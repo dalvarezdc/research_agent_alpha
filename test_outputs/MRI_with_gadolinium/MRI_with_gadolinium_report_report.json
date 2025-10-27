@@ -1,0 +1,332 @@
+{
+  "metadata": {
+    "report_generated_at": "2025-10-27T20:21:30.384272",
+    "report_version": "1.0",
+    "analysis_type": "medical_procedure_reasoning"
+  },
+  "procedure": {
+    "summary": "MRI Scanner - With gadolinium contrast",
+    "confidence_score": 0.75,
+    "organs_analyzed_count": 4,
+    "reasoning_steps_count": 6
+  },
+  "organs_analysis": [
+    {
+      "organ_name": "kidneys",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          {
+            "intervention": "Adequate hydration pre/post procedure",
+            "rationale": "Increases urine flow rate and reduces concentration of contrast agent in tubules, minimizing direct nephrotoxic effects",
+            "evidence_level": "Strong - Multiple RCTs and guidelines (ESR, ACR)",
+            "timing": "500ml saline 1-2 hours before, continue 6-12 hours after"
+          },
+          {
+            "intervention": "Monitor kidney function in at-risk patients",
+            "rationale": "Early detection of contrast-induced nephropathy allows for prompt intervention and prevents progression to acute kidney injury",
+            "evidence_level": "Strong - Standard of care per nephrology guidelines",
+            "timing": "Baseline creatinine within 7 days, follow-up at 48-72 hours post-procedure"
+          },
+          {
+            "intervention": "Avoid NSAIDs 48-72 hours post-procedure",
+            "rationale": "NSAIDs reduce renal blood flow via prostaglandin inhibition, compounding contrast-induced vasoconstriction",
+            "evidence_level": "Strong - Consistent evidence across multiple studies",
+            "timing": "48-72 hours before and after contrast exposure"
+          }
+        ],
+        "potential": [
+          {
+            "intervention": "N-Acetylcysteine supplementation",
+            "rationale": "Antioxidant properties may reduce oxidative stress and free radical damage from contrast agents. Acts as glutathione precursor.",
+            "evidence_level": "Mixed - Some positive RCTs but multiple negative studies and meta-analyses show conflicting results",
+            "dosing": "600mg orally twice daily for 2 days starting day before procedure",
+            "limitations": "2018 Cochrane review found no significant benefit; still used in some centers"
+          },
+          {
+            "intervention": "Magnesium support for kidney function",
+            "rationale": "Magnesium deficiency associated with increased nephrotoxicity; supplementation may maintain cellular energy and reduce calcium influx",
+            "evidence_level": "Limited - Small studies suggest benefit but larger RCTs needed",
+            "dosing": "Magnesium sulfate 3g in 250ml saline over 1 hour before procedure",
+            "limitations": "Mechanism unclear, optimal dosing not established"
+          }
+        ],
+        "debunked_claims": [
+          {
+            "claim": "Kidney detox cleanses",
+            "reason_debunked": "No scientific evidence for enhanced elimination of contrast agents; may cause electrolyte imbalances and dehydration",
+            "debunked_by": "American Society of Nephrology, National Kidney Foundation",
+            "evidence": "Systematic reviews show no benefit and potential harm from commercial detox products",
+            "why_harmful": "Can lead to dehydration, electrolyte disturbances, and delayed medical care"
+          },
+          {
+            "claim": "Herbal kidney flushes",
+            "reason_debunked": "No peer-reviewed evidence for gadolinium elimination; some herbs (aristolochia) are nephrotoxic",
+            "debunked_by": "FDA warnings, nephrology literature",
+            "evidence": "Case reports of acute kidney injury from herbal products",
+            "why_harmful": "Potential drug interactions and direct nephrotoxicity"
+          }
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 3,
+        "potential_count": 3,
+        "debunked_count": 3
+      }
+    },
+    {
+      "organ_name": "brain",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          {
+            "intervention": "No specific interventions required for healthy patients",
+            "rationale": "Gadolinium retention in brain has no proven clinical consequences in patients with normal kidney function",
+            "evidence_level": "Strong - Multiple safety studies and FDA review",
+            "timing": "Ongoing monitoring of safety data"
+          }
+        ],
+        "potential": [
+          {
+            "intervention": "Minimize repeated exposures when possible",
+            "rationale": "Linear gadolinium agents show greater brain retention than macrocyclic agents; cumulative effects unknown",
+            "evidence_level": "Precautionary - Based on imaging studies showing retention",
+            "dosing": "Use lowest effective dose, prefer macrocyclic agents",
+            "limitations": "No proven clinical harm, may delay necessary imaging"
+          }
+        ],
+        "debunked_claims": [
+          {
+            "claim": "Brain detox supplements",
+            "reason_debunked": "Blood-brain barrier prevents most oral supplements from accessing brain tissue; no evidence for gadolinium removal",
+            "debunked_by": "Neuropharmacology research, lack of clinical trials",
+            "evidence": "No peer-reviewed studies showing brain gadolinium reduction from supplements",
+            "why_harmful": "Expensive, false hope, may contain unlisted ingredients"
+          },
+          {
+            "claim": "Chelation therapy for gadolinium removal",
+            "reason_debunked": "No evidence that chelating agents remove gadolinium from brain tissue; may be harmful",
+            "debunked_by": "FDA warnings, multiple medical societies including American College of Radiology",
+            "evidence": "EDTA and other chelators can cause kidney damage, electrolyte imbalances, and cardiac arrhythmias",
+            "why_harmful": "Serious adverse effects including death; no proven benefit for gadolinium removal"
+          }
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 1,
+        "potential_count": 1,
+        "debunked_count": 2
+      }
+    },
+    {
+      "organ_name": "liver",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          {
+            "intervention": "Monitor liver function in patients with hepatic disease",
+            "rationale": "Severely impaired hepatic function may affect gadolinium elimination kinetics",
+            "evidence_level": "Moderate - Based on pharmacokinetic studies",
+            "timing": "Baseline and 48-72 hour follow-up in severe hepatic impairment"
+          }
+        ],
+        "potential": [
+          {
+            "intervention": "Antioxidant support",
+            "rationale": "Theoretical benefit from reducing oxidative stress, though liver is not primary elimination route",
+            "evidence_level": "Very limited - Mostly preclinical data",
+            "dosing": "Various antioxidant combinations studied",
+            "limitations": "No specific studies with gadolinium contrast; unclear clinical relevance"
+          },
+          {
+            "intervention": "Milk thistle supplementation",
+            "rationale": "Silymarin may have hepatoprotective effects through antioxidant and anti-inflammatory mechanisms",
+            "evidence_level": "Limited - Some studies in other hepatotoxic contexts",
+            "dosing": "140-420mg daily of standardized silymarin extract",
+            "limitations": "No studies specific to contrast agents; variable product quality"
+          }
+        ],
+        "debunked_claims": [
+          {
+            "claim": "Liver cleanses",
+            "reason_debunked": "Liver has natural detoxification processes; no evidence that commercial cleanses enhance gadolinium elimination",
+            "debunked_by": "American Liver Foundation, hepatology literature",
+            "evidence": "No scientific basis for enhanced liver 'cleansing' beyond normal physiology",
+            "why_harmful": "May cause diarrhea, electrolyte imbalances, and interfere with medications"
+          },
+          {
+            "claim": "Coffee enemas",
+            "reason_debunked": "No mechanism for gadolinium elimination via colon; potentially dangerous procedure",
+            "debunked_by": "Multiple case reports of complications, FDA warnings",
+            "evidence": "Risk of electrolyte imbalances, infections, and rectal perforation",
+            "why_harmful": "Serious complications including death reported; no medical justification"
+          }
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 1,
+        "potential_count": 2,
+        "debunked_count": 2
+      }
+    },
+    {
+      "organ_name": "skin",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          {
+            "intervention": "Monitor for skin reactions in at-risk patients",
+            "rationale": "Nephrogenic systemic fibrosis (NSF) can occur in patients with severe kidney disease, causing skin thickening and fibrosis",
+            "evidence_level": "Strong - Well-documented association with gadolinium exposure",
+            "timing": "Ongoing monitoring for weeks to months post-exposure in at-risk patients"
+          }
+        ],
+        "potential": [],
+        "debunked_claims": [
+          {
+            "claim": "Topical detox creams for gadolinium removal",
+            "reason_debunked": "No evidence that topical applications can remove systemically distributed gadolinium",
+            "debunked_by": "Lack of peer-reviewed studies, basic dermatology principles",
+            "evidence": "Gadolinium is eliminated through kidneys, not through skin",
+            "why_harmful": "May delay appropriate medical care, potential for allergic reactions"
+          }
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 1,
+        "potential_count": 0,
+        "debunked_count": 0
+      }
+    }
+  ],
+  "general_recommendations": [
+    "Consult healthcare provider",
+    "Monitor for adverse effects"
+  ],
+  "research_gaps": [
+    "Long-term gadolinium retention effects",
+    "Optimal hydration protocols"
+  ],
+  "reasoning_trace": [
+    {
+      "stage": "input_analysis",
+      "timestamp": "2025-10-27T20:21:29.148530",
+      "reasoning": "Parsing medical procedure input and identifying key components",
+      "confidence": 0.8,
+      "input_summary": "{'procedure': 'MRI Scanner', 'details': 'With gadolinium contrast'}",
+      "output_summary": "{'procedure_type': 'MRI Scanner', 'complexity': 'high'}"
+    },
+    {
+      "stage": "organ_identification",
+      "timestamp": "2025-10-27T20:21:29.148840",
+      "reasoning": "Identifying organs affected by procedure based on mechanism of action using LLM analysis",
+      "confidence": 0.8,
+      "input_summary": "{'procedure': 'MRI Scanner', 'details': 'With gadolinium contrast'}",
+      "output_summary": "{'method': 'anthropic_claude_analysis'}"
+    },
+    {
+      "stage": "evidence_gathering",
+      "timestamp": "2025-10-27T20:21:29.727917",
+      "reasoning": "Gathering evidence from medical literature for organ-specific effects using LLM",
+      "confidence": 0.8,
+      "input_summary": "{'organs': ['kidneys', 'brain', 'liver', 'skin'], 'search_strategy': 'llm_medical_literature_analysis'}",
+      "output_summary": "{'method': 'anthropic_claude_evidence_synthesis'}"
+    },
+    {
+      "stage": "risk_assessment",
+      "timestamp": "2025-10-27T20:21:30.029838",
+      "reasoning": "Assessing risk levels based on procedure mechanism and patient factors",
+      "confidence": 0.8,
+      "input_summary": "{'organs': ['kidneys', 'brain', 'liver', 'skin'], 'evidence': {'kidneys': {'elimination_pathway': 'glomerular_filtration_and_tubular_secretion', 'risk_factors': ['pre_existing_ckd', 'dehydration', 'ag...",
+      "output_summary": "{'risk_framework': 'evidence_based', 'risk_levels': ['low', 'moderate', 'high']}"
+    },
+    {
+      "stage": "recommendation_synthesis",
+      "timestamp": "2025-10-27T20:21:30.030307",
+      "reasoning": "Synthesizing evidence-based recommendations using LLM analysis while categorizing by evidence quality",
+      "confidence": 0.8,
+      "input_summary": "{'evidence_summary': 4, 'risks_assessed': 4}",
+      "output_summary": "{'categories': ['known_effective', 'potentially_beneficial', 'debunked'], 'method': 'anthropic_claude_synthesis'}"
+    },
+    {
+      "stage": "critical_evaluation",
+      "timestamp": "2025-10-27T20:21:30.341344",
+      "reasoning": "Critically evaluating recommendations against recent evidence and identifying debunked claims",
+      "confidence": 0.8,
+      "input_summary": "{'recommendations': {'kidneys': {'known_recommendations': [{'intervention': 'Adequate hydration pre/post procedure', 'rationale': 'Increases urine flow rate and reduces concentration of contrast agent...",
+      "output_summary": "{'evaluation_criteria': ['evidence_quality', 'clinical_relevance', 'safety_profile']}"
+    }
+  ],
+  "validation": {
+    "overall_score": 0.7899999999999999,
+    "safety_score": 0.7,
+    "accuracy_score": 1.0,
+    "completeness_score": 0.7,
+    "issues_count": 3,
+    "critical_issues": 0
+  },
+  "confidence_analysis": {
+    "overall_confidence": 0.75,
+    "reasoning_confidence": {
+      "average": 0.8000000000000002,
+      "minimum": 0.8,
+      "maximum": 0.8,
+      "consistency": 0.0
+    },
+    "confidence_interpretation": "High - Good evidence with some limitations"
+  },
+  "recommendations_summary": {
+    "totals": {
+      "known_recommendations": 6,
+      "potential_recommendations": 6,
+      "debunked_claims": 7
+    },
+    "risk_distribution": {
+      "high_risk_organs": 0,
+      "moderate_risk_organs": 4,
+      "low_risk_organs": 0
+    },
+    "organs_with_most_recommendations": [
+      [
+        "kidneys",
+        6
+      ],
+      [
+        "liver",
+        3
+      ],
+      [
+        "brain",
+        2
+      ]
+    ]
+  }
+}
