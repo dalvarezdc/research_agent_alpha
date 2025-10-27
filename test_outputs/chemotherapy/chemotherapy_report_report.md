@@ -1,22 +1,22 @@
 # Medical Procedure Analysis Report
 
-**Generated:** 2025-10-27 17:16:42
-**Procedure:** MRI Scanner - With contrast
+**Generated:** 2025-10-27 23:12:43
+**Procedure:** chemotherapy - Researched from 3 authoritative sources, affects: bladder, intestines, lungs, stomach, brain, heart, kidneys
 **Overall Confidence:** 0.75 (High - Good evidence with some limitations)
 
 ## 📋 Executive Summary
 
-This analysis examined **4 organ systems** affected by the specified medical procedure.
+This analysis examined **1 organ systems** affected by the specified medical procedure.
 The systematic reasoning process completed **6 analytical stages** following evidence-based medical principles.
 
 ## 🎯 Quality Assessment
 
-- **Overall Score:** 0.79/1.00
-- **Safety Score:** 0.70/1.00
+- **Overall Score:** 1.00/1.00
+- **Safety Score:** 1.00/1.00
 - **Medical Accuracy:** 1.00/1.00
-- **Completeness:** 0.70/1.00
+- **Completeness:** 1.00/1.00
 
-**Issues Identified:** 3 total
+**Issues Identified:** 0 total
 
 ## 🔍 Organ System Analysis
 
@@ -52,33 +52,27 @@ The systematic reasoning process completed **6 analytical stages** following evi
 - *Dosing:* 600mg orally twice daily for 2 days starting day before procedure
 - *Limitations:* 2018 Cochrane review found no significant benefit; still used in some centers
 
+**Magnesium support for kidney function**
+- *Rationale:* Magnesium deficiency associated with increased nephrotoxicity; supplementation may maintain cellular energy and reduce calcium influx
+- *Evidence Level:* Limited - Small studies suggest benefit but larger RCTs needed
+- *Dosing:* Magnesium sulfate 3g in 250ml saline over 1 hour before procedure
+- *Limitations:* Mechanism unclear, optimal dosing not established
+
 
 #### ❌ Debunked/Ineffective Approaches
 
-**Chelation therapy for gadolinium removal**
-- *Why Debunked:* No evidence that chelating agents remove gadolinium from brain tissue; may be harmful
-- *Debunked By:* FDA warnings, multiple medical societies including American College of Radiology
-- *Evidence Against:* EDTA and other chelators can cause kidney damage, electrolyte imbalances, and cardiac arrhythmias
-- *Why Harmful:* Serious adverse effects including death; no proven benefit for gadolinium removal
+**Kidney detox cleanses**
+- *Why Debunked:* No scientific evidence for enhanced elimination of contrast agents; may cause electrolyte imbalances and dehydration
+- *Debunked By:* American Society of Nephrology, National Kidney Foundation
+- *Evidence Against:* Systematic reviews show no benefit and potential harm from commercial detox products
+- *Why Harmful:* Can lead to dehydration, electrolyte disturbances, and delayed medical care
 
+**Herbal kidney flushes**
+- *Why Debunked:* No peer-reviewed evidence for gadolinium elimination; some herbs (aristolochia) are nephrotoxic
+- *Debunked By:* FDA warnings, nephrology literature
+- *Evidence Against:* Case reports of acute kidney injury from herbal products
+- *Why Harmful:* Potential drug interactions and direct nephrotoxicity
 
-### 🟡 Brain
-
-**Risk Level:** Moderate  
-**Evidence Quality:** Moderate  
-**Pathways Involved:** elimination, filtration
-
-### 🟡 Liver
-
-**Risk Level:** Moderate  
-**Evidence Quality:** Moderate  
-**Pathways Involved:** elimination, filtration
-
-### 🟡 Skin
-
-**Risk Level:** Moderate  
-**Evidence Quality:** Moderate  
-**Pathways Involved:** elimination, filtration
 
 ## 🎯 General Recommendations
 
@@ -104,13 +98,13 @@ Parsing medical procedure input and identifying key components
 
 **Confidence:** `████████░░` 0.80
 
-Identifying organs affected by procedure based on mechanism of action
+Identifying organs affected by procedure based on mechanism of action using LLM analysis
 
 ### 3. Evidence Gathering
 
 **Confidence:** `████████░░` 0.80
 
-Gathering evidence from medical literature for organ-specific effects
+Gathering evidence from medical literature for organ-specific effects using LLM
 
 ### 4. Risk Assessment
 
@@ -122,7 +116,7 @@ Assessing risk levels based on procedure mechanism and patient factors
 
 **Confidence:** `████████░░` 0.80
 
-Synthesizing evidence-based recommendations while categorizing by evidence quality
+Synthesizing evidence-based recommendations using LLM analysis while categorizing by evidence quality
 
 ### 6. Critical Evaluation
 

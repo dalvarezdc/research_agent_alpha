@@ -37,7 +37,7 @@ class InputValidator:
     """Comprehensive input validation and sanitization"""
     
     # Allowed medical procedure patterns
-    MEDICAL_PROCEDURE_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_()./,]{1,200}$')
+    MEDICAL_PROCEDURE_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_()./,:]{1,200}$')
     
     # Allowed characters for medical aspects
     MEDICAL_ASPECT_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_]{1,100}$')
