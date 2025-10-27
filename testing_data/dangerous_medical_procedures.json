@@ -1,0 +1,127 @@
+{
+  "title": "Risky Medical Exams and Procedures",
+  "summary": "The term 'risky' can refer to different factors: the potential for complications (like infection or bleeding), the amount of radiation exposure, or the consequences of an inaccurate result (a false-positive or false-negative). The exams listed here are generally safe, but have higher potential risks that must be weighed against their diagnostic benefits.",
+  "riskCategories": [
+    {
+      "categoryTitle": "Invasive Procedures",
+      "primaryRisk": "Risk of Bleeding, Infection, or Perforation",
+      "description": "These procedures involve inserting instruments, needles, or cameras into the body. While complications are rare, they can be serious.",
+      "procedures": [
+        {
+          "name": "Biopsies",
+          "description": "A procedure to remove a small sample of tissue for testing, often to check for cancer.",
+          "examples": [
+            "Lung biopsy",
+            "Liver biopsy",
+            "Kidney biopsy",
+            "Prostate biopsy"
+          ],
+          "potentialRisks": [
+            "Bleeding at the biopsy site",
+            "Infection",
+            "Damage to a nearby organ (e.g., collapsed lung during a lung biopsy)"
+          ]
+        },
+        {
+          "name": "Endoscopies",
+          "description": "Using a flexible tube with a camera to look inside a part of the body.",
+          "examples": [
+            "Colonoscopy",
+            "Upper GI Endoscopy"
+          ],
+          "potentialRisks": [
+            "Reaction to sedation",
+            "Bleeding (especially if polyps are removed)",
+            "Rare risk of tearing or perforation of the organ wall"
+          ]
+        },
+        {
+          "name": "Cardiac Catheterization (Angiogram)",
+          "description": "A thin, flexible tube is threaded through a blood vessel up to the heart to diagnose and treat heart conditions.",
+          "potentialRisks": [
+            "Bleeding or bruising at the insertion site",
+            "Blood clots",
+            "Stroke",
+            "Heart attack",
+            "Allergic reaction to contrast dye"
+          ]
+        },
+        {
+          "name": "Amniocentesis / Chorionic Villus Sampling (CVS)",
+          "description": "Prenatal tests that involve taking a sample of amniotic fluid (amniocentesis) or placental tissue (CVS) to check for genetic abnormalities.",
+          "potentialRisks": [
+            "Small risk of miscarriage",
+            "Infection",
+            "Leakage of amniotic fluid"
+          ]
+        }
+      ]
+    },
+    {
+      "categoryTitle": "Procedures with Significant Radiation Exposure",
+      "primaryRisk": "Cumulative lifetime risk of cancer from ionizing radiation",
+      "description": "These tests use ionizing radiation. The risk from a single scan is very low, but the risk increases with the number of scans a person has over their life.",
+      "procedures": [
+        {
+          "name": "Computed Tomography (CT or CAT) Scans",
+          "description": "A series of X-ray images taken from different angles to create cross-sectional 'slices' of the body.",
+          "potentialRisks": [
+            "Delivers a much higher dose of radiation than a standard X-ray",
+            "Allergic reaction to contrast dye",
+            "Harm to kidneys from contrast dye (in people with kidney problems)"
+          ]
+        },
+        {
+          "name": "Nuclear Medicine Scans",
+          "description": "Involves swallowing, inhaling, or being injected with a small amount of a radioactive substance (a 'tracer') which is then tracked by a special camera.",
+          "examples": [
+            "PET Scans",
+            "Bone Scans"
+          ],
+          "potentialRisks": [
+            "Radiation exposure from the radioactive tracer",
+            "Contribution to cumulative lifetime radiation dose"
+          ]
+        },
+        {
+          "name": "Fluoroscopy-Guided Procedures",
+          "description": "A type of 'live' X-ray 'movie' used to guide procedures in real-time.",
+          "examples": [
+            "Angioplasty (stent placement)",
+            "Barium enemas"
+          ],
+          "potentialRisks": [
+            "Can involve high doses of radiation, especially for complex or long procedures"
+          ]
+        }
+      ]
+    },
+    {
+      "categoryTitle": "Screening Tests",
+      "primaryRisk": "Consequences of Inaccurate Results",
+      "description": "The risk here is not from the test itself, but from the consequences of a false result, which can lead to anxiety, unnecessary follow-up procedures, or delayed treatment.",
+      "procedures": [
+        {
+          "name": "False-Positives",
+          "description": "The test indicates you have a condition that you do not actually have.",
+          "examples": [
+            "Abnormal screening mammogram",
+            "High PSA (Prostate-Specific Antigen) test"
+          ],
+          "potentialRisks": [
+            "Significant anxiety",
+            "Leads to unnecessary and riskier follow-up tests (e.g., an invasive biopsy)"
+          ]
+        },
+        {
+          "name": "False-Negatives",
+          "description": "The test indicates you do not have a condition that you actually do have.",
+          "potentialRisks": [
+            "False reassurance",
+            "Delay in diagnosis and treatment for a real, and potentially serious, disease"
+          ]
+        }
+      ]
+    }
+  ]
+}
