@@ -158,7 +158,7 @@ class MedicalReportGenerator:
     
     def _get_detailed_recommendations(self, organ_name: str) -> Dict[str, Any]:
         """Get detailed recommendation data with rationales"""
-        # This mirrors the detailed database from medical_reasoning_agent.py
+        # Complete detailed database mirroring medical_reasoning_agent.py
         detailed_db = {
             "kidneys": {
                 "known_recommendations": [
@@ -188,15 +188,126 @@ class MedicalReportGenerator:
                         "evidence_level": "Mixed - Some positive RCTs but multiple negative studies and meta-analyses show conflicting results",
                         "dosing": "600mg orally twice daily for 2 days starting day before procedure",
                         "limitations": "2018 Cochrane review found no significant benefit; still used in some centers"
+                    },
+                    {
+                        "intervention": "Magnesium support for kidney function",
+                        "rationale": "Magnesium deficiency associated with increased nephrotoxicity; supplementation may maintain cellular energy and reduce calcium influx",
+                        "evidence_level": "Limited - Small studies suggest benefit but larger RCTs needed",
+                        "dosing": "Magnesium sulfate 3g in 250ml saline over 1 hour before procedure",
+                        "limitations": "Mechanism unclear, optimal dosing not established"
                     }
                 ],
                 "debunked_claims": [
+                    {
+                        "claim": "Kidney detox cleanses",
+                        "reason_debunked": "No scientific evidence for enhanced elimination of contrast agents; may cause electrolyte imbalances and dehydration",
+                        "debunked_by": "American Society of Nephrology, National Kidney Foundation",
+                        "evidence": "Systematic reviews show no benefit and potential harm from commercial detox products",
+                        "why_harmful": "Can lead to dehydration, electrolyte disturbances, and delayed medical care"
+                    },
+                    {
+                        "claim": "Herbal kidney flushes",
+                        "reason_debunked": "No peer-reviewed evidence for gadolinium elimination; some herbs (aristolochia) are nephrotoxic",
+                        "debunked_by": "FDA warnings, nephrology literature",
+                        "evidence": "Case reports of acute kidney injury from herbal products",
+                        "why_harmful": "Potential drug interactions and direct nephrotoxicity"
+                    }
+                ]
+            },
+            "brain": {
+                "known_recommendations": [
+                    {
+                        "intervention": "No specific interventions required for healthy patients",
+                        "rationale": "Gadolinium retention in brain has no proven clinical consequences in patients with normal kidney function",
+                        "evidence_level": "Strong - Multiple safety studies and FDA review",
+                        "timing": "Ongoing monitoring of safety data"
+                    }
+                ],
+                "potential_recommendations": [
+                    {
+                        "intervention": "Minimize repeated exposures when possible",
+                        "rationale": "Linear gadolinium agents show greater brain retention than macrocyclic agents; cumulative effects unknown",
+                        "evidence_level": "Precautionary - Based on imaging studies showing retention",
+                        "dosing": "Use lowest effective dose, prefer macrocyclic agents",
+                        "limitations": "No proven clinical harm, may delay necessary imaging"
+                    }
+                ],
+                "debunked_claims": [
+                    {
+                        "claim": "Brain detox supplements",
+                        "reason_debunked": "Blood-brain barrier prevents most oral supplements from accessing brain tissue; no evidence for gadolinium removal",
+                        "debunked_by": "Neuropharmacology research, lack of clinical trials",
+                        "evidence": "No peer-reviewed studies showing brain gadolinium reduction from supplements",
+                        "why_harmful": "Expensive, false hope, may contain unlisted ingredients"
+                    },
                     {
                         "claim": "Chelation therapy for gadolinium removal",
                         "reason_debunked": "No evidence that chelating agents remove gadolinium from brain tissue; may be harmful",
                         "debunked_by": "FDA warnings, multiple medical societies including American College of Radiology",
                         "evidence": "EDTA and other chelators can cause kidney damage, electrolyte imbalances, and cardiac arrhythmias",
                         "why_harmful": "Serious adverse effects including death; no proven benefit for gadolinium removal"
+                    }
+                ]
+            },
+            "liver": {
+                "known_recommendations": [
+                    {
+                        "intervention": "Monitor liver function in patients with hepatic disease",
+                        "rationale": "Severely impaired hepatic function may affect gadolinium elimination kinetics",
+                        "evidence_level": "Moderate - Based on pharmacokinetic studies",
+                        "timing": "Baseline and 48-72 hour follow-up in severe hepatic impairment"
+                    }
+                ],
+                "potential_recommendations": [
+                    {
+                        "intervention": "Antioxidant support",
+                        "rationale": "Theoretical benefit from reducing oxidative stress, though liver is not primary elimination route",
+                        "evidence_level": "Very limited - Mostly preclinical data",
+                        "dosing": "Various antioxidant combinations studied",
+                        "limitations": "No specific studies with gadolinium contrast; unclear clinical relevance"
+                    },
+                    {
+                        "intervention": "Milk thistle supplementation",
+                        "rationale": "Silymarin may have hepatoprotective effects through antioxidant and anti-inflammatory mechanisms",
+                        "evidence_level": "Limited - Some studies in other hepatotoxic contexts",
+                        "dosing": "140-420mg daily of standardized silymarin extract",
+                        "limitations": "No studies specific to contrast agents; variable product quality"
+                    }
+                ],
+                "debunked_claims": [
+                    {
+                        "claim": "Liver cleanses",
+                        "reason_debunked": "Liver has natural detoxification processes; no evidence that commercial cleanses enhance gadolinium elimination",
+                        "debunked_by": "American Liver Foundation, hepatology literature",
+                        "evidence": "No scientific basis for enhanced liver 'cleansing' beyond normal physiology",
+                        "why_harmful": "May cause diarrhea, electrolyte imbalances, and interfere with medications"
+                    },
+                    {
+                        "claim": "Coffee enemas",
+                        "reason_debunked": "No mechanism for gadolinium elimination via colon; potentially dangerous procedure",
+                        "debunked_by": "Multiple case reports of complications, FDA warnings",
+                        "evidence": "Risk of electrolyte imbalances, infections, and rectal perforation",
+                        "why_harmful": "Serious complications including death reported; no medical justification"
+                    }
+                ]
+            },
+            "skin": {
+                "known_recommendations": [
+                    {
+                        "intervention": "Monitor for skin reactions in at-risk patients",
+                        "rationale": "Nephrogenic systemic fibrosis (NSF) can occur in patients with severe kidney disease, causing skin thickening and fibrosis",
+                        "evidence_level": "Strong - Well-documented association with gadolinium exposure",
+                        "timing": "Ongoing monitoring for weeks to months post-exposure in at-risk patients"
+                    }
+                ],
+                "potential_recommendations": [],
+                "debunked_claims": [
+                    {
+                        "claim": "Topical detox creams for gadolinium removal",
+                        "reason_debunked": "No evidence that topical applications can remove systemically distributed gadolinium",
+                        "debunked_by": "Lack of peer-reviewed studies, basic dermatology principles",
+                        "evidence": "Gadolinium is eliminated through kidneys, not through skin",
+                        "why_harmful": "May delay appropriate medical care, potential for allergic reactions"
                     }
                 ]
             }
