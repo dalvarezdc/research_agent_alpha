@@ -21,6 +21,61 @@ except ImportError:
 class WebResearchAgent:
     """Agent for researching medical information using Tavily Search"""
     
+    # Pre-compiled regex patterns for efficient text processing
+    ORGAN_PATTERNS = [
+        (re.compile(r'\b(kidney|renal|nephro)\w*\b', re.IGNORECASE), 'kidneys'),
+        (re.compile(r'\b(liver|hepatic|hepato)\w*\b', re.IGNORECASE), 'liver'),
+        (re.compile(r'\b(brain|neural|neuro|cerebral)\w*\b', re.IGNORECASE), 'brain'),
+        (re.compile(r'\b(heart|cardiac|cardio)\w*\b', re.IGNORECASE), 'heart'),
+        (re.compile(r'\b(lung|pulmonary|respiratory)\w*\b', re.IGNORECASE), 'lungs'),
+        (re.compile(r'\b(thyroid|endocrine)\w*\b', re.IGNORECASE), 'thyroid'),
+        (re.compile(r'\b(stomach|gastric|gastro)\w*\b', re.IGNORECASE), 'stomach'),
+        (re.compile(r'\b(intestin|bowel|colon)\w*\b', re.IGNORECASE), 'intestines'),
+        (re.compile(r'\b(bladder|urinary)\w*\b', re.IGNORECASE), 'bladder'),
+        (re.compile(r'\b(pancrea)\w*\b', re.IGNORECASE), 'pancreas')
+    ]
+    
+    RISK_PATTERNS = [
+        re.compile(r'risk(?:s)? of ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'contraindicated in ([^.;,]{10,60})', re.IGNORECASE),
+        re.compile(r'caution in ([^.;,]{10,60})', re.IGNORECASE),
+        re.compile(r'adverse effect(?:s)? (?:include )?([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'complication(?:s)? (?:include )?([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'warning[:\s]+([^.;,]{10,80})', re.IGNORECASE)
+    ]
+    
+    RECOMMENDATION_PATTERNS = [
+        re.compile(r'recommend(?:ed|s|ation)?[:\s]+([^.;,]{10,100})', re.IGNORECASE),
+        re.compile(r'should ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'guidelines? suggest ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'evidence supports ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'best practice[:\s]+([^.;,]{10,80})', re.IGNORECASE)
+    ]
+    
+    PREPARATION_PATTERNS = [
+        re.compile(r'before (?:the )?procedure[:\s]+([^.;,]{10,100})', re.IGNORECASE),
+        re.compile(r'preparation[:\s]+([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'pre-procedure[:\s]+([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'patient should ([^.;,]{10,80}) before', re.IGNORECASE),
+        re.compile(r'prior to (?:the )?procedure[:\s]+([^.;,]{10,80})', re.IGNORECASE)
+    ]
+    
+    POST_CARE_PATTERNS = [
+        re.compile(r'after (?:the )?procedure[:\s]+([^.;,]{10,100})', re.IGNORECASE),
+        re.compile(r'post-procedure[:\s]+([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'following (?:the )?procedure[:\s]+([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'monitor(?:ing)?[:\s]+([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'recovery[:\s]+([^.;,]{10,80})', re.IGNORECASE)
+    ]
+    
+    CONTRAINDICATION_PATTERNS = [
+        re.compile(r'contraindicated? in ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'should not be used in ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'avoid in ([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'warning[:\s]+([^.;,]{10,80})', re.IGNORECASE),
+        re.compile(r'not recommended for ([^.;,]{10,80})', re.IGNORECASE)
+    ]
+    
     def __init__(self, api_key: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
         self.api_key = api_key or os.getenv("TAVILY_API_KEY")
@@ -201,41 +256,19 @@ class WebResearchAgent:
             research_results["recommendations"][rec_type] = list(set(research_results["recommendations"][rec_type]))[:5]
     
     def _extract_organs_from_text(self, text: str) -> List[str]:
-        """Extract organ systems mentioned in medical text"""
-        organ_patterns = [
-            (r'\b(kidney|renal|nephro)\w*\b', 'kidneys'),
-            (r'\b(liver|hepatic|hepato)\w*\b', 'liver'),
-            (r'\b(brain|neural|neuro|cerebral)\w*\b', 'brain'),
-            (r'\b(heart|cardiac|cardio)\w*\b', 'heart'),
-            (r'\b(lung|pulmonary|respiratory)\w*\b', 'lungs'),
-            (r'\b(thyroid|endocrine)\w*\b', 'thyroid'),
-            (r'\b(stomach|gastric|gastro)\w*\b', 'stomach'),
-            (r'\b(intestin|bowel|colon)\w*\b', 'intestines'),
-            (r'\b(bladder|urinary)\w*\b', 'bladder'),
-            (r'\b(pancrea)\w*\b', 'pancreas')
-        ]
-        
+        """Extract organ systems mentioned in medical text using pre-compiled patterns"""
         organs = []
-        for pattern, organ_name in organ_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
+        for pattern, organ_name in self.ORGAN_PATTERNS:
+            if pattern.search(text):
                 organs.append(organ_name)
         
         return organs
     
     def _extract_risks_from_text(self, text: str) -> List[str]:
-        """Extract risk factors from medical text"""
-        risk_patterns = [
-            r'risk(?:s)? of ([^.;,]{10,80})',
-            r'contraindicated in ([^.;,]{10,60})',
-            r'caution in ([^.;,]{10,60})',
-            r'adverse effect(?:s)? (?:include )?([^.;,]{10,80})',
-            r'complication(?:s)? (?:include )?([^.;,]{10,80})',
-            r'warning[:\s]+([^.;,]{10,80})'
-        ]
-        
+        """Extract risk factors from medical text using pre-compiled patterns"""
         risks = []
-        for pattern in risk_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+        for pattern in self.RISK_PATTERNS:
+            matches = pattern.findall(text)
             for match in matches:
                 if len(match.strip()) > 5:  # Filter out very short matches
                     risks.append(match.strip())
@@ -243,18 +276,10 @@ class WebResearchAgent:
         return risks[:10]  # Limit to top 10 risks
     
     def _extract_recommendations_from_text(self, text: str) -> List[str]:
-        """Extract recommendations from medical text"""
-        rec_patterns = [
-            r'recommend(?:ed|s|ation)?[:\s]+([^.;,]{10,100})',
-            r'should ([^.;,]{10,80})',
-            r'guidelines? suggest ([^.;,]{10,80})',
-            r'evidence supports ([^.;,]{10,80})',
-            r'best practice[:\s]+([^.;,]{10,80})'
-        ]
-        
+        """Extract recommendations from medical text using pre-compiled patterns"""
         recommendations = []
-        for pattern in rec_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+        for pattern in self.RECOMMENDATION_PATTERNS:
+            matches = pattern.findall(text)
             for match in matches:
                 if len(match.strip()) > 5:
                     recommendations.append(match.strip())
@@ -262,18 +287,10 @@ class WebResearchAgent:
         return recommendations[:10]
     
     def _extract_preparation_from_text(self, text: str) -> List[str]:
-        """Extract preparation guidelines from text"""
-        prep_patterns = [
-            r'before (?:the )?procedure[:\s]+([^.;,]{10,100})',
-            r'preparation[:\s]+([^.;,]{10,80})',
-            r'pre-procedure[:\s]+([^.;,]{10,80})',
-            r'patient should ([^.;,]{10,80}) before',
-            r'prior to (?:the )?procedure[:\s]+([^.;,]{10,80})'
-        ]
-        
+        """Extract preparation guidelines from text using pre-compiled patterns"""
         preparations = []
-        for pattern in prep_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+        for pattern in self.PREPARATION_PATTERNS:
+            matches = pattern.findall(text)
             for match in matches:
                 if len(match.strip()) > 5:
                     preparations.append(match.strip())
@@ -281,18 +298,10 @@ class WebResearchAgent:
         return preparations
     
     def _extract_post_care_from_text(self, text: str) -> List[str]:
-        """Extract post-procedure care from text"""
-        post_patterns = [
-            r'after (?:the )?procedure[:\s]+([^.;,]{10,100})',
-            r'post-procedure[:\s]+([^.;,]{10,80})',
-            r'following (?:the )?procedure[:\s]+([^.;,]{10,80})',
-            r'monitor(?:ing)?[:\s]+([^.;,]{10,80})',
-            r'recovery[:\s]+([^.;,]{10,80})'
-        ]
-        
+        """Extract post-procedure care from text using pre-compiled patterns"""
         post_care = []
-        for pattern in post_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+        for pattern in self.POST_CARE_PATTERNS:
+            matches = pattern.findall(text)
             for match in matches:
                 if len(match.strip()) > 5:
                     post_care.append(match.strip())
@@ -300,18 +309,10 @@ class WebResearchAgent:
         return post_care
     
     def _extract_contraindications_from_text(self, text: str) -> List[str]:
-        """Extract contraindications from text"""
-        contra_patterns = [
-            r'contraindicated? in ([^.;,]{10,80})',
-            r'should not be used in ([^.;,]{10,80})',
-            r'avoid in ([^.;,]{10,80})',
-            r'warning[:\s]+([^.;,]{10,80})',
-            r'not recommended for ([^.;,]{10,80})'
-        ]
-        
+        """Extract contraindications from text using pre-compiled patterns"""
         contraindications = []
-        for pattern in contra_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+        for pattern in self.CONTRAINDICATION_PATTERNS:
+            matches = pattern.findall(text)
             for match in matches:
                 if len(match.strip()) > 5:
                     contraindications.append(match.strip())

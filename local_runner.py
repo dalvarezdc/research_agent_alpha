@@ -232,7 +232,7 @@ def run_single_scenario(scenario: Dict[str, Any], agent: MedicalReasoningAgent,
             print(f"    Potential Recommendations: {len(organ.potential_recommendations)}")
             print(f"    Debunked Claims: {len(organ.debunked_claims)}")
         
-        print(f"\nReasonimg Stages: {len(result.reasoning_trace)}")
+        print(f"\nReasoning Stages: {len(result.reasoning_trace)}")
         for step in result.reasoning_trace:
             print(f"  • {step.stage.value}: {step.reasoning[:100]}...")
         
@@ -357,20 +357,36 @@ def main():
             print(f"📋 Scenario '{args.scenario_name}' not found in predefined scenarios.")
             print(f"🔬 Creating dynamic scenario for medical procedure: {args.scenario_name}")
             
+            # Validate the scenario name first
+            from input_validation import InputValidator, ValidationError
+            validation_result = InputValidator.validate_scenario_name(args.scenario_name)
+            
+            if not validation_result.is_valid:
+                print(f"❌ Invalid scenario name: {', '.join(validation_result.errors)}")
+                return
+            
+            if validation_result.warnings:
+                for warning in validation_result.warnings:
+                    print(f"⚠️  Warning: {warning}")
+            
+            # Use sanitized name
+            sanitized_scenario_name = validation_result.sanitized_input
+            print(f"✅ Using sanitized scenario name: {sanitized_scenario_name}")
+            
             # Initialize web research agent
             web_agent = WebResearchAgent()
             
             try:
                 # Research the procedure to gather initial information
-                print(f"🌐 Researching {args.scenario_name} from medical literature...")
-                research_results = web_agent.search_medical_procedure(args.scenario_name)
+                print(f"🌐 Researching {sanitized_scenario_name} from medical literature...")
+                research_results = web_agent.search_medical_procedure(sanitized_scenario_name)
                 
                 # Create enhanced scenario with research data
                 details = f"Researched from {len(research_results['sources_consulted'])} authoritative sources"
                 if research_results['organ_systems']:
                     details += f", affects: {', '.join(set(research_results['organ_systems']))}"
                 
-                dynamic_scenario = create_dynamic_scenario(args.scenario_name, details)
+                dynamic_scenario = create_dynamic_scenario(sanitized_scenario_name, details)
                 dynamic_scenario["research_data"] = research_results  # Include research data
                 
                 scenarios = [dynamic_scenario]
@@ -384,7 +400,7 @@ def main():
             except Exception as e:
                 print(f"⚠️  Web research failed: {str(e)}")
                 print(f"🔄 Creating basic dynamic scenario without web research...")
-                scenarios = [create_dynamic_scenario(args.scenario_name)]
+                scenarios = [create_dynamic_scenario(sanitized_scenario_name)]
     
     if args.compare:
         # Run comparison test
