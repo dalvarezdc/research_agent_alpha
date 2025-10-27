@@ -14,6 +14,7 @@ from pathlib import Path
 
 from medical_reasoning_agent import MedicalReasoningAgent, MedicalInput
 from llm_integrations import create_llm_manager, LLMConfig, LLMProvider
+from web_research import WebResearchAgent
 
 
 def setup_logging(level: str = "INFO"):
@@ -28,6 +29,27 @@ def setup_logging(level: str = "INFO"):
         ]
     )
 
+
+def create_dynamic_scenario(procedure_name: str, details: str = "") -> Dict[str, Any]:
+    """Create a dynamic scenario from user-provided procedure name"""
+    return {
+        "name": procedure_name.replace(" ", "_"),
+        "description": f"Analysis of {procedure_name} medical procedure",
+        "input": {
+            "procedure": procedure_name,
+            "details": details or f"Standard {procedure_name} procedure",
+            "objectives": [
+                "understand implications",
+                "risks and complications",
+                "preparation requirements", 
+                "organs affected by procedure",
+                "post-procedure care",
+                "contraindications"
+            ]
+        },
+        "dynamic": True,  # Flag to indicate this is dynamically created
+        "requires_web_research": True
+    }
 
 def load_test_scenarios(scenarios_file: str = "test_scenarios.json") -> List[Dict[str, Any]]:
     """Load test scenarios from JSON file"""
@@ -324,12 +346,45 @@ def main():
     scenarios = load_test_scenarios(args.scenarios)
     print(f"Loaded {len(scenarios)} test scenarios")
     
-    # Filter specific scenario if requested
+    # Filter specific scenario if requested OR create dynamic scenario
     if args.scenario_name:
-        scenarios = [s for s in scenarios if s['name'] == args.scenario_name]
-        if not scenarios:
-            print(f"❌ Scenario '{args.scenario_name}' not found")
-            return
+        # First try to find existing scenario
+        existing_scenarios = [s for s in scenarios if s['name'] == args.scenario_name]
+        if existing_scenarios:
+            scenarios = existing_scenarios
+        else:
+            # Create dynamic scenario from the name
+            print(f"📋 Scenario '{args.scenario_name}' not found in predefined scenarios.")
+            print(f"🔬 Creating dynamic scenario for medical procedure: {args.scenario_name}")
+            
+            # Initialize web research agent
+            web_agent = WebResearchAgent()
+            
+            try:
+                # Research the procedure to gather initial information
+                print(f"🌐 Researching {args.scenario_name} from medical literature...")
+                research_results = web_agent.search_medical_procedure(args.scenario_name)
+                
+                # Create enhanced scenario with research data
+                details = f"Researched from {len(research_results['sources_consulted'])} authoritative sources"
+                if research_results['organ_systems']:
+                    details += f", affects: {', '.join(set(research_results['organ_systems']))}"
+                
+                dynamic_scenario = create_dynamic_scenario(args.scenario_name, details)
+                dynamic_scenario["research_data"] = research_results  # Include research data
+                
+                scenarios = [dynamic_scenario]
+                
+                print(f"✅ Dynamic scenario created successfully!")
+                print(f"📊 Research confidence: {research_results['research_confidence']}")
+                print(f"📚 Sources consulted: {', '.join(research_results['sources_consulted'])}")
+                if research_results['organ_systems']:
+                    print(f"🫀 Organs identified: {', '.join(set(research_results['organ_systems']))}")
+                
+            except Exception as e:
+                print(f"⚠️  Web research failed: {str(e)}")
+                print(f"🔄 Creating basic dynamic scenario without web research...")
+                scenarios = [create_dynamic_scenario(args.scenario_name)]
     
     if args.compare:
         # Run comparison test
