@@ -1,0 +1,230 @@
+{
+  "metadata": {
+    "report_generated_at": "2025-10-27T16:49:22.250569",
+    "report_version": "1.0",
+    "analysis_type": "medical_procedure_reasoning"
+  },
+  "procedure": {
+    "summary": "MRI Scanner - With gadolinium contrast",
+    "confidence_score": 0.75,
+    "organs_analyzed_count": 4,
+    "reasoning_steps_count": 6
+  },
+  "organs_analysis": [
+    {
+      "organ_name": "kidneys",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          "Adequate hydration pre/post procedure",
+          "Monitor kidney function in at-risk patients",
+          "Avoid NSAIDs 48-72 hours post-procedure"
+        ],
+        "potential": [
+          "N-Acetylcysteine supplementation",
+          "Magnesium support for kidney function",
+          "Sodium bicarbonate pre-treatment"
+        ],
+        "debunked_claims": [
+          "Kidney detox cleanses",
+          "Herbal kidney flushes",
+          "Juice cleanses for elimination"
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 3,
+        "potential_count": 3,
+        "debunked_count": 3
+      }
+    },
+    {
+      "organ_name": "brain",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          "No specific interventions required for healthy patients"
+        ],
+        "potential": [
+          "Minimize repeated exposures when possible"
+        ],
+        "debunked_claims": [
+          "Brain detox supplements",
+          "Chelation therapy for gadolinium removal"
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 1,
+        "potential_count": 1,
+        "debunked_count": 2
+      }
+    },
+    {
+      "organ_name": "liver",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          "Monitor liver function in patients with hepatic disease"
+        ],
+        "potential": [
+          "Antioxidant support",
+          "Milk thistle supplementation"
+        ],
+        "debunked_claims": [
+          "Liver cleanses",
+          "Coffee enemas"
+        ]
+      },
+      "recommendation_counts": {
+        "known_count": 1,
+        "potential_count": 2,
+        "debunked_count": 2
+      }
+    },
+    {
+      "organ_name": "skin",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "elimination",
+        "filtration"
+      ],
+      "evidence_quality": "moderate",
+      "recommendations": {
+        "known": [
+          "Consult healthcare provider"
+        ],
+        "potential": [],
+        "debunked_claims": []
+      },
+      "recommendation_counts": {
+        "known_count": 1,
+        "potential_count": 0,
+        "debunked_count": 0
+      }
+    }
+  ],
+  "general_recommendations": [
+    "Consult healthcare provider",
+    "Monitor for adverse effects"
+  ],
+  "research_gaps": [
+    "Long-term gadolinium retention effects",
+    "Optimal hydration protocols"
+  ],
+  "reasoning_trace": [
+    {
+      "stage": "input_analysis",
+      "timestamp": "2025-10-27T16:49:22.244130",
+      "reasoning": "Parsing medical procedure input and identifying key components",
+      "confidence": 0.8,
+      "input_summary": "{'procedure': 'MRI Scanner', 'details': 'With gadolinium contrast'}",
+      "output_summary": "{'procedure_type': 'MRI Scanner', 'complexity': 'high'}"
+    },
+    {
+      "stage": "organ_identification",
+      "timestamp": "2025-10-27T16:49:22.244847",
+      "reasoning": "Identifying organs affected by procedure based on mechanism of action",
+      "confidence": 0.8,
+      "input_summary": "{'procedure': 'MRI Scanner', 'details': 'With gadolinium contrast'}",
+      "output_summary": "{'organs': ['kidneys', 'brain', 'liver'], 'primary_elimination': 'renal'}"
+    },
+    {
+      "stage": "evidence_gathering",
+      "timestamp": "2025-10-27T16:49:22.244910",
+      "reasoning": "Gathering evidence from medical literature for organ-specific effects",
+      "confidence": 0.8,
+      "input_summary": "{'organs': ['kidneys', 'brain', 'liver', 'skin'], 'search_strategy': 'systematic_review'}",
+      "output_summary": "{'evidence_sources': ['pubmed', 'cochrane', 'clinical_guidelines']}"
+    },
+    {
+      "stage": "risk_assessment",
+      "timestamp": "2025-10-27T16:49:22.244950",
+      "reasoning": "Assessing risk levels based on procedure mechanism and patient factors",
+      "confidence": 0.8,
+      "input_summary": "{'organs': ['kidneys', 'brain', 'liver', 'skin'], 'evidence': {'kidneys': {'elimination_pathway': 'glomerular_filtration', 'risk_factors': ['pre_existing_ckd', 'dehydration', 'age_over_65'], 'evidence...",
+      "output_summary": "{'risk_framework': 'evidence_based', 'risk_levels': ['low', 'moderate', 'high']}"
+    },
+    {
+      "stage": "recommendation_synthesis",
+      "timestamp": "2025-10-27T16:49:22.244988",
+      "reasoning": "Synthesizing evidence-based recommendations while categorizing by evidence quality",
+      "confidence": 0.8,
+      "input_summary": "{'evidence_summary': 4, 'risks_assessed': 4}",
+      "output_summary": "{'categories': ['known_effective', 'potentially_beneficial', 'debunked']}"
+    },
+    {
+      "stage": "critical_evaluation",
+      "timestamp": "2025-10-27T16:49:22.245017",
+      "reasoning": "Critically evaluating recommendations against recent evidence and identifying debunked claims",
+      "confidence": 0.8,
+      "input_summary": "{'recommendations': {'kidneys': {'known_recommendations': ['Adequate hydration pre/post procedure', 'Monitor kidney function in at-risk patients', 'Avoid NSAIDs 48-72 hours post-procedure'], 'potentia...",
+      "output_summary": "{'evaluation_criteria': ['evidence_quality', 'clinical_relevance', 'safety_profile']}"
+    }
+  ],
+  "validation": {
+    "overall_score": 0.7899999999999999,
+    "safety_score": 0.7,
+    "accuracy_score": 1.0,
+    "completeness_score": 0.7,
+    "issues_count": 3,
+    "critical_issues": 0
+  },
+  "confidence_analysis": {
+    "overall_confidence": 0.75,
+    "reasoning_confidence": {
+      "average": 0.8000000000000002,
+      "minimum": 0.8,
+      "maximum": 0.8,
+      "consistency": 0.0
+    },
+    "confidence_interpretation": "High - Good evidence with some limitations"
+  },
+  "recommendations_summary": {
+    "totals": {
+      "known_recommendations": 6,
+      "potential_recommendations": 6,
+      "debunked_claims": 7
+    },
+    "risk_distribution": {
+      "high_risk_organs": 0,
+      "moderate_risk_organs": 4,
+      "low_risk_organs": 0
+    },
+    "organs_with_most_recommendations": [
+      [
+        "kidneys",
+        6
+      ],
+      [
+        "liver",
+        3
+      ],
+      [
+        "brain",
+        2
+      ]
+    ]
+  }
+}

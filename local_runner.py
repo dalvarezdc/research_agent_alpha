@@ -157,6 +157,47 @@ def run_single_scenario(scenario: Dict[str, Any], agent: MedicalReasoningAgent,
         trace_file = scenario_dir / "reasoning_trace.json"
         agent.export_reasoning_trace(str(trace_file))
         
+        # ADDITIONAL: Generate enhanced reports (keeping all existing outputs)
+        try:
+            from report_generator import generate_reports
+            from validation_scoring import validate_medical_output
+            
+            print(f"Generating additional report formats...")
+            
+            # Validate the results
+            validation_report = validate_medical_output(result)
+            validation_dict = {
+                "overall_score": validation_report.overall_score,
+                "safety_score": validation_report.safety_score,
+                "accuracy_score": validation_report.accuracy_score,
+                "completeness_score": validation_report.completeness_score,
+                "issues": [
+                    {
+                        "severity": issue.severity.value,
+                        "category": issue.category.value,
+                        "message": issue.message,
+                        "suggested_fix": issue.suggested_fix
+                    }
+                    for issue in validation_report.issues
+                ]
+            }
+            
+            # Generate additional report formats (supplementing existing files)
+            additional_reports = generate_reports(
+                result, 
+                validation_dict, 
+                str(scenario_dir),
+                f"{scenario['name']}_report"
+            )
+            
+            print(f"✅ Enhanced reports generated:")
+            for report_type, path in additional_reports.items():
+                print(f"    📄 {report_type}: {Path(path).name}")
+                
+        except Exception as e:
+            print(f"⚠️  Enhanced reports not generated: {e}")
+            print("    (Original outputs still available)")
+        
         # Display key results
         print(f"\nProcedure: {result.procedure_summary}")
         print(f"Confidence Score: {result.confidence_score:.2f}")
