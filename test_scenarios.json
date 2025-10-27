@@ -1,0 +1,71 @@
+[
+  {
+    "name": "MRI_with_gadolinium",
+    "description": "MRI scan with gadolinium contrast agent",
+    "input": {
+      "procedure": "MRI Scanner",
+      "details": "With gadolinium contrast",
+      "objectives": [
+        "understand implications",
+        "risks",
+        "what to do after to prevent and reduce risks",
+        "organs affected by procedure",
+        "organs at risk"
+      ]
+    },
+    "expected_focus": [
+      "kidneys",
+      "brain"
+    ],
+    "test_assertions": [
+      "Should identify kidney elimination pathway",
+      "Should recommend hydration",
+      "Should mention gadolinium retention risks"
+    ]
+  },
+  {
+    "name": "CT_with_iodine",
+    "description": "CT scan with iodine contrast",
+    "input": {
+      "procedure": "CT Scan",
+      "details": "With iodine contrast",
+      "objectives": [
+        "nephrotoxicity risks",
+        "thyroid effects",
+        "pre and post procedure care"
+      ]
+    },
+    "expected_focus": [
+      "kidneys",
+      "thyroid"
+    ],
+    "test_assertions": [
+      "Should warn about contrast-induced nephropathy",
+      "Should mention thyroid considerations",
+      "Should recommend kidney function monitoring"
+    ]
+  },
+  {
+    "name": "Cardiac_catheterization",
+    "description": "Cardiac catheterization with contrast",
+    "input": {
+      "procedure": "Cardiac Catheterization",
+      "details": "With iodine contrast for coronary angiography",
+      "objectives": [
+        "cardiac risks",
+        "kidney protection",
+        "post-procedure monitoring"
+      ]
+    },
+    "expected_focus": [
+      "heart",
+      "kidneys",
+      "blood_vessels"
+    ],
+    "test_assertions": [
+      "Should address cardiac risks",
+      "Should emphasize kidney protection",
+      "Should recommend cardiac monitoring"
+    ]
+  }
+]
