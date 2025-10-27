@@ -127,9 +127,14 @@ class MedicalReportGenerator:
         return report
     
     def _format_organs_for_json(self, organs: List[OrganAnalysis]) -> List[Dict[str, Any]]:
-        """Format organ analyses for JSON output"""
-        return [
-            {
+        """Format organ analyses for JSON output with detailed rationales"""
+        formatted_organs = []
+        
+        for organ in organs:
+            # Try to get detailed recommendations from the internal database
+            detailed_data = self._get_detailed_recommendations(organ.organ_name)
+            
+            organ_data = {
                 "organ_name": organ.organ_name,
                 "affected_by_procedure": organ.affected_by_procedure,
                 "at_risk": organ.at_risk,
@@ -137,9 +142,9 @@ class MedicalReportGenerator:
                 "pathways_involved": organ.pathways_involved,
                 "evidence_quality": organ.evidence_quality,
                 "recommendations": {
-                    "known": organ.known_recommendations,
-                    "potential": organ.potential_recommendations,
-                    "debunked_claims": organ.debunked_claims
+                    "known": detailed_data.get("known_recommendations", organ.known_recommendations),
+                    "potential": detailed_data.get("potential_recommendations", organ.potential_recommendations),
+                    "debunked_claims": detailed_data.get("debunked_claims", organ.debunked_claims)
                 },
                 "recommendation_counts": {
                     "known_count": len(organ.known_recommendations),
@@ -147,8 +152,57 @@ class MedicalReportGenerator:
                     "debunked_count": len(organ.debunked_claims)
                 }
             }
-            for organ in organs
-        ]
+            formatted_organs.append(organ_data)
+        
+        return formatted_organs
+    
+    def _get_detailed_recommendations(self, organ_name: str) -> Dict[str, Any]:
+        """Get detailed recommendation data with rationales"""
+        # This mirrors the detailed database from medical_reasoning_agent.py
+        detailed_db = {
+            "kidneys": {
+                "known_recommendations": [
+                    {
+                        "intervention": "Adequate hydration pre/post procedure",
+                        "rationale": "Increases urine flow rate and reduces concentration of contrast agent in tubules, minimizing direct nephrotoxic effects",
+                        "evidence_level": "Strong - Multiple RCTs and guidelines (ESR, ACR)",
+                        "timing": "500ml saline 1-2 hours before, continue 6-12 hours after"
+                    },
+                    {
+                        "intervention": "Monitor kidney function in at-risk patients",
+                        "rationale": "Early detection of contrast-induced nephropathy allows for prompt intervention and prevents progression to acute kidney injury",
+                        "evidence_level": "Strong - Standard of care per nephrology guidelines",
+                        "timing": "Baseline creatinine within 7 days, follow-up at 48-72 hours post-procedure"
+                    },
+                    {
+                        "intervention": "Avoid NSAIDs 48-72 hours post-procedure",
+                        "rationale": "NSAIDs reduce renal blood flow via prostaglandin inhibition, compounding contrast-induced vasoconstriction",
+                        "evidence_level": "Strong - Consistent evidence across multiple studies",
+                        "timing": "48-72 hours before and after contrast exposure"
+                    }
+                ],
+                "potential_recommendations": [
+                    {
+                        "intervention": "N-Acetylcysteine supplementation",
+                        "rationale": "Antioxidant properties may reduce oxidative stress and free radical damage from contrast agents. Acts as glutathione precursor.",
+                        "evidence_level": "Mixed - Some positive RCTs but multiple negative studies and meta-analyses show conflicting results",
+                        "dosing": "600mg orally twice daily for 2 days starting day before procedure",
+                        "limitations": "2018 Cochrane review found no significant benefit; still used in some centers"
+                    }
+                ],
+                "debunked_claims": [
+                    {
+                        "claim": "Chelation therapy for gadolinium removal",
+                        "reason_debunked": "No evidence that chelating agents remove gadolinium from brain tissue; may be harmful",
+                        "debunked_by": "FDA warnings, multiple medical societies including American College of Radiology",
+                        "evidence": "EDTA and other chelators can cause kidney damage, electrolyte imbalances, and cardiac arrhythmias",
+                        "why_harmful": "Serious adverse effects including death; no proven benefit for gadolinium removal"
+                    }
+                ]
+            }
+        }
+        
+        return detailed_db.get(organ_name, {})
     
     def _format_reasoning_trace_for_json(self, trace: List[ReasoningStep]) -> List[Dict[str, Any]]:
         """Format reasoning trace for JSON output"""
@@ -276,34 +330,69 @@ class MedicalReportGenerator:
                 ""
             ])
             
-            # Known Recommendations
-            if organ.known_recommendations:
+            # Get detailed recommendations
+            detailed_data = self._get_detailed_recommendations(organ.organ_name)
+            
+            # Known Recommendations with detailed rationales
+            known_recs = detailed_data.get("known_recommendations", [])
+            if known_recs:
                 report_lines.extend([
                     "#### ✅ Evidence-Based Recommendations",
                     ""
                 ])
-                for rec in organ.known_recommendations:
-                    report_lines.append(f"- {rec}")
+                for rec in known_recs:
+                    if isinstance(rec, dict):
+                        report_lines.extend([
+                            f"**{rec['intervention']}**",
+                            f"- *Rationale:* {rec['rationale']}",
+                            f"- *Evidence Level:* {rec['evidence_level']}",
+                            f"- *Implementation:* {rec.get('timing', rec.get('dosing', 'As clinically indicated'))}",
+                            ""
+                        ])
+                    else:
+                        report_lines.append(f"- {rec}")
                 report_lines.append("")
             
-            # Potential Recommendations
-            if organ.potential_recommendations:
+            # Potential Recommendations with detailed rationales
+            potential_recs = detailed_data.get("potential_recommendations", [])
+            if potential_recs:
                 report_lines.extend([
                     "#### 🔬 Potential Interventions (Limited Evidence)",
                     ""
                 ])
-                for rec in organ.potential_recommendations:
-                    report_lines.append(f"- {rec}")
+                for rec in potential_recs:
+                    if isinstance(rec, dict):
+                        report_lines.extend([
+                            f"**{rec['intervention']}**",
+                            f"- *Rationale:* {rec['rationale']}",
+                            f"- *Evidence Level:* {rec['evidence_level']}",
+                            f"- *Dosing:* {rec.get('dosing', 'Consult literature')}",
+                            f"- *Limitations:* {rec.get('limitations', 'Limited data available')}",
+                            ""
+                        ])
+                    else:
+                        report_lines.append(f"- {rec}")
                 report_lines.append("")
             
-            # Debunked Claims
-            if organ.debunked_claims:
+            # Debunked Claims with detailed explanations
+            debunked_claims = detailed_data.get("debunked_claims", [])
+            if debunked_claims:
                 report_lines.extend([
                     "#### ❌ Debunked/Ineffective Approaches",
                     ""
                 ])
-                for claim in organ.debunked_claims:
-                    report_lines.append(f"- {claim}")
+                for claim in debunked_claims:
+                    if isinstance(claim, dict):
+                        report_lines.extend([
+                            f"**{claim['claim']}**",
+                            f"- *Why Debunked:* {claim['reason_debunked']}",
+                            f"- *Debunked By:* {claim['debunked_by']}",
+                            f"- *Evidence Against:* {claim['evidence']}",
+                            f"- *Why Harmful:* {claim['why_harmful']}",
+                            ""
+                        ])
+                    else:
+                        report_lines.append(f"- {claim}")
                 report_lines.append("")
         
         # General Recommendations

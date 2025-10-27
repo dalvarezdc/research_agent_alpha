@@ -1,0 +1,27 @@
+# MRI Scanner - With contrast - Analysis Summary
+
+**Confidence:** 0.75 | **Organs:** 4 | **Generated:** 2025-10-27 17:16
+
+## 🟡 Moderate Risk Organs
+
+- **Kidneys**: 3 known + 3 potential interventions
+- **Brain**: 1 known + 1 potential interventions
+- **Liver**: 1 known + 2 potential interventions
+- **Skin**: 1 known + 0 potential interventions
+
+## ✅ Key Evidence-Based Actions
+
+- Consult healthcare provider
+- Avoid NSAIDs 48-72 hours post-procedure
+- Monitor liver function in patients with hepatic disease
+- No specific interventions required for healthy patients
+- Monitor kidney function in at-risk patients
+
+## ❌ Avoid These Debunked Approaches
+
+- Kidney detox cleanses
+- Herbal kidney flushes
+- Juice cleanses for elimination
+
+---
+*For detailed analysis, generate full report. Educational use only.*
