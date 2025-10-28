@@ -13,7 +13,7 @@ from typing import Dict, Any, List
 from pathlib import Path
 
 from simple_medical_agent import create_simple_agent
-from medical_reasoning_agent import MedicalInput
+from medical_reasoning_agent import MedicalReasoningAgent, MedicalInput
 from llm_integrations import create_llm_manager, LLMConfig, LLMProvider
 from web_research import WebResearchAgent
 

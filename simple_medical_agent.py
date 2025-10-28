@@ -567,7 +567,7 @@ Examples:
     args = parser.parse_args()
     
     # Create agent
-    provider = None if args.provider == "none" else args.provider
+    provider = None if args.provider == "" else args.provider
     agent = create_simple_agent(provider, enable_logging=not args.quiet)
     
     # Create medical input
