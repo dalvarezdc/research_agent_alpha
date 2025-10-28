@@ -396,7 +396,7 @@ def create_llm_manager(primary_provider: str = "claude",
     if primary_provider == "claude":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE,
-            model="claude-3-sonnet-20240229",
+            model="claude-sonnet-4-5-20250929",
             temperature=0.1
         ))
     

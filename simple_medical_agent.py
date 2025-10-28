@@ -8,6 +8,10 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from medical_reasoning_agent import MedicalInput, MedicalOutput, OrganAnalysis, ReasoningStep, ReasoningStage
 from organ_analyzer import OrganAnalyzer
