@@ -33,6 +33,12 @@ class SimpleMedicalAgent:
         self.logger = logging.getLogger(__name__)
         if not enable_logging:
             self.logger.disabled = True
+        
+        # Log initialization
+        if llm_manager:
+            self.logger.info("🤖 LLM integration enabled - will use AI for enhanced analysis")
+        else:
+            self.logger.info("🔧 Running in offline mode - using built-in medical knowledge base")
     
     def analyze_procedure(self, medical_input: MedicalInput) -> MedicalOutput:
         """Main analysis method - simplified and clear"""
@@ -205,6 +211,7 @@ class SimpleMedicalAgent:
     def export_reasoning_trace(self, filepath: str):
         """Export reasoning trace to file"""
         import json
+        import os
         
         trace_data = []
         for step in self.reasoning_trace:
@@ -218,7 +225,9 @@ class SimpleMedicalAgent:
         with open(filepath, 'w') as f:
             json.dump(trace_data, f, indent=2)
         
-        self.logger.info(f"Reasoning trace exported to {filepath}")
+        abs_path = os.path.abspath(filepath)
+        self.logger.info(f"📄 Reasoning trace saved to: {abs_path}")
+        return abs_path
 
 
 # Factory function for easy creation
@@ -264,8 +273,8 @@ Examples:
                        help="Medical procedure name (default: MRI Scanner)")
     
     parser.add_argument("--details", "-d",
-                       default="With contrast", 
-                       help="Procedure details (default: With contrast)")
+                       default=None, 
+                       help="Procedure details (default: None)")
     
     parser.add_argument("--objectives", "-o",
                        nargs="+",
@@ -292,15 +301,16 @@ Examples:
     agent = create_simple_agent(provider, enable_logging=not args.quiet)
     
     # Create medical input
+    details = args.details or ""  # Convert None to empty string
     medical_input = MedicalInput(
         procedure=args.procedure,
-        details=args.details,
+        details=details,
         objectives=tuple(args.objectives)
     )
     
     if not args.quiet:
         print(f"🧠 Analyzing: {args.procedure}")
-        print(f"📋 Details: {args.details}")
+        print(f"📋 Details: {details or 'None specified'}")
         print(f"🎯 Objectives: {', '.join(args.objectives)}")
         print(f"🤖 Provider: {args.provider}")
         print("-" * 50)
@@ -321,9 +331,9 @@ Examples:
         print(f"    Potential recommendations: {len(organ.potential_recommendations)}")
         print(f"    Debunked claims: {len(organ.debunked_claims)}")
     
-    # Export reasoning trace
-    agent.export_reasoning_trace(args.output)
-    print(f"\n📄 Reasoning trace exported to: {args.output}")
+    # Export reasoning trace  
+    saved_path = agent.export_reasoning_trace(args.output)
+    print(f"\n📄 Reasoning trace exported to: {saved_path}")
     
     if not args.quiet:
         print(f"\n💡 To see detailed recommendations, check the trace file!")

@@ -21,6 +21,25 @@ except ImportError:
 class WebResearchAgent:
     """Agent for researching medical information using Tavily Search"""
     
+    # Source mapping for efficient URL classification
+    SOURCE_MAPPING = {
+        ("pubmed", "ncbi.nlm.nih.gov"): "PubMed/NCBI",
+        ("nih.gov",): "NIH", 
+        ("medlineplus",): "MedlinePlus",
+        ("fda.gov",): "FDA",
+        ("cdc.gov",): "CDC",
+        ("cochrane",): "Cochrane Library",
+        ("mayoclinic",): "Mayo Clinic",
+        ("nhs.uk",): "NHS",
+        ("who.int",): "WHO",
+        ("jamanetwork",): "JAMA",
+        ("nejm.org",): "NEJM",
+        ("thelancet",): "The Lancet",
+        ("bmj.com",): "BMJ",
+        ("acr.org",): "ACR",
+        ("rsna.org",): "RSNA"
+    }
+    
     # Pre-compiled regex patterns for efficient text processing
     ORGAN_PATTERNS = [
         (re.compile(r'\b(kidney|renal|nephro)\w*\b', re.IGNORECASE), 'kidneys'),
@@ -81,13 +100,17 @@ class WebResearchAgent:
         self.api_key = api_key or os.getenv("TAVILY_API_KEY")
         
         if TavilyClient is None:
-            raise ImportError("Tavily client not available. Install with: pip install tavily-python")
+            self.logger.warning("🔍 Tavily client not available. Web research disabled. Install with: pip install tavily-python")
+            self.client = None
+            return
         
         if not self.api_key:
-            raise ValueError("Tavily API key required. Set TAVILY_API_KEY environment variable or pass api_key parameter")
+            self.logger.warning("🔍 No Tavily API key found. Web research disabled. Set TAVILY_API_KEY environment variable")
+            self.client = None
+            return
         
         self.client = TavilyClient(api_key=self.api_key)
-        self.logger.info("Tavily search client initialized")
+        self.logger.info("🔍 Tavily web research enabled - will search authoritative medical sources")
         
     def search_medical_procedure(self, procedure: str, specific_aspects: List[str] = None) -> Dict[str, Any]:
         """
@@ -126,10 +149,16 @@ class WebResearchAgent:
         
         all_results = []
         
+        # Check if Tavily is available
+        if not self.client:
+            self.logger.warning("🔍 Tavily web research unavailable - returning minimal research data")
+            research_results["research_confidence"] = 0.1
+            return research_results
+        
         # Perform searches with Tavily
         for query in search_queries:
             try:
-                self.logger.info(f"Searching: {query}")
+                self.logger.info(f"🔍 Searching medical literature: {query}")
                 
                 # Search with medical domain focus
                 response = self.client.search(
@@ -137,15 +166,24 @@ class WebResearchAgent:
                     search_depth="advanced",
                     include_domains=[
                         "pubmed.ncbi.nlm.nih.gov",
+                        "nih.gov",
+                        "ncbi.nlm.nih.gov", 
                         "medlineplus.gov", 
                         "fda.gov",
+                        "cdc.gov",
                         "cochranelibrary.com",
                         "uptodate.com",
                         "mayoclinic.org",
                         "nhs.uk",
-                        "who.int"
+                        "who.int",
+                        "jamanetwork.com",
+                        "nejm.org",
+                        "thelancet.com",
+                        "bmj.com",
+                        "acr.org",
+                        "rsna.org"
                     ],
-                    max_results=10
+                    max_results=15
                 )
                 
                 if response and "results" in response:
@@ -168,6 +206,16 @@ class WebResearchAgent:
             research_results["research_confidence"] = 0.1
         
         return research_results
+    
+    def _identify_source(self, url: str) -> str:
+        """Efficiently identify source from URL using mapping"""
+        url_lower = url.lower()
+        
+        for domains, source_name in self.SOURCE_MAPPING.items():
+            if any(domain in url_lower for domain in domains):
+                return source_name
+        
+        return "Medical Literature"
     
     def _generate_search_queries(self, procedure: str, aspects: List[str] = None) -> List[str]:
         """Generate targeted search queries for the procedure"""
@@ -193,23 +241,8 @@ class WebResearchAgent:
             title = result.get("title", "")
             content = result.get("content", "")
             
-            # Track sources
-            if "pubmed" in url:
-                sources.add("PubMed")
-            elif "medlineplus" in url:
-                sources.add("MedlinePlus")
-            elif "fda.gov" in url:
-                sources.add("FDA")
-            elif "cochrane" in url:
-                sources.add("Cochrane Library")
-            elif "mayoclinic" in url:
-                sources.add("Mayo Clinic")
-            elif "nhs.uk" in url:
-                sources.add("NHS")
-            elif "who.int" in url:
-                sources.add("WHO")
-            else:
-                sources.add("Medical Literature")
+            # Track sources using mapping
+            sources.add(self._identify_source(url))
             
             # Extract information from content
             combined_text = f"{title} {content}".lower()
@@ -328,9 +361,9 @@ class WebResearchAgent:
         confidence_bonus = min(results_count * 0.05, 0.3)
         
         # Increase confidence based on authoritative sources
-        authoritative_sources = {"PubMed", "FDA", "Cochrane Library", "NHS", "WHO"}
+        authoritative_sources = {"PubMed/NCBI", "NIH", "FDA", "CDC", "Cochrane Library", "NHS", "WHO", "JAMA", "NEJM", "The Lancet", "BMJ"}
         sources_found = set(research_results["sources_consulted"])
-        authority_bonus = len(sources_found.intersection(authoritative_sources)) * 0.1
+        authority_bonus = len(sources_found.intersection(authoritative_sources)) * 0.08
         
         # Increase confidence if we found comprehensive information
         if research_results["organ_systems"]:
