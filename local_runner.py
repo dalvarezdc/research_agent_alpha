@@ -12,7 +12,8 @@ import logging
 from typing import Dict, Any, List
 from pathlib import Path
 
-from medical_reasoning_agent import MedicalReasoningAgent, MedicalInput
+from simple_medical_agent import SimpleMedicalAgent, create_simple_agent
+from medical_reasoning_agent import MedicalInput
 from llm_integrations import create_llm_manager, LLMConfig, LLMProvider
 from web_research import WebResearchAgent
 
@@ -144,7 +145,7 @@ def run_single_scenario(scenario: Dict[str, Any], agent: MedicalReasoningAgent,
     
     try:
         # Run analysis
-        result = agent.analyze_medical_procedure(medical_input)
+        result = agent.analyze_procedure(medical_input)
         
         # Create output directory for this scenario
         scenario_dir = output_dir / scenario['name']
@@ -272,8 +273,8 @@ def run_comparison_test(scenarios: List[Dict[str, Any]], llm_providers: List[str
         
         try:
             # Create agent with specific provider
-            agent = MedicalReasoningAgent(
-                primary_llm_provider=provider,
+            agent = create_simple_agent(
+                llm_provider=provider,
                 enable_logging=True
             )
             
@@ -410,9 +411,8 @@ def main():
         # Run with single provider
         print(f"🤖 Using {args.provider.upper()} as primary LLM provider")
         
-        agent = MedicalReasoningAgent(
-            primary_llm_provider=args.provider,
-            fallback_providers=["openai", "ollama"] if args.provider != "openai" else ["claude", "ollama"],
+        agent = create_simple_agent(
+            llm_provider=args.provider,
             enable_logging=True
         )
         

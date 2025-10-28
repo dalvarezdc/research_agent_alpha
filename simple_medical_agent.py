@@ -258,3 +258,7 @@ if __name__ == "__main__":
         print(f"\n{organ.organ_name.upper()}:")
         print(f"  Risk level: {organ.risk_level}")
         print(f"  Known recommendations: {len(organ.known_recommendations)}")
+    
+    # Export reasoning trace
+    agent.export_reasoning_trace("reasoning_trace.json")
+    print(f"\nReasoning trace exported to: reasoning_trace.json")
