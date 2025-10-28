@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import time
 import json
 import re
+from colored_logger import get_colored_logger
 
 try:
     from tavily import TavilyClient
@@ -96,21 +97,21 @@ class WebResearchAgent:
     ]
     
     def __init__(self, api_key: Optional[str] = None):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_colored_logger(__name__)
         self.api_key = api_key or os.getenv("TAVILY_API_KEY")
         
         if TavilyClient is None:
-            self.logger.warning("🔍 Tavily client not available. Web research disabled. Install with: pip install tavily-python")
+            self.logger.web_research_disabled("Tavily client not available. Install with: pip install tavily-python")
             self.client = None
             return
         
         if not self.api_key:
-            self.logger.warning("🔍 No Tavily API key found. Web research disabled. Set TAVILY_API_KEY environment variable")
+            self.logger.web_research_disabled("No API key found. Set TAVILY_API_KEY environment variable")
             self.client = None
             return
         
         self.client = TavilyClient(api_key=self.api_key)
-        self.logger.info("🔍 Tavily web research enabled - will search authoritative medical sources")
+        self.logger.web_research_enabled()
         
     def search_medical_procedure(self, procedure: str, specific_aspects: List[str] = None) -> Dict[str, Any]:
         """
@@ -151,14 +152,14 @@ class WebResearchAgent:
         
         # Check if Tavily is available
         if not self.client:
-            self.logger.warning("🔍 Tavily web research unavailable - returning minimal research data")
+            self.logger.fallback_mode("Web Research", "Tavily unavailable - returning minimal research data")
             research_results["research_confidence"] = 0.1
             return research_results
         
         # Perform searches with Tavily
         for query in search_queries:
             try:
-                self.logger.info(f"🔍 Searching medical literature: {query}")
+                self.logger.web_search_query(query)
                 
                 # Search with medical domain focus
                 response = self.client.search(

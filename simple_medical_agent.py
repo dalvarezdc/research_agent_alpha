@@ -18,6 +18,7 @@ from organ_analyzer import OrganAnalyzer
 from evidence_gatherer import EvidenceGatherer
 from recommendation_synthesizer import RecommendationSynthesizer
 from input_validation import InputValidator, ValidationError
+from colored_logger import get_colored_logger
 
 
 class SimpleMedicalAgent:
@@ -33,20 +34,18 @@ class SimpleMedicalAgent:
         self.evidence_gatherer = EvidenceGatherer(llm_manager)
         self.recommendation_synthesizer = RecommendationSynthesizer(llm_manager)
         
-        # Setup logging
-        self.logger = logging.getLogger(__name__)
-        if not enable_logging:
-            self.logger.disabled = True
+        # Setup colored logging
+        self.logger = get_colored_logger(__name__, enable_logging)
         
-        # Log initialization
+        # Log initialization with colors
         if llm_manager:
-            self.logger.info("🤖 LLM integration enabled - will use AI for enhanced analysis")
+            self.logger.llm_enabled("AI models")
         else:
-            self.logger.info("🔧 Running in offline mode - using built-in medical knowledge base")
+            self.logger.llm_offline_mode()
     
     def analyze_procedure(self, medical_input: MedicalInput) -> MedicalOutput:
         """Main analysis method - simplified and clear"""
-        self.logger.info(f"Starting analysis of {medical_input.procedure}")
+        self.logger.analysis_start(medical_input.procedure)
         self.reasoning_trace = []
         
         try:
@@ -71,6 +70,7 @@ class SimpleMedicalAgent:
     
     def _validate_input(self, medical_input: MedicalInput):
         """Validate medical input"""
+        self.logger.analysis_stage("INPUT_ANALYSIS", f"Validating input for {medical_input.procedure}")
         self._log_step(
             ReasoningStage.INPUT_ANALYSIS,
             f"Validating input for {medical_input.procedure}",
@@ -80,10 +80,13 @@ class SimpleMedicalAgent:
         # Basic validation
         proc_result = InputValidator.validate_medical_procedure(medical_input.procedure)
         if not proc_result.is_valid:
-            raise ValidationError(f"Invalid procedure: {', '.join(proc_result.errors)}")
+            error_msg = f"Invalid procedure: {', '.join(proc_result.errors)}"
+            self.logger.validation_error(error_msg)
+            raise ValidationError(error_msg)
     
     def _identify_organs(self, medical_input: MedicalInput) -> List[str]:
         """Identify affected organs"""
+        self.logger.analysis_stage("ORGAN_IDENTIFICATION", f"Identifying organs affected by {medical_input.procedure}")
         self._log_step(
             ReasoningStage.ORGAN_IDENTIFICATION,
             f"Identifying organs affected by {medical_input.procedure}",
@@ -91,11 +94,12 @@ class SimpleMedicalAgent:
         )
         
         organs = self.organ_analyzer.identify_affected_organs(medical_input)
-        self.logger.info(f"Identified organs: {organs}")
+        self.logger.organs_identified(organs)
         return organs
     
     def _gather_evidence(self, organs: List[str], medical_input: MedicalInput) -> Dict[str, Dict[str, Any]]:
         """Gather evidence for organs"""
+        self.logger.analysis_stage("EVIDENCE_GATHERING", f"Gathering evidence for {len(organs)} organs")
         self._log_step(
             ReasoningStage.EVIDENCE_GATHERING,
             f"Gathering evidence for {len(organs)} organs",
@@ -103,12 +107,18 @@ class SimpleMedicalAgent:
         )
         
         evidence = self.evidence_gatherer.get_evidence_summary(organs, medical_input.procedure)
-        self.logger.info(f"Gathered evidence for {len(evidence)} organs")
+        
+        # Log evidence quality for each organ
+        for organ, organ_evidence in evidence.items():
+            quality = organ_evidence.get("quality", "unknown")
+            self.logger.evidence_gathered(organ, quality)
+        
         return evidence
     
     def _generate_recommendations(self, organs: List[str], evidence: Dict[str, Dict[str, Any]], 
                                 medical_input: MedicalInput) -> Dict[str, Dict[str, List[str]]]:
         """Generate recommendations"""
+        self.logger.analysis_stage("RECOMMENDATION_SYNTHESIS", f"Generating recommendations for {len(organs)} organs")
         self._log_step(
             ReasoningStage.RECOMMENDATION_SYNTHESIS,
             f"Generating recommendations for {len(organs)} organs",
@@ -118,13 +128,19 @@ class SimpleMedicalAgent:
         recommendations = self.recommendation_synthesizer.synthesize_all_recommendations(
             evidence, medical_input
         )
-        self.logger.info(f"Generated recommendations for {len(recommendations)} organs")
+        
+        # Log recommendation counts for each organ
+        for organ, organ_recs in recommendations.items():
+            total_count = len(organ_recs.get("known", [])) + len(organ_recs.get("potential", [])) + len(organ_recs.get("debunked", []))
+            self.logger.recommendations_generated(organ, total_count)
+        
         return recommendations
     
     def _create_output(self, medical_input: MedicalInput, organs: List[str], 
                       evidence: Dict[str, Dict[str, Any]], 
                       recommendations: Dict[str, Dict[str, List[str]]]) -> MedicalOutput:
         """Create final structured output"""
+        self.logger.analysis_stage("CRITICAL_EVALUATION", "Creating final analysis output")
         self._log_step(
             ReasoningStage.CRITICAL_EVALUATION,
             "Creating final analysis output",
@@ -152,6 +168,9 @@ class SimpleMedicalAgent:
         
         # Calculate confidence
         confidence = self._calculate_confidence(organs, evidence, recommendations)
+        
+        # Log analysis completion
+        self.logger.analysis_complete(confidence, len(organs))
         
         return MedicalOutput(
             procedure_summary=f"{medical_input.procedure} - {medical_input.details}",
@@ -230,7 +249,7 @@ class SimpleMedicalAgent:
             json.dump(trace_data, f, indent=2)
         
         abs_path = os.path.abspath(filepath)
-        self.logger.info(f"📄 Reasoning trace saved to: {abs_path}")
+        self.logger.file_saved("reasoning_trace", abs_path)
         return abs_path
     
     def export_analysis_result(self, result: 'MedicalOutput', filepath: str):
@@ -265,7 +284,7 @@ class SimpleMedicalAgent:
             json.dump(analysis_data, f, indent=2)
         
         abs_path = os.path.abspath(filepath)
-        self.logger.info(f"📊 Analysis result saved to: {abs_path}")
+        self.logger.file_saved("analysis_result", abs_path)
         return abs_path
     
     def export_summary_report(self, result: 'MedicalOutput', filepath: str):
@@ -451,7 +470,7 @@ class SimpleMedicalAgent:
             f.write(summary)
         
         abs_path = os.path.abspath(filepath)
-        self.logger.info(f"📝 COMPREHENSIVE medical report saved to: {abs_path}")
+        self.logger.file_saved("comprehensive_report", abs_path)
         return abs_path
     
     def _confidence_interpretation(self, score: float) -> str:
@@ -479,14 +498,19 @@ class SimpleMedicalAgent:
 # Factory function for easy creation
 def create_simple_agent(llm_provider: str = "claude", enable_logging: bool = True) -> SimpleMedicalAgent:
     """Create a simple medical agent with optional LLM support"""
+    logger = get_colored_logger("create_simple_agent", enable_logging)
     llm_manager = None
     
     if llm_provider:
         try:
             from llm_integrations import create_llm_manager
             llm_manager = create_llm_manager(llm_provider)
+            logger.provider_auth_success(llm_provider)
+        except ImportError as e:
+            logger.provider_unavailable(llm_provider)
         except Exception as e:
-            logging.warning(f"Failed to initialize LLM: {e}. Running in fallback mode.")
+            logger.provider_auth_failed(llm_provider, str(e))
+            logger.fallback_mode("LLM", "Running in offline mode")
     
     return SimpleMedicalAgent(llm_manager, enable_logging)
 
