@@ -236,29 +236,95 @@ def create_simple_agent(llm_provider: str = "claude", enable_logging: bool = Tru
     return SimpleMedicalAgent(llm_manager, enable_logging)
 
 
-# Example usage
+# Command line interface
 if __name__ == "__main__":
-    # Simple test
-    agent = create_simple_agent("claude", enable_logging=True)
+    import argparse
     
-    medical_input = MedicalInput(
-        procedure="MRI Scanner",
-        details="With contrast",
-        objectives=("understand implications", "risks", "post-procedure care")
+    parser = argparse.ArgumentParser(
+        description="Simple Medical Reasoning Agent - Analyze medical procedures with AI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use defaults (MRI with contrast)
+  python simple_medical_agent.py
+  
+  # Custom procedure
+  python simple_medical_agent.py --procedure "Endoscopy" --details "Upper GI endoscopy" 
+  
+  # Custom objectives
+  python simple_medical_agent.py --objectives "risks" "preparation" "recovery"
+  
+  # Different LLM provider
+  python simple_medical_agent.py --provider openai
+        """
     )
     
+    parser.add_argument("--procedure", "-p", 
+                       default="MRI Scanner",
+                       help="Medical procedure name (default: MRI Scanner)")
+    
+    parser.add_argument("--details", "-d",
+                       default="With contrast", 
+                       help="Procedure details (default: With contrast)")
+    
+    parser.add_argument("--objectives", "-o",
+                       nargs="+",
+                       default=["understand implications", "risks", "post-procedure care"],
+                       help="Analysis objectives (default: implications, risks, care)")
+    
+    parser.add_argument("--provider",
+                       choices=["claude", "openai", "ollama", "none"],
+                       default="claude",
+                       help="LLM provider to use (default: claude)")
+    
+    parser.add_argument("--output", 
+                       default="reasoning_trace.json",
+                       help="Output file for reasoning trace (default: reasoning_trace.json)")
+    
+    parser.add_argument("--quiet", "-q",
+                       action="store_true",
+                       help="Reduce output verbosity")
+    
+    args = parser.parse_args()
+    
+    # Create agent
+    provider = None if args.provider == "none" else args.provider
+    agent = create_simple_agent(provider, enable_logging=not args.quiet)
+    
+    # Create medical input
+    medical_input = MedicalInput(
+        procedure=args.procedure,
+        details=args.details,
+        objectives=tuple(args.objectives)
+    )
+    
+    if not args.quiet:
+        print(f"🧠 Analyzing: {args.procedure}")
+        print(f"📋 Details: {args.details}")
+        print(f"🎯 Objectives: {', '.join(args.objectives)}")
+        print(f"🤖 Provider: {args.provider}")
+        print("-" * 50)
+    
+    # Run analysis
     result = agent.analyze_procedure(medical_input)
     
-    print(f"Analysis complete:")
-    print(f"Procedure: {result.procedure_summary}")
-    print(f"Organs analyzed: {len(result.organs_analyzed)}")
-    print(f"Confidence: {result.confidence_score:.2f}")
+    # Display results
+    print(f"✅ Analysis complete!")
+    print(f"📝 Procedure: {result.procedure_summary}")
+    print(f"🫀 Organs analyzed: {len(result.organs_analyzed)}")
+    print(f"📊 Confidence: {result.confidence_score:.2f}")
     
     for organ in result.organs_analyzed:
-        print(f"\n{organ.organ_name.upper()}:")
-        print(f"  Risk level: {organ.risk_level}")
-        print(f"  Known recommendations: {len(organ.known_recommendations)}")
+        print(f"\n🔍 {organ.organ_name.upper()}:")
+        print(f"    Risk level: {organ.risk_level}")
+        print(f"    Known recommendations: {len(organ.known_recommendations)}")
+        print(f"    Potential recommendations: {len(organ.potential_recommendations)}")
+        print(f"    Debunked claims: {len(organ.debunked_claims)}")
     
     # Export reasoning trace
-    agent.export_reasoning_trace("reasoning_trace.json")
-    print(f"\nReasoning trace exported to: reasoning_trace.json")
+    agent.export_reasoning_trace(args.output)
+    print(f"\n📄 Reasoning trace exported to: {args.output}")
+    
+    if not args.quiet:
+        print(f"\n💡 To see detailed recommendations, check the trace file!")
+        print(f"💡 Run with -h to see all available options.")
