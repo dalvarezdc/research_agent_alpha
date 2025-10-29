@@ -78,6 +78,7 @@ class MedicalOutput:
     research_gaps: List[str]
     confidence_score: float
     reasoning_trace: List[ReasoningStep]
+    procedure_overview: Optional[Dict[str, str]] = None  # New field for overview (description, conditions, contraindications)
     token_usage: Optional[TokenUsage] = None
 
 

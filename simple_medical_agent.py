@@ -52,7 +52,16 @@ class SimpleMedicalAgent:
             # 1. Validate input
             self._validate_input(medical_input)
 
-            # 2. Perform consolidated analysis (ONE LLM call instead of multiple)
+            # 2. Get procedure overview (SEPARATE API call)
+            self.logger.analysis_stage("PROCEDURE_OVERVIEW", f"Fetching overview for {medical_input.procedure}")
+            self._log_step(
+                ReasoningStage.INPUT_ANALYSIS,
+                f"Fetching procedure overview for {medical_input.procedure}",
+                {"method": "consolidated_analyzer.get_procedure_overview"}
+            )
+            procedure_overview = self.consolidated_analyzer.get_procedure_overview(medical_input)
+
+            # 3. Perform consolidated analysis (ONE LLM call instead of multiple)
             self.logger.analysis_stage("CONSOLIDATED_ANALYSIS", f"Analyzing {medical_input.procedure} (single call)")
             self._log_step(
                 ReasoningStage.ORGAN_IDENTIFICATION,
@@ -62,8 +71,8 @@ class SimpleMedicalAgent:
 
             analysis_result = self.consolidated_analyzer.analyze_procedure(medical_input)
 
-            # 3. Create final output from consolidated result
-            return self._create_output_from_consolidated(medical_input, analysis_result)
+            # 4. Create final output from consolidated result
+            return self._create_output_from_consolidated(medical_input, analysis_result, procedure_overview)
 
         except Exception as e:
             self.logger.error(f"Analysis failed: {str(e)}")
@@ -87,7 +96,8 @@ class SimpleMedicalAgent:
     
     
     def _create_output_from_consolidated(self, medical_input: MedicalInput,
-                                        analysis_result: Dict[str, Any]) -> MedicalOutput:
+                                        analysis_result: Dict[str, Any],
+                                        procedure_overview: Dict[str, str]) -> MedicalOutput:
         """Create final structured output from consolidated analysis result"""
         self.logger.analysis_stage("CRITICAL_EVALUATION", "Creating final analysis output")
 
@@ -145,6 +155,7 @@ class SimpleMedicalAgent:
 
         return MedicalOutput(
             procedure_summary=f"{medical_input.procedure} - {medical_input.details}",
+            procedure_overview=procedure_overview,
             organs_analyzed=organ_analyses,
             general_recommendations=[
                 "Consult healthcare provider before procedure",
@@ -239,13 +250,35 @@ class SimpleMedicalAgent:
         """Export comprehensive medical analysis report"""
         import os
         
+        # Build procedure overview section
+        overview_section = ""
+        if result.procedure_overview:
+            overview = result.procedure_overview
+            overview_section = f"""
+## 📋 PROCEDURE INFORMATION
+
+### What is {result.procedure_summary.split(' - ')[0]}?
+
+{overview.get('description', 'No description available.')}
+
+### 🎯 Medical Conditions Treated
+
+{overview.get('conditions_treated', 'No conditions information available.')}
+
+### ⚠️ Patients at Special Risk / Contraindications
+
+{overview.get('contraindications', 'No contraindications information available.')}
+
+---
+"""
+
         summary = f"""# COMPREHENSIVE MEDICAL PROCEDURE ANALYSIS
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis System:** SimpleMedicalAgent v2.0
 
 ---
-
-## 🏥 PROCEDURE OVERVIEW
+{overview_section}
+## 🏥 ANALYSIS OVERVIEW
 **Procedure:** {result.procedure_summary}
 **Analysis Confidence:** {result.confidence_score:.2f}/1.00 ({self._confidence_interpretation(result.confidence_score)})
 **Total Organs Analyzed:** {len(result.organs_analyzed)}
