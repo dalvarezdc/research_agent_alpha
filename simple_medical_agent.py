@@ -323,33 +323,51 @@ class SimpleMedicalAgent:
             for pathway in organ.pathways_involved:
                 summary += f"- {pathway.replace('_', ' ').title()}\n"
             
-            summary += f"""
-**✅ EVIDENCE-BASED RECOMMENDATIONS** ({len(organ.known_recommendations)} items)
-*These are proven, medically-established interventions with strong clinical evidence*
+            # Filter out generic/placeholder recommendations
+            filtered_known = [rec for rec in organ.known_recommendations
+                            if not any(phrase in rec.lower() for phrase in
+                                     ['standard potential recommendations', 'standard debunked recommendations',
+                                      'key considerations:', 'rationale for', 'limitations acknowledged',
+                                      'emerging but not yet standard', 'synthesized recommendations'])]
+
+            filtered_potential = [rec for rec in organ.potential_recommendations
+                                if not any(phrase in rec.lower() for phrase in
+                                         ['standard potential recommendations', 'key considerations:'])]
+
+            filtered_debunked = [rec for rec in organ.debunked_claims
+                               if not any(phrase in rec.lower() for phrase in
+                                        ['standard debunked recommendations'])]
+
+            if filtered_known:
+                summary += f"""
+**✅ EVIDENCE-BASED RECOMMENDATIONS** ({len(filtered_known)} recommendations)
+*Proven interventions with strong clinical evidence*
 
 """
-            for j, rec in enumerate(organ.known_recommendations, 1):
-                summary += f"{j}. **{rec}**\n"
-                summary += f"   - *Evidence Level: Strong clinical support*\n"
-                summary += f"   - *Implementation: Follow standard medical protocols*\n\n"
-            
-            summary += f"""**🔬 INVESTIGATIONAL/POTENTIAL TREATMENTS** ({len(organ.potential_recommendations)} items)
-*These show promise but need more research or have limited evidence*
+                for j, rec in enumerate(filtered_known, 1):
+                    # Clean up formatting - remove excessive asterisks and colons at end
+                    clean_rec = rec.strip('*').strip(':').strip()
+                    summary += f"{j}. {clean_rec}\n"
+
+            if filtered_potential:
+                summary += f"""
+**🔬 INVESTIGATIONAL/POTENTIAL TREATMENTS** ({len(filtered_potential)} items)
+*Show promise but need more research*
 
 """
-            for j, rec in enumerate(organ.potential_recommendations, 1):
-                summary += f"{j}. **{rec}**\n"
-                summary += f"   - *Evidence Level: Limited but promising*\n"
-                summary += f"   - *Status: Under investigation or emerging evidence*\n\n"
-            
-            summary += f"""**❌ DEBUNKED/HARMFUL TREATMENTS** ({len(organ.debunked_claims)} items)
-*These are PROVEN INEFFECTIVE or potentially dangerous - AVOID these*
+                for j, rec in enumerate(filtered_potential, 1):
+                    clean_rec = rec.strip('*').strip(':').strip()
+                    summary += f"{j}. {clean_rec}\n"
+
+            if filtered_debunked:
+                summary += f"""
+**❌ DEBUNKED/HARMFUL TREATMENTS** ({len(filtered_debunked)} items)
+*AVOID - Proven ineffective or dangerous*
 
 """
-            for j, claim in enumerate(organ.debunked_claims, 1):
-                summary += f"{j}. **❌ {claim}**\n"
-                summary += f"   - *Status: SCIENTIFICALLY DISPROVEN*\n"
-                summary += f"   - *Risk: May delay proper treatment or cause harm*\n\n"
+                for j, claim in enumerate(filtered_debunked, 1):
+                    clean_claim = claim.strip('*').strip(':').strip().lstrip('❌').strip()
+                    summary += f"{j}. ❌ {clean_claim}\n"
             
             summary += "---\n\n"
         
@@ -358,19 +376,15 @@ class SimpleMedicalAgent:
 **IMMEDIATE ACTIONS REQUIRED:**
 """
         for i, rec in enumerate(result.general_recommendations, 1):
-            summary += f"{i}. **{rec}**\n"
-            summary += f"   - Priority: High\n"
-            summary += f"   - Timeline: Before and during procedure\n\n"
-        
+            summary += f"{i}. {rec}\n"
+
         summary += f"""
 ## 🔬 CURRENT RESEARCH GAPS & LIMITATIONS
 
 **Areas Needing Further Study:**
 """
         for i, gap in enumerate(result.research_gaps, 1):
-            summary += f"{i}. **{gap}**\n"
-            summary += f"   - Impact: May affect future treatment protocols\n"
-            summary += f"   - Status: Active area of medical research\n\n"
+            summary += f"{i}. {gap}\n"
         
         # Add detailed reasoning trace summary
         summary += f"""
