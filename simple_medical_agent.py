@@ -14,9 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from medical_reasoning_agent import MedicalInput, MedicalOutput, OrganAnalysis, ReasoningStep, ReasoningStage
-from organ_analyzer import OrganAnalyzer
-from evidence_gatherer import EvidenceGatherer
-from recommendation_synthesizer import RecommendationSynthesizer
+from consolidated_analyzer import ConsolidatedAnalyzer
 from input_validation import InputValidator, ValidationError
 from colored_logger import get_colored_logger
 
@@ -28,15 +26,13 @@ class SimpleMedicalAgent:
         """Initialize with optional LLM support"""
         self.llm_manager = llm_manager
         self.reasoning_trace: List[ReasoningStep] = []
-        
-        # Initialize components
-        self.organ_analyzer = OrganAnalyzer(llm_manager)
-        self.evidence_gatherer = EvidenceGatherer(llm_manager)
-        self.recommendation_synthesizer = RecommendationSynthesizer(llm_manager)
-        
+
+        # Initialize consolidated analyzer (replaces organ_analyzer, evidence_gatherer, recommendation_synthesizer)
+        self.consolidated_analyzer = ConsolidatedAnalyzer(llm_manager)
+
         # Setup colored logging
         self.logger = get_colored_logger(__name__, enable_logging)
-        
+
         # Log initialization with colors
         if llm_manager:
             self.logger.llm_enabled("AI models")
@@ -44,7 +40,7 @@ class SimpleMedicalAgent:
             self.logger.llm_offline_mode()
     
     def analyze_procedure(self, medical_input: MedicalInput) -> MedicalOutput:
-        """Main analysis method - simplified and clear"""
+        """Main analysis method - simplified with consolidated single-call approach"""
         self.logger.analysis_start(medical_input.procedure)
         self.reasoning_trace = []
 
@@ -56,17 +52,18 @@ class SimpleMedicalAgent:
             # 1. Validate input
             self._validate_input(medical_input)
 
-            # 2. Identify affected organs
-            organs = self._identify_organs(medical_input)
+            # 2. Perform consolidated analysis (ONE LLM call instead of multiple)
+            self.logger.analysis_stage("CONSOLIDATED_ANALYSIS", f"Analyzing {medical_input.procedure} (single call)")
+            self._log_step(
+                ReasoningStage.ORGAN_IDENTIFICATION,
+                f"Performing consolidated analysis for {medical_input.procedure}",
+                {"method": "consolidated_analyzer"}
+            )
 
-            # 3. Gather evidence
-            evidence = self._gather_evidence(organs, medical_input)
+            analysis_result = self.consolidated_analyzer.analyze_procedure(medical_input)
 
-            # 4. Generate recommendations
-            recommendations = self._generate_recommendations(organs, evidence, medical_input)
-
-            # 5. Create final output
-            return self._create_output(medical_input, organs, evidence, recommendations)
+            # 3. Create final output from consolidated result
+            return self._create_output_from_consolidated(medical_input, analysis_result)
 
         except Exception as e:
             self.logger.error(f"Analysis failed: {str(e)}")
@@ -88,90 +85,52 @@ class SimpleMedicalAgent:
             self.logger.validation_error(error_msg)
             raise ValidationError(error_msg)
     
-    def _identify_organs(self, medical_input: MedicalInput) -> List[str]:
-        """Identify affected organs"""
-        self.logger.analysis_stage("ORGAN_IDENTIFICATION", f"Identifying organs affected by {medical_input.procedure}")
-        self._log_step(
-            ReasoningStage.ORGAN_IDENTIFICATION,
-            f"Identifying organs affected by {medical_input.procedure}",
-            {"method": "organ_analyzer"}
-        )
-        
-        organs = self.organ_analyzer.identify_affected_organs(medical_input)
-        self.logger.organs_identified(organs)
-        return organs
     
-    def _gather_evidence(self, organs: List[str], medical_input: MedicalInput) -> Dict[str, Dict[str, Any]]:
-        """Gather evidence for organs"""
-        self.logger.analysis_stage("EVIDENCE_GATHERING", f"Gathering evidence for {len(organs)} organs")
-        self._log_step(
-            ReasoningStage.EVIDENCE_GATHERING,
-            f"Gathering evidence for {len(organs)} organs",
-            {"organs": organs, "method": "evidence_gatherer"}
-        )
-        
-        evidence = self.evidence_gatherer.get_evidence_summary(organs, medical_input.procedure)
-        
-        # Log evidence quality for each organ
-        for organ, organ_evidence in evidence.items():
-            quality = organ_evidence.get("quality", "unknown")
-            self.logger.evidence_gathered(organ, quality)
-        
-        return evidence
-    
-    def _generate_recommendations(self, organs: List[str], evidence: Dict[str, Dict[str, Any]], 
-                                medical_input: MedicalInput) -> Dict[str, Dict[str, List[str]]]:
-        """Generate recommendations"""
-        self.logger.analysis_stage("RECOMMENDATION_SYNTHESIS", f"Generating recommendations for {len(organs)} organs")
-        self._log_step(
-            ReasoningStage.RECOMMENDATION_SYNTHESIS,
-            f"Generating recommendations for {len(organs)} organs",
-            {"method": "recommendation_synthesizer"}
-        )
-        
-        recommendations = self.recommendation_synthesizer.synthesize_all_recommendations(
-            evidence, medical_input
-        )
-        
-        # Log recommendation counts for each organ
-        for organ, organ_recs in recommendations.items():
-            total_count = len(organ_recs.get("known", [])) + len(organ_recs.get("potential", [])) + len(organ_recs.get("debunked", []))
-            self.logger.recommendations_generated(organ, total_count)
-        
-        return recommendations
-    
-    def _create_output(self, medical_input: MedicalInput, organs: List[str], 
-                      evidence: Dict[str, Dict[str, Any]], 
-                      recommendations: Dict[str, Dict[str, List[str]]]) -> MedicalOutput:
-        """Create final structured output"""
+    def _create_output_from_consolidated(self, medical_input: MedicalInput,
+                                        analysis_result: Dict[str, Any]) -> MedicalOutput:
+        """Create final structured output from consolidated analysis result"""
         self.logger.analysis_stage("CRITICAL_EVALUATION", "Creating final analysis output")
+
+        organs_data = analysis_result.get("organs_analyzed", [])
+
         self._log_step(
             ReasoningStage.CRITICAL_EVALUATION,
             "Creating final analysis output",
-            {"organs_analyzed": len(organs)}
+            {"organs_analyzed": len(organs_data)}
         )
-        
-        # Create organ analyses
+
+        # Create organ analyses from consolidated result
         organ_analyses = []
-        for organ in organs:
-            organ_evidence = evidence.get(organ, {})
-            organ_recs = recommendations.get(organ, {})
-            
+        for organ_data in organs_data:
+            # Log each organ found
+            organ_name = organ_data.get("name", "unknown")
+            self.logger.organs_identified([organ_name])
+
+            # Get evidence and log quality
+            evidence = organ_data.get("evidence", {})
+            quality = evidence.get("quality", "limited")
+            self.logger.evidence_gathered(organ_name, quality)
+
+            # Get recommendations and log counts
+            recs = organ_data.get("recommendations", {})
+            total_count = len(recs.get("known", [])) + len(recs.get("potential", [])) + len(recs.get("debunked", []))
+            self.logger.recommendations_generated(organ_name, total_count)
+
             analysis = OrganAnalysis(
-                organ_name=organ,
+                organ_name=organ_name,
                 affected_by_procedure=True,
                 at_risk=True,
-                risk_level=self._assess_risk_level(organ_evidence),
-                pathways_involved=[organ_evidence.get("pathway", "unknown")],
-                known_recommendations=organ_recs.get("known", []),
-                potential_recommendations=organ_recs.get("potential", []),
-                debunked_claims=organ_recs.get("debunked", []),
-                evidence_quality=organ_evidence.get("quality", "limited")
+                risk_level=organ_data.get("risk_level", "moderate"),
+                pathways_involved=organ_data.get("pathways", ["unknown"]),
+                known_recommendations=recs.get("known", []),
+                potential_recommendations=recs.get("potential", []),
+                debunked_claims=recs.get("debunked", []),
+                evidence_quality=quality
             )
             organ_analyses.append(analysis)
-        
-        # Calculate confidence
-        confidence = self._calculate_confidence(organs, evidence, recommendations)
+
+        # Use confidence from consolidated result or calculate if not provided
+        confidence = analysis_result.get("confidence_score", 0.7)
 
         # Get token usage from LLM manager
         token_usage = None
@@ -182,7 +141,7 @@ class SimpleMedicalAgent:
                                f"({token_usage.input_tokens:,} input + {token_usage.output_tokens:,} output)")
 
         # Log analysis completion
-        self.logger.analysis_complete(confidence, len(organs))
+        self.logger.analysis_complete(confidence, len(organs_data))
 
         return MedicalOutput(
             procedure_summary=f"{medical_input.procedure} - {medical_input.details}",
@@ -201,35 +160,6 @@ class SimpleMedicalAgent:
             token_usage=token_usage
         )
     
-    def _assess_risk_level(self, evidence: Dict[str, Any]) -> str:
-        """Simple risk assessment"""
-        risks = evidence.get("risks", [])
-        if len(risks) >= 3:
-            return "high"
-        elif len(risks) >= 2:
-            return "moderate"
-        else:
-            return "low"
-    
-    def _calculate_confidence(self, organs: List[str], evidence: Dict[str, Dict[str, Any]], 
-                            recommendations: Dict[str, Dict[str, List[str]]]) -> float:
-        """Calculate confidence score"""
-        base_confidence = 0.6
-        
-        # Bonus for comprehensive analysis
-        if len(organs) >= 2:
-            base_confidence += 0.1
-        
-        # Bonus for high-quality evidence
-        high_quality_count = sum(1 for ev in evidence.values() if ev.get("quality") == "strong")
-        base_confidence += high_quality_count * 0.05
-        
-        # Bonus for complete recommendations
-        complete_recs = sum(1 for rec in recommendations.values() 
-                           if len(rec.get("known", [])) >= 2)
-        base_confidence += complete_recs * 0.05
-        
-        return min(base_confidence, 0.95)
     
     def _log_step(self, stage: ReasoningStage, reasoning: str, data: Dict[str, Any]):
         """Log reasoning step"""
