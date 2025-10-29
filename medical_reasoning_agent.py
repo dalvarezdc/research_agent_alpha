@@ -10,6 +10,20 @@ from enum import Enum
 from datetime import datetime
 
 
+@dataclass
+class TokenUsage:
+    """Track token usage across pipeline"""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+    def add(self, other: 'TokenUsage'):
+        """Add another TokenUsage to this one"""
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.total_tokens += other.total_tokens
+
+
 class ReasoningStage(Enum):
     """Stages of medical reasoning pipeline"""
     INPUT_ANALYSIS = "input_analysis"
@@ -64,6 +78,7 @@ class MedicalOutput:
     research_gaps: List[str]
     confidence_score: float
     reasoning_trace: List[ReasoningStep]
+    token_usage: Optional[TokenUsage] = None
 
 
 if __name__ == "__main__":

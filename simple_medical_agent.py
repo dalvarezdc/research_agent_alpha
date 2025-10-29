@@ -47,23 +47,27 @@ class SimpleMedicalAgent:
         """Main analysis method - simplified and clear"""
         self.logger.analysis_start(medical_input.procedure)
         self.reasoning_trace = []
-        
+
+        # Reset token usage counter
+        if self.llm_manager:
+            self.llm_manager.reset_token_usage()
+
         try:
             # 1. Validate input
             self._validate_input(medical_input)
-            
+
             # 2. Identify affected organs
             organs = self._identify_organs(medical_input)
-            
+
             # 3. Gather evidence
             evidence = self._gather_evidence(organs, medical_input)
-            
+
             # 4. Generate recommendations
             recommendations = self._generate_recommendations(organs, evidence, medical_input)
-            
+
             # 5. Create final output
             return self._create_output(medical_input, organs, evidence, recommendations)
-            
+
         except Exception as e:
             self.logger.error(f"Analysis failed: {str(e)}")
             raise
@@ -168,10 +172,18 @@ class SimpleMedicalAgent:
         
         # Calculate confidence
         confidence = self._calculate_confidence(organs, evidence, recommendations)
-        
+
+        # Get token usage from LLM manager
+        token_usage = None
+        if self.llm_manager:
+            token_usage = self.llm_manager.get_token_usage()
+            if token_usage and token_usage.total_tokens > 0:
+                self.logger.info(f"💰 Token usage: {token_usage.total_tokens:,} total "
+                               f"({token_usage.input_tokens:,} input + {token_usage.output_tokens:,} output)")
+
         # Log analysis completion
         self.logger.analysis_complete(confidence, len(organs))
-        
+
         return MedicalOutput(
             procedure_summary=f"{medical_input.procedure} - {medical_input.details}",
             organs_analyzed=organ_analyses,
@@ -185,7 +197,8 @@ class SimpleMedicalAgent:
                 "Optimal protocols under investigation"
             ],
             confidence_score=confidence,
-            reasoning_trace=self.reasoning_trace
+            reasoning_trace=self.reasoning_trace,
+            token_usage=token_usage
         )
     
     def _assess_risk_level(self, evidence: Dict[str, Any]) -> str:
@@ -277,7 +290,12 @@ class SimpleMedicalAgent:
             ],
             "general_recommendations": result.general_recommendations,
             "research_gaps": result.research_gaps,
-            "reasoning_steps_count": len(result.reasoning_trace)
+            "reasoning_steps_count": len(result.reasoning_trace),
+            "token_usage": {
+                "input_tokens": result.token_usage.input_tokens,
+                "output_tokens": result.token_usage.output_tokens,
+                "total_tokens": result.token_usage.total_tokens
+            } if result.token_usage else None
         }
         
         with open(filepath, 'w') as f:
@@ -420,10 +438,19 @@ class SimpleMedicalAgent:
             known_count = len(organ.known_recommendations)
             potential_count = len(organ.potential_recommendations)
             total_recs = known_count + potential_count
-            
+
             if total_recs > 0:
                 known_percentage = (known_count / total_recs) * 100
                 summary += f"- **{organ.organ_name.title()}:** {known_percentage:.0f}% evidence-based recommendations\n"
+
+        # Add token usage if available
+        if result.token_usage and result.token_usage.total_tokens > 0:
+            summary += f"""
+**Token Usage:**
+- Input tokens: {result.token_usage.input_tokens:,}
+- Output tokens: {result.token_usage.output_tokens:,}
+- Total tokens: {result.token_usage.total_tokens:,}
+"""
         
         summary += f"""
 
@@ -607,7 +634,12 @@ Examples:
     print(f"📝 Procedure: {result.procedure_summary}")
     print(f"🫀 Organs analyzed: {len(result.organs_analyzed)}")
     print(f"📊 Confidence: {result.confidence_score:.2f}")
-    
+
+    # Display token usage if available
+    if result.token_usage and result.token_usage.total_tokens > 0:
+        print(f"💰 Tokens used: {result.token_usage.total_tokens:,} "
+              f"({result.token_usage.input_tokens:,} input + {result.token_usage.output_tokens:,} output)")
+
     for organ in result.organs_analyzed:
         print(f"\n🔍 {organ.organ_name.upper()}:")
         print(f"    Risk level: {organ.risk_level}")

@@ -4,7 +4,7 @@ LLM Integration Module
 Supports multiple LLM providers with fallback mechanisms using LangChain and DSPy.
 """
 
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 from abc import ABC, abstractmethod
 import os
 from dataclasses import dataclass
@@ -13,6 +13,9 @@ from enum import Enum
 
 import dspy
 from pydantic import BaseModel
+
+# Import TokenUsage from medical_reasoning_agent
+from medical_reasoning_agent import TokenUsage
 
 # Backwards compatible imports for LangChain
 try:
@@ -81,17 +84,17 @@ class MedicalQuerySignature(dspy.Signature):
 
 class LLMInterface(ABC):
     """Abstract interface for LLM providers"""
-    
+
     @abstractmethod
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Generate response from LLM"""
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        """Generate response from LLM - returns (response, token_usage)"""
         pass
-    
+
     @abstractmethod
     def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
         """Specialized medical analysis method"""
         pass
-    
+
     @abstractmethod
     def is_available(self) -> bool:
         """Check if LLM provider is available"""
@@ -120,55 +123,69 @@ class ClaudeLLM(LLMInterface):
             self.logger.error(f"Failed to initialize Claude client: {e}")
             self.client = None
     
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using Claude"""
         if self.client is None:
             raise RuntimeError("Claude client not initialized")
-            
+
         try:
             messages = []
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
             messages.append(HumanMessage(content=prompt))
-            
+
             response = self.client.invoke(messages)
-            return response.content
-            
+
+            # Extract token usage from response
+            token_usage = TokenUsage()
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                token_usage.input_tokens = response.usage_metadata.get('input_tokens', 0)
+                token_usage.output_tokens = response.usage_metadata.get('output_tokens', 0)
+                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+            elif hasattr(response, 'response_metadata') and response.response_metadata:
+                usage = response.response_metadata.get('usage', {})
+                token_usage.input_tokens = usage.get('input_tokens', 0)
+                token_usage.output_tokens = usage.get('output_tokens', 0)
+                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+
+            return response.content, token_usage
+
         except Exception as e:
             self.logger.error(f"Claude API error: {str(e)}")
             raise
     
     def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
         """Specialized medical analysis using Claude"""
-        system_prompt = """You are a medical reasoning AI that provides systematic analysis 
-        of medical procedures. Focus on evidence-based recommendations and clearly distinguish 
+        system_prompt = """You are a medical reasoning AI that provides systematic analysis
+        of medical procedures. Focus on evidence-based recommendations and clearly distinguish
         between proven interventions, potential treatments, and debunked claims."""
-        
+
         prompt = f"""
         Medical Input: {medical_input}
         Reasoning Stage: {stage}
-        
+
         Provide analysis in this exact format:
         - Analysis: [detailed analysis]
         - Confidence: [0.0-1.0]
         - Sources Needed: [list of additional sources needed]
         """
-        
-        response = self.generate_response(prompt, system_prompt)
-        
+
+        response, token_usage = self.generate_response(prompt, system_prompt)
+
         # Parse response (simplified - would need more robust parsing)
         return {
             "analysis": response,
             "confidence": 0.8,  # Would extract from response
-            "sources_needed": []
+            "sources_needed": [],
+            "token_usage": token_usage
         }
-    
+
     def is_available(self) -> bool:
         """Check if Claude is available"""
         if self.client is None:
             return False
         try:
-            test_response = self.generate_response("Test", "Respond with 'OK'")
+            test_response, _ = self.generate_response("Test", "Respond with 'OK'")
             return "OK" in test_response
         except Exception:
             return False
@@ -196,51 +213,65 @@ class OpenAILLM(LLMInterface):
             self.logger.error(f"Failed to initialize OpenAI client: {e}")
             self.client = None
     
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using OpenAI"""
         if self.client is None:
             raise RuntimeError("OpenAI client not initialized")
-            
+
         try:
             messages = []
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
             messages.append(HumanMessage(content=prompt))
-            
+
             response = self.client.invoke(messages)
-            return response.content
-            
+
+            # Extract token usage from response
+            token_usage = TokenUsage()
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                token_usage.input_tokens = response.usage_metadata.get('prompt_tokens', 0)
+                token_usage.output_tokens = response.usage_metadata.get('completion_tokens', 0)
+                token_usage.total_tokens = response.usage_metadata.get('total_tokens', 0)
+            elif hasattr(response, 'response_metadata') and response.response_metadata:
+                usage = response.response_metadata.get('token_usage', {})
+                token_usage.input_tokens = usage.get('prompt_tokens', 0)
+                token_usage.output_tokens = usage.get('completion_tokens', 0)
+                token_usage.total_tokens = usage.get('total_tokens', 0)
+
+            return response.content, token_usage
+
         except Exception as e:
             self.logger.error(f"OpenAI API error: {str(e)}")
             raise
-    
+
     def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
         """Specialized medical analysis using OpenAI"""
-        system_prompt = """You are a medical reasoning AI that provides systematic analysis 
+        system_prompt = """You are a medical reasoning AI that provides systematic analysis
         of medical procedures with focus on organ-specific effects and evidence-based recommendations."""
-        
+
         prompt = f"""
         Analyze this medical procedure:
         Input: {medical_input}
         Stage: {stage}
-        
+
         Provide structured analysis with confidence scores.
         """
-        
-        response = self.generate_response(prompt, system_prompt)
-        
+
+        response, token_usage = self.generate_response(prompt, system_prompt)
+
         return {
             "analysis": response,
             "confidence": 0.75,
-            "sources_needed": []
+            "sources_needed": [],
+            "token_usage": token_usage
         }
-    
+
     def is_available(self) -> bool:
         """Check if OpenAI is available"""
         if self.client is None:
             return False
         try:
-            test_response = self.generate_response("Test", "Respond with 'OK'")
+            test_response, _ = self.generate_response("Test", "Respond with 'OK'")
             return "OK" in test_response
         except Exception:
             return False
@@ -266,47 +297,56 @@ class OllamaLLM(LLMInterface):
             self.logger.error(f"Failed to initialize Ollama client: {e}")
             self.client = None
     
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using Ollama"""
         if self.client is None:
             raise RuntimeError("Ollama client not initialized")
-            
+
         try:
             full_prompt = prompt
             if system_prompt:
                 full_prompt = f"{system_prompt}\n\n{prompt}"
-            
+
             response = self.client.invoke(full_prompt)
-            return response
-            
+
+            # Ollama may not provide token counts, so we estimate
+            token_usage = TokenUsage()
+            # Simple estimation: ~4 chars per token
+            token_usage.input_tokens = len(full_prompt) // 4
+            token_usage.output_tokens = len(response) // 4
+            token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+
+            return response, token_usage
+
         except Exception as e:
             self.logger.error(f"Ollama error: {str(e)}")
             raise
-    
+
     def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
         """Medical analysis using local Ollama model"""
         prompt = f"""
         Medical Analysis Task:
         Input: {medical_input}
         Stage: {stage}
-        
+
         Provide evidence-based medical analysis.
         """
-        
-        response = self.generate_response(prompt)
-        
+
+        response, token_usage = self.generate_response(prompt)
+
         return {
             "analysis": response,
             "confidence": 0.7,  # Lower confidence for local models
-            "sources_needed": []
+            "sources_needed": [],
+            "token_usage": token_usage
         }
-    
+
     def is_available(self) -> bool:
         """Check if Ollama is available"""
         if self.client is None:
             return False
         try:
-            test_response = self.generate_response("Test: respond with OK")
+            test_response, _ = self.generate_response("Test: respond with OK")
             return len(test_response) > 0
         except Exception:
             return False
@@ -314,13 +354,14 @@ class OllamaLLM(LLMInterface):
 
 class LLMManager:
     """Manages multiple LLM providers with fallback mechanisms"""
-    
+
     def __init__(self, configs: List[LLMConfig]):
         self.configs = configs
         self.providers: Dict[LLMProvider, LLMInterface] = {}
         self.current_provider: Optional[LLMProvider] = None
         self.logger = logging.getLogger(__name__)
-        
+        self.token_usage = TokenUsage()  # Track total token usage
+
         self._initialize_providers()
     
     def _initialize_providers(self):
@@ -358,13 +399,26 @@ class LLMManager:
                     self.logger.info(f"Attempting analysis with {provider_type.value}")
                     result = provider.medical_analysis(medical_input, stage)
                     result["provider_used"] = provider_type.value
+
+                    # Accumulate token usage
+                    if "token_usage" in result and result["token_usage"]:
+                        self.token_usage.add(result["token_usage"])
+
                     return result
-                    
+
             except Exception as e:
                 self.logger.warning(f"{provider_type.value} failed: {str(e)}, trying next provider")
                 continue
-        
+
         raise RuntimeError("All LLM providers failed")
+
+    def get_token_usage(self) -> TokenUsage:
+        """Get accumulated token usage"""
+        return self.token_usage
+
+    def reset_token_usage(self):
+        """Reset token usage counter"""
+        self.token_usage = TokenUsage()
     
     def setup_dspy_integration(self):
         """Setup DSPy with current LLM provider"""
