@@ -319,9 +319,9 @@ DETAILS: {medical_input.details}
 Return ONLY valid JSON in this EXACT format (no markdown, no code blocks, just raw JSON):
 
 {{
-  "description": "Brief description of the procedure in maximum 100 words. Explain what it is, how it works, and its general purpose.",
-  "conditions_treated": "List the main medical conditions this procedure is used for in maximum 50 words. Be specific.",
-  "contraindications": "List patients at special risk or who should not undergo this procedure in maximum 50 words. Include absolute and relative contraindications."
+  "description": "Brief description of the procedure in maximum 300 words. Explain what it is, how it works, and its general purpose.",
+  "conditions_treated": "List the main medical conditions this procedure is used for in maximum 150 words. Be specific.",
+  "contraindications": "List patients at special risk or who should not undergo this procedure in maximum 150 words. Include absolute and relative contraindications."
 }}
 
 REQUIREMENTS:
