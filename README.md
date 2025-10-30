@@ -54,7 +54,7 @@ The easiest way to get started:
 
 ```bash
 # Analyze MRI with contrast (our example from the conversation)
-python local_runner.py --provider claude --scenario-name MRI_with_gadolinium
+python simple_medical_agent.py --provider claude --scenario-name MRI_with_gadolinium
 ```
 
 **Output Example:**
@@ -98,7 +98,7 @@ result = agent.analyze_medical_procedure(input_data)
 
 ```bash
 # All built-in scenarios
-python local_runner.py --provider claude
+python simple_medical_agent.py --provider claude
 
 # Available scenarios:
 # - MRI_with_gadolinium (our example)
