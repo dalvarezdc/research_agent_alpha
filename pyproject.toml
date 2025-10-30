@@ -35,6 +35,7 @@ dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
     "tavily-python>=0.7.12",
+    "vulture>=2.14",
 ]
 
 [project.optional-dependencies]
