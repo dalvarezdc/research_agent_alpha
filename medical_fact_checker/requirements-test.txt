@@ -1,0 +1,21 @@
+# Testing dependencies for Medical Fact Checker
+
+# Core testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-asyncio>=0.21.0
+
+# Mocking and fixtures
+mock>=5.1.0
+
+# Code quality
+pytest-flake8>=1.1.1
+pytest-pylint>=0.19.0
+
+# Coverage reporting
+coverage>=7.2.0
+
+# Test utilities
+faker>=19.0.0
+hypothesis>=6.82.0

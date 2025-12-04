@@ -67,8 +67,8 @@ class LLMConfig:
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     temperature: float = 0.1
-    max_tokens: int = 3000
-    timeout: int = 60
+    max_tokens: int = 4096  # Increased for detailed responses
+    timeout: int = 300  # 5 minutes for complex medical analysis
 
 
 class MedicalQuerySignature(dspy.Signature):
