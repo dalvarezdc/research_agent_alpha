@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import time
 import json
 import re
-from colored_logger import get_colored_logger
+from .colored_logger import get_colored_logger
 
 try:
     from tavily import TavilyClient

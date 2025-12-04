@@ -1,0 +1,90 @@
+{
+  "timestamp": "2025-10-30T01:05:48.892379",
+  "procedure_summary": "Radiotherapy - ",
+  "confidence_score": 0.7,
+  "organs_analyzed": [
+    {
+      "organ_name": "skin",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "high",
+      "pathways_involved": [
+        "direct_radiation_exposure",
+        "cellular_damage"
+      ],
+      "known_recommendations": [
+        "Apply moisturizer regularly to irradiated skin",
+        "Avoid sun exposure on treated areas",
+        "Use mild, fragrance-free soap"
+      ],
+      "potential_recommendations": [
+        "Hyaluronic acid-based creams may help with healing",
+        "Silver sulfadiazine for acute radiation dermatitis"
+      ],
+      "debunked_claims": [
+        "Petroleum jelly prevents radiation dermatitis (no evidence)",
+        "Aloe vera significantly reduces skin damage (limited evidence)"
+      ],
+      "evidence_quality": "strong"
+    },
+    {
+      "organ_name": "bone_marrow",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "moderate",
+      "pathways_involved": [
+        "radiation_induced_myelosuppression"
+      ],
+      "known_recommendations": [
+        "Monitor complete blood counts regularly",
+        "Adjust treatment if severe myelosuppression occurs",
+        "Consider growth factors if indicated"
+      ],
+      "potential_recommendations": [
+        "Stem cell mobilization for severe cases",
+        "Prophylactic growth factors in high-risk patients"
+      ],
+      "debunked_claims": [
+        "Routine prophylactic antibiotics prevent all infections (not recommended)"
+      ],
+      "evidence_quality": "strong"
+    },
+    {
+      "organ_name": "salivary_glands",
+      "affected_by_procedure": true,
+      "at_risk": true,
+      "risk_level": "high",
+      "pathways_involved": [
+        "radiation_induced_xerostomia"
+      ],
+      "known_recommendations": [
+        "Use saliva substitutes and stimulants",
+        "Maintain excellent oral hygiene",
+        "Regular dental follow-up with fluoride treatments"
+      ],
+      "potential_recommendations": [
+        "Amifostine may provide radioprotection",
+        "Acupuncture for xerostomia management"
+      ],
+      "debunked_claims": [
+        "Pilocarpine works for all patients (variable response)"
+      ],
+      "evidence_quality": "strong"
+    }
+  ],
+  "general_recommendations": [
+    "Consult healthcare provider before procedure",
+    "Follow all pre-procedure instructions",
+    "Monitor for adverse effects post-procedure"
+  ],
+  "research_gaps": [
+    "Long-term effects need further study",
+    "Optimal protocols under investigation"
+  ],
+  "reasoning_steps_count": 4,
+  "token_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0
+  }
+}

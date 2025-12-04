@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 
-from medical_reasoning_agent import MedicalOutput, OrganAnalysis, ReasoningStep
+from .medical_reasoning_agent import MedicalOutput, OrganAnalysis, ReasoningStep
 
 
 @dataclass

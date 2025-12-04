@@ -1,0 +1,954 @@
+[
+  {
+    "stage": "input_analysis",
+    "timestamp": "2025-12-04T21:33:49.832669",
+    "reasoning": "Parsing medical procedure input and identifying key components",
+    "input": {
+      "procedure": "MRI Scanner",
+      "details": "With gadolinium contrast"
+    },
+    "output": {
+      "procedure_type": "MRI Scanner",
+      "complexity": "high"
+    },
+    "confidence": 0.8,
+    "sources": []
+  },
+  {
+    "stage": "organ_identification",
+    "timestamp": "2025-12-04T21:33:49.832710",
+    "reasoning": "Identifying organs affected by procedure based on mechanism of action using LLM analysis",
+    "input": {
+      "procedure": "MRI Scanner",
+      "details": "With gadolinium contrast"
+    },
+    "output": {
+      "method": "anthropic_claude_analysis"
+    },
+    "confidence": 0.8,
+    "sources": []
+  },
+  {
+    "stage": "evidence_gathering",
+    "timestamp": "2025-12-04T21:34:13.259319",
+    "reasoning": "Gathering evidence from medical literature for organ-specific effects using LLM",
+    "input": {
+      "organs": [
+        "skin",
+        "kidneys",
+        "blood_vessels",
+        "brain"
+      ],
+      "search_strategy": "llm_medical_literature_analysis"
+    },
+    "output": {
+      "method": "anthropic_claude_evidence_synthesis"
+    },
+    "confidence": 0.8,
+    "sources": []
+  },
+  {
+    "stage": "risk_assessment",
+    "timestamp": "2025-12-04T21:35:59.858524",
+    "reasoning": "Assessing risk levels based on procedure mechanism and patient factors",
+    "input": {
+      "organs": [
+        "skin",
+        "kidneys",
+        "blood_vessels",
+        "brain"
+      ],
+      "evidence": {
+        "skin": {
+          "elimination_pathway": "pathway_not_specified",
+          "risk_factors": [],
+          "protective_factors": [],
+          "evidence_quality": "strong",
+          "mechanism": "mechanism_not_specified"
+        },
+        "kidneys": {
+          "elimination_pathway": "pathway_not_specified",
+          "risk_factors": [
+            "advanced_age"
+          ],
+          "protective_factors": [],
+          "evidence_quality": "limited",
+          "mechanism": "mechanism_not_specified"
+        },
+        "blood_vessels": {
+          "elimination_pathway": "pathway_not_specified",
+          "risk_factors": [],
+          "protective_factors": [],
+          "evidence_quality": "strong",
+          "mechanism": "mechanism_not_specified"
+        },
+        "brain": {
+          "elimination_pathway": "pathway_not_specified",
+          "risk_factors": [
+            "kidney_impairment"
+          ],
+          "protective_factors": [],
+          "evidence_quality": "limited",
+          "mechanism": "mechanism_not_specified"
+        }
+      }
+    },
+    "output": {
+      "risk_framework": "evidence_based",
+      "risk_levels": [
+        "low",
+        "moderate",
+        "high"
+      ]
+    },
+    "confidence": 0.8,
+    "sources": []
+  },
+  {
+    "stage": "recommendation_synthesis",
+    "timestamp": "2025-12-04T21:35:59.858586",
+    "reasoning": "Synthesizing evidence-based recommendations using LLM analysis while categorizing by evidence quality",
+    "input": {
+      "evidence_summary": 4,
+      "risks_assessed": 4
+    },
+    "output": {
+      "categories": [
+        "known_effective",
+        "potentially_beneficial",
+        "debunked"
+      ],
+      "method": "anthropic_claude_synthesis"
+    },
+    "confidence": 0.8,
+    "sources": []
+  },
+  {
+    "stage": "critical_evaluation",
+    "timestamp": "2025-12-04T21:38:03.456892",
+    "reasoning": "Critically evaluating recommendations against recent evidence and identifying debunked claims",
+    "input": {
+      "recommendations": {
+        "skin": {
+          "known_recommendations": [],
+          "potential_recommendations": [],
+          "debunked_claims": []
+        },
+        "kidneys": {
+          "known_recommendations": [
+            {
+              "intervention": "eGFR \u226530: Standard macrocyclic GBCA acceptable",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "eGFR 15-29: Use only if essential; consider alternatives",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "eGFR <15 or dialysis: Avoid unless life-threatening indication; arrange immediate post-procedure dialysis if used",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Non-contrast MRI protocols (T1/T2-weighted, diffusion-weighted imaging)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Ultrasound with Doppler for functional assessment",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Non-contrast CT for structural evaluation (though involves radiation)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            }
+          ],
+          "potential_recommendations": [
+            {
+              "intervention": "Risk is highest with linear (non-cyclic) gadolinium agents",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Acute kidney injury from gadolinium is rare but documented",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Age-related decline in renal function (even with normal creatinine due to decreased muscle mass)",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Reduced clearance capacity increases retention risk",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Higher prevalence of comorbid conditions affecting kidney function",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            }
+          ],
+          "debunked_claims": [
+            {
+              "claim": "Prophylactic hemodialysis in non-dialysis patients (no proven benefit, may cause harm)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Routine gadolinium \"chelation\" therapy post-exposure (no evidence base)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Long-term effects of gadolinium retention remain incompletely characterized",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Optimal screening thresholds continue to evolve",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Individual patient risk factors may not be fully captured by eGFR alone",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Diagnostic information is critical and unavailable through other means",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "eGFR \u226530 mL/min/1.73m\u00b2 with macrocyclic agent",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Patient informed of risks/benefits",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Non-contrast sequences adequate for clinical question",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Severe renal impairment (eGFR <30) without compelling indication",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Recent gadolinium exposure (<7 days)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "--",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Strong evidence base for NSF risk and prevention (0.9-0.95 confidence)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Moderate evidence for gadolinium retention significance (0.7-0.75 confidence)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Well-established clinical guidelines from ACR, ESUR",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Uncertainty regarding long-term outcomes of retention reduces overall confidence",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Limited mechanism specification in provided data requires assumptions",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "--",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Current eGFR/creatinine clearance",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "History of prior gadolinium exposures",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Specific clinical indication for MRI",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Availability of alternative imaging modalities",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Local formulary of available GBCA agents",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Institutional contrast safety policies",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Access to non-contrast MRI sequences",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "ACR Manual on Contrast Media (latest edition)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "ESUR Contrast Media Safety Guidelines",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "FDA safety communications on gadolinium retention",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Recent meta-analyses on gadolinium retention clinical significance",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Age-specific risk stratification data",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Comparative effectiveness of non-contrast vs. contrast kidney MRI protocols",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Long-term follow-up studies of gadolinium-exposed elderly patients",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Specific pathway of gadolinium elimination in this patient population",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            }
+          ]
+        },
+        "blood_vessels": {
+          "known_recommendations": [
+            {
+              "intervention": "**Non-invasive visualization**: Provides excellent soft tissue contrast without ionizing radiation",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Comprehensive vascular assessment**: Can evaluate vessel stenosis, aneurysms, dissections, and malformations",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**No nephrotoxic contrast required**: Time-of-flight (TOF) and phase-contrast techniques require no contrast agents",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Functional information**: Can assess blood flow velocity and direction",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**No ionizing radiation exposure**: Unlike CT angiography or conventional angiography",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Contrast-related risks (when gadolinium used)**:",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Nephrogenic systemic fibrosis (NSF) - rare, primarily in severe renal impairment",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Allergic reactions - extremely rare compared to iodinated contrast",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Gadolinium deposition - clinical significance unclear",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Contraindications to consider**:",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Certain metallic implants (pacemakers, some aneurysm clips)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Claustrophobia (can be mitigated)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Pregnancy (first trimester - relative contraindication)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Pre-screening for contraindications (metal implants, renal function)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Use of non-contrast techniques when possible",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Proper patient selection and preparation",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Use of newer gadolinium agents (macrocyclic) with better safety profiles",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Sedation options for claustrophobic patients",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Evaluation of carotid artery stenosis",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Assessment of intracranial aneurysms",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Diagnosis of aortic dissection and aneurysms",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Evaluation of renal artery stenosis",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Assessment of peripheral arterial disease",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Congenital vascular malformations",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Superior to ultrasound for deep vessels and complex anatomy",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "No radiation compared to CT angiography",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Better soft tissue contrast than CT",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Less invasive than catheter angiography",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Longer acquisition times than CT",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "More expensive than ultrasound",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Contraindicated in some patients with implants",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "May overestimate stenosis in some cases",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Limited availability in some settings",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Multiple large-scale clinical trials",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Meta-analyses demonstrating diagnostic accuracy",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Established clinical guidelines from major societies (ACR, ESR, AHA)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Decades of clinical use with well-documented safety profile",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "High confidence based on extensive clinical evidence and established safety profile",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Well-documented indications and contraindications",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Slight uncertainty (0.08) due to:",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Evolving understanding of gadolinium deposition",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Individual patient variability in contraindications",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Technique-dependent quality variations",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            }
+          ],
+          "potential_recommendations": [],
+          "debunked_claims": []
+        },
+        "brain": {
+          "known_recommendations": [
+            {
+              "intervention": "**Overall Risk Level**: Appropriately classified as LOW for the general population",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Gadolinium Accumulation**: Confirmed phenomenon, particularly with linear GBCAs, but clinical significance remains unclear",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Kidney Impairment**: Valid concern for nephrogenic systemic fibrosis (NSF), though rare with modern macrocyclic agents",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Deposition confirmed in dentate nucleus and globus pallidus on unenhanced T1-weighted imaging",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "More pronounced with linear agents (gadodiamide, gadopentetate) vs. macrocyclic agents (gadobutrol, gadoterate)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Critical Gap**: No proven clinical sequelae from brain deposition in patients with normal renal function",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "FDA and EMA reviews (2017-2018) found no evidence of harm but recommended preferential use of macrocyclic agents",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "NSF risk is virtually eliminated with macrocyclic GBCAs and proper screening",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "eGFR <30 mL/min/1.73m\u00b2 represents highest risk category",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Group II (macrocyclic) agents preferred in at-risk populations",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Justify contrast necessity**: Ensure diagnostic question requires contrast enhancement",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Agent selection**: Preferentially use macrocyclic GBCAs (gadobutrol, gadoterate, gadoteridol)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Dose optimization**: Use lowest effective dose (typically 0.1 mmol/kg)",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "**Avoid repeat exposures**: When clinically appropriate, consider non-contrast alternatives",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "eGFR \u226530: Macrocyclic agents considered safe",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "eGFR <30: Risk-benefit analysis required; consider alternative imaging or use group II agents with informed consent",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Dialysis patients: Can receive macrocyclic agents; consider dialysis within 2-3 hours post-administration",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Agent selection IS a mitigation strategy",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Dose reduction IS a mitigation strategy",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Adequate hydration in appropriate patients",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Screening protocols reduce risk",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            },
+            {
+              "intervention": "Alternative imaging (non-contrast MRI, CT, ultrasound) when appropriate",
+              "rationale": "Evidence-based intervention",
+              "evidence_level": "Strong",
+              "timing": "As clinically indicated"
+            }
+          ],
+          "potential_recommendations": [
+            {
+              "intervention": "--",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "High-quality evidence exists for renal safety protocols and NSF prevention (0.95)",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Moderate evidence on gadolinium deposition patterns but limited clinical outcome data (0.75)",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Strong regulatory guidance from FDA/EMA (0.90)",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Well-established clinical practice guidelines (0.90)",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Incomplete understanding of long-term effects of brain deposition",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Limited data on cumulative exposure effects",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "Ongoing debate about gadolinium-related symptoms in normal renal function",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            },
+            {
+              "intervention": "--",
+              "rationale": "Limited but promising evidence",
+              "evidence_level": "Limited",
+              "limitations": "Requires further study"
+            }
+          ],
+          "debunked_claims": [
+            {
+              "claim": "**Gadolinium \"detox\" protocols**: No evidence supporting chelation therapy or supplements for removal",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "**Causation of symptoms in normal renal function**: \"Gadolinium deposition disease\" remains controversial and not recognized by major medical organizations",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "**Equivalence of all GBCAs**: Clear evidence distinguishes linear from macrocyclic agents",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Long-term clinical outcomes of gadolinium brain deposition (ongoing studies)",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Optimal screening thresholds for pediatric populations",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            },
+            {
+              "claim": "Effects of cumulative lifetime exposure",
+              "reason_debunked": "Insufficient evidence or proven harmful",
+              "debunked_by": "Medical literature",
+              "evidence": "Lack of clinical benefit",
+              "why_harmful": "May delay appropriate care"
+            }
+          ]
+        }
+      }
+    },
+    "output": {
+      "evaluation_criteria": [
+        "evidence_quality",
+        "clinical_relevance",
+        "safety_profile"
+      ]
+    },
+    "confidence": 0.8,
+    "sources": []
+  }
+]

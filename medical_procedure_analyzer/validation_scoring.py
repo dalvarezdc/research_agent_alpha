@@ -11,7 +11,7 @@ import re
 import logging
 from datetime import datetime
 
-from medical_reasoning_agent import MedicalOutput, OrganAnalysis, ReasoningStep
+from .medical_reasoning_agent import MedicalOutput, OrganAnalysis, ReasoningStep
 
 
 class ValidationCategory(Enum):

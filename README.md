@@ -4,11 +4,11 @@ A **simplified** AI agent that follows systematic medical analysis patterns, pro
 
 ## 🚀 Recent Improvements (v2.0)
 
-**Major Simplification:** Reduced code complexity by 84% while preserving all functionality!
-- ✅ **774 lines → 126 lines** - Much easier to understand and maintain
-- ✅ **4 focused classes** instead of 1 monolithic class  
-- ✅ **Same API** - All existing code still works
-- ✅ **Better performance** - Cleaner, more efficient implementation
+**Comprehensive Analysis:** Full 6-stage reasoning pipeline for deep medical insights!
+- ✅ **6 dedicated LLM reasoning stages** - Each stage builds on previous analysis
+- ✅ **774 lines of systematic analysis** - Thorough, evidence-based reasoning
+- ✅ **Complete reasoning trace** - Full transparency into AI decision-making
+- ✅ **Better analysis quality** - Deeper insights than single-call approaches
 
 ## Overview
 
@@ -53,8 +53,8 @@ export ANTHROPIC_API_KEY=your_key_here
 The easiest way to get started:
 
 ```bash
-# Analyze MRI with contrast (our example from the conversation)
-python simple_medical_agent.py --provider claude --scenario-name MRI_with_gadolinium
+# Analyze MRI with contrast using the full 6-stage reasoning pipeline
+python -m medical_procedure_analyzer.medical_reasoning_agent
 ```
 
 **Output Example:**
@@ -73,10 +73,13 @@ python simple_medical_agent.py --provider claude --scenario-name MRI_with_gadoli
 ### 2. Use in Python Code
 
 ```python
-from medical_reasoning_agent import MedicalReasoningAgent, MedicalInput
+from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput
 
-# Create agent (works offline without API keys)
-agent = MedicalReasoningAgent(enable_logging=False)
+# Create agent with full 6-stage reasoning pipeline
+agent = MedicalReasoningAgent(
+    primary_llm_provider="claude",
+    enable_logging=True
+)
 
 # Your medical question
 input_data = MedicalInput(
@@ -85,7 +88,7 @@ input_data = MedicalInput(
     objectives=("understand risks", "post-procedure care")
 )
 
-# Get systematic analysis
+# Get systematic analysis with full reasoning trace
 result = agent.analyze_medical_procedure(input_data)
 
 # Results follow our conversation pattern:
@@ -97,19 +100,17 @@ result = agent.analyze_medical_procedure(input_data)
 ### 3. Available Test Scenarios
 
 ```bash
-# All built-in scenarios
-python simple_medical_agent.py --provider claude
-
-# Available scenarios:
-# - MRI_with_gadolinium (our example)
-# - CT_with_iodine 
-# - Cardiac_catheterization
+# Use in Python code for full control over the 6-stage reasoning pipeline
+python -c "from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput; \
+agent = MedicalReasoningAgent(primary_llm_provider='claude'); \
+result = agent.analyze_medical_procedure(MedicalInput('MRI Scanner', 'with contrast', ('risks', 'care'))); \
+print(f'Analyzed {len(result.organs_analyzed)} organs with {len(result.reasoning_trace)} reasoning steps')"
 ```
 
 ### 4. Validation & Quality Check
 
 ```python
-from validation_scoring import validate_medical_output
+from medical_procedure_analyzer import validate_medical_output
 
 # Validate any analysis result
 report = validate_medical_output(result)
@@ -133,8 +134,8 @@ This agent replicates the **exact analytical pattern** from our conversation:
 # Run tests
 python -m pytest tests/ -v
 
-# Check performance  
-python -c "from medical_reasoning_agent import *; print('All systems working!')"
+# Check package installation
+python -c "from medical_procedure_analyzer import *; print('All systems working!')"
 ```
 
 ---

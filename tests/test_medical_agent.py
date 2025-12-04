@@ -9,14 +9,14 @@ import tempfile
 from unittest.mock import Mock, patch
 from datetime import datetime
 
-from medical_reasoning_agent import (
-    MedicalReasoningAgent, 
-    MedicalInput, 
-    OrganAnalysis, 
+from medical_procedure_analyzer import (
+    MedicalReasoningAgent,
+    MedicalInput,
+    OrganAnalysis,
     MedicalOutput,
-    ReasoningStage
+    ReasoningStage,
+    LLMManager
 )
-from llm_integrations import LLMManager, LLMConfig, LLMProvider
 
 
 class TestMedicalReasoningAgent:
@@ -56,7 +56,7 @@ class TestMedicalReasoningAgent:
             fallback_providers=["openai"],
             enable_logging=True
         )
-        
+
         assert agent.primary_llm == "claude"
         assert agent.fallback_providers == ["openai"]
         assert len(agent.reasoning_trace) == 0
@@ -91,9 +91,9 @@ class TestMedicalReasoningAgent:
         assert step.input_data == {"test": "data"}
         assert step.output == {"result": "test_output"}
     
-    @patch('medical_reasoning_agent.MedicalReasoningAgent._gather_evidence')
-    @patch('medical_reasoning_agent.MedicalReasoningAgent._assess_risks')
-    @patch('medical_reasoning_agent.MedicalReasoningAgent._synthesize_recommendations')
+    @patch('medical_procedure_analyzer.medical_reasoning_agent.MedicalReasoningAgent._gather_evidence')
+    @patch('medical_procedure_analyzer.medical_reasoning_agent.MedicalReasoningAgent._assess_risks')
+    @patch('medical_procedure_analyzer.medical_reasoning_agent.MedicalReasoningAgent._synthesize_recommendations')
     def test_full_analysis_pipeline(self, mock_synth, mock_risk, mock_evidence, sample_medical_input):
         """Test the complete analysis pipeline"""
         # Setup mocks
@@ -101,12 +101,12 @@ class TestMedicalReasoningAgent:
         mock_risk.return_value = {"kidneys": {"risk_level": "moderate"}}
         mock_synth.return_value = {
             "kidneys": {
-                "known_recommendations": ["hydration"],
-                "potential_recommendations": ["NAC"],
-                "debunked_claims": ["detox_teas"]
+                "known_recommendations": [{"intervention": "hydration", "rationale": "test", "evidence_level": "strong", "timing": "test"}],
+                "potential_recommendations": [{"intervention": "NAC", "rationale": "test", "evidence_level": "limited", "limitations": "test"}],
+                "debunked_claims": [{"claim": "detox_teas", "reason_debunked": "test", "debunked_by": "test", "evidence": "test", "why_harmful": "test"}]
             }
         }
-        
+
         agent = MedicalReasoningAgent(enable_logging=False)
         result = agent.analyze_medical_procedure(sample_medical_input)
         
@@ -203,7 +203,7 @@ class TestIntegrationScenarios:
         )
         
         agent = MedicalReasoningAgent(enable_logging=True)
-        
+
         # This would normally use real LLM calls
         # For testing, we'll check the pipeline structure
         try:
@@ -238,7 +238,7 @@ class TestIntegrationScenarios:
         )
         
         agent = MedicalReasoningAgent(enable_logging=True)
-        
+
         try:
             result = agent.analyze_medical_procedure(medical_input)
             
@@ -309,8 +309,7 @@ if __name__ == "__main__":
     pytest.main([
         __file__,
         "-v",
-        "--cov=medical_reasoning_agent",
-        "--cov=llm_integrations",
+        "--cov=medical_procedure_analyzer",
         "--cov-report=html",
         "--cov-report=term-missing"
     ])

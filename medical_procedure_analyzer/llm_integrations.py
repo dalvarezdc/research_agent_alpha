@@ -15,7 +15,7 @@ import dspy
 from pydantic import BaseModel
 
 # Import TokenUsage from medical_reasoning_agent
-from medical_reasoning_agent import TokenUsage
+from .medical_reasoning_agent import TokenUsage
 
 # Backwards compatible imports for LangChain
 try:
