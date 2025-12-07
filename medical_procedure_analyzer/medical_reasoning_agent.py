@@ -513,59 +513,79 @@ class MedicalReasoningAgent:
                     organ_risk = risks.get(organ, {})
                     
                     prompt = f"""
-                    Synthesize medical recommendations for {organ} following this medical procedure:
-                    
+                    Synthesize comprehensive medical recommendations for {organ} protection following this medical procedure:
+
                     Procedure: {medical_input.procedure}
                     Details: {medical_input.details}
                     Organ: {organ}
-                    
+
                     Evidence Summary:
                     - Elimination pathway: {organ_evidence.get('elimination_pathway', 'unknown')}
                     - Risk factors: {organ_evidence.get('risk_factors', [])}
                     - Protective factors: {organ_evidence.get('protective_factors', [])}
                     - Evidence quality: {organ_evidence.get('evidence_quality', 'limited')}
                     - Risk level: {organ_risk.get('risk_level', 'unknown')}
-                    
-                    Provide recommendations in 3 categories with detailed rationales:
-                    
-                    1. KNOWN/EVIDENCE-BASED (Strong clinical evidence):
-                    - Include specific interventions with rationale, evidence level, and implementation details
-                    
-                    2. POTENTIAL/INVESTIGATIONAL (Limited but promising evidence):
-                    - Include rationale, evidence level, dosing, and limitations
-                    
-                    3. DEBUNKED/HARMFUL (Proven ineffective or dangerous):
-                    - Include why debunked, who debunked it, evidence against, and why harmful
-                    
-                    Format as JSON:
-                    {{
-                        "known_recommendations": [
-                            {{
-                                "intervention": "specific recommendation",
-                                "rationale": "mechanism and reasoning",
-                                "evidence_level": "Strong - source details",
-                                "timing": "when/how to implement"
-                            }}
-                        ],
-                        "potential_recommendations": [
-                            {{
-                                "intervention": "investigational approach",
-                                "rationale": "theoretical basis",
-                                "evidence_level": "Limited - study details",
-                                "dosing": "specific dosing if known",
-                                "limitations": "why evidence is limited"
-                            }}
-                        ],
-                        "debunked_claims": [
-                            {{
-                                "claim": "debunked treatment",
-                                "reason_debunked": "scientific reasoning",
-                                "debunked_by": "authorities/studies",
-                                "evidence": "evidence against",
-                                "why_harmful": "specific harms"
-                            }}
-                        ]
-                    }}
+
+                    Provide DETAILED, COMPREHENSIVE recommendations in 3 categories. Each recommendation should include enough detail to write a full paragraph (3-5 sentences minimum):
+
+                    1. KNOWN/EVIDENCE-BASED RECOMMENDATIONS (Strong clinical evidence):
+                    For each recommendation, provide:
+                    - intervention: Specific action to take
+                    - rationale: Detailed explanation of mechanism and why this works (2-3 sentences)
+                    - evidence_level: Evidence strength with specific sources (e.g., "Strong - Multiple RCTs including Smith et al. 2023")
+                    - timing: Precise timing and duration (e.g., "Begin 24h before procedure, continue for 48h after")
+                    - implementation: Step-by-step how to implement, including dosing if applicable
+                    - expected_outcome: What results to expect and when
+                    - monitoring: What to monitor and how often
+                    - cost_consideration: Approximate cost if relevant (e.g., "~$15/month OTC supplement")
+
+                    2. POTENTIAL/INVESTIGATIONAL RECOMMENDATIONS (Limited but promising evidence):
+                    For each recommendation, provide:
+                    - intervention: Specific approach
+                    - rationale: Theoretical basis and preliminary evidence (2-3 sentences)
+                    - evidence_level: Current evidence with limitations
+                    - implementation: How to try this approach
+                    - dosing: Specific dosing if known from studies
+                    - limitations: Why evidence is limited and what studies are needed
+                    - safety_profile: Known safety information
+
+                    3. CONTRAINDICATIONS - What NOT to do (Things to avoid):
+                    For each contraindication, provide:
+                    - condition: What should be avoided
+                    - severity: absolute/relative/caution
+                    - reason: Detailed explanation why this is contraindicated (2-3 sentences)
+                    - alternative: What to do instead if this is needed
+                    - risk_if_ignored: Specific harms that can occur
+
+                    4. DEBUNKED/HARMFUL TREATMENTS (Proven ineffective or dangerous):
+                    For each debunked treatment, provide:
+                    - claim: What treatment people incorrectly use
+                    - reason_debunked: Scientific explanation why it doesn't work (2-3 sentences)
+                    - debunked_by: Specific authorities, studies, or meta-analyses
+                    - evidence: Specific evidence against this treatment
+                    - why_harmful: How this can actually cause harm
+                    - common_misconception: Why people think it works
+
+                    5. WARNING SIGNS to watch for:
+                    For each warning sign, provide:
+                    - sign: Observable symptom or test result
+                    - severity: emergency/urgent/monitor
+                    - mechanism: Why this sign indicates a problem
+                    - action: Specific action to take
+                    - timeframe: When this typically occurs
+
+                    6. INTERACTIONS (if applicable for medications/supplements):
+                    - drug_interactions: Medications that interact
+                    - food_interactions: Foods to avoid or that help
+                    - environmental_factors: Light sensitivity, temperature, activity restrictions
+
+                    Write each field with enough detail that it could be expanded into a full paragraph. Be specific with:
+                    - Numbers and measurements (dosages, percentages, timeframes)
+                    - Mechanisms of action
+                    - Evidence sources
+                    - Practical implementation steps
+
+                    Format as JSON with rich, detailed content in each field.
                     """
                     
                     system_prompt = f"""You are a medical expert synthesizing evidence-based recommendations for {organ} protection.
@@ -644,49 +664,81 @@ class MedicalReasoningAgent:
         recommendations = {
             "known_recommendations": [],
             "potential_recommendations": [],
-            "debunked_claims": []
+            "contraindications": [],
+            "debunked_claims": [],
+            "warning_signs": [],
+            "interactions": {}
         }
-        
+
         # Simple text parsing for fallback
         lines = response_text.split('\n')
         current_section = None
-        
+
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-                
+
             if "known" in line.lower() or "evidence-based" in line.lower():
                 current_section = "known"
             elif "potential" in line.lower() or "investigational" in line.lower():
                 current_section = "potential"
+            elif "contraindication" in line.lower() or "what not to do" in line.lower():
+                current_section = "contraindications"
             elif "debunked" in line.lower() or "harmful" in line.lower():
                 current_section = "debunked"
+            elif "warning" in line.lower():
+                current_section = "warning"
+            elif "interaction" in line.lower():
+                current_section = "interactions"
             elif line.startswith('-') or line.startswith('•'):
                 intervention = line[1:].strip()
                 if current_section == "known":
                     recommendations["known_recommendations"].append({
                         "intervention": intervention,
-                        "rationale": "Evidence-based intervention",
-                        "evidence_level": "Strong",
-                        "timing": "As clinically indicated"
+                        "rationale": "Evidence-based intervention - detailed rationale not parsed from text",
+                        "evidence_level": "Strong - based on clinical guidelines",
+                        "timing": "As clinically indicated",
+                        "implementation": "Consult healthcare provider for specific implementation",
+                        "expected_outcome": "Variable based on individual factors",
+                        "monitoring": "Standard monitoring recommended"
                     })
                 elif current_section == "potential":
                     recommendations["potential_recommendations"].append({
                         "intervention": intervention,
-                        "rationale": "Limited but promising evidence",
-                        "evidence_level": "Limited",
-                        "limitations": "Requires further study"
+                        "rationale": "Limited but promising evidence - requires further validation",
+                        "evidence_level": "Limited - preliminary studies",
+                        "implementation": "Discuss with healthcare provider",
+                        "dosing": "Not standardized",
+                        "limitations": "Requires further study",
+                        "safety_profile": "Generally considered safe, monitor for adverse effects"
+                    })
+                elif current_section == "contraindications":
+                    recommendations["contraindications"].append({
+                        "condition": intervention,
+                        "severity": "caution",
+                        "reason": "May interfere with procedure or recovery",
+                        "alternative": "Consult healthcare provider for alternatives",
+                        "risk_if_ignored": "Increased risk of complications"
                     })
                 elif current_section == "debunked":
                     recommendations["debunked_claims"].append({
                         "claim": intervention,
                         "reason_debunked": "Insufficient evidence or proven harmful",
-                        "debunked_by": "Medical literature",
-                        "evidence": "Lack of clinical benefit",
-                        "why_harmful": "May delay appropriate care"
+                        "debunked_by": "Medical literature and clinical trials",
+                        "evidence": "Lack of clinical benefit in controlled studies",
+                        "why_harmful": "May delay appropriate care or cause direct harm",
+                        "common_misconception": "Popular belief not supported by evidence"
                     })
-        
+                elif current_section == "warning":
+                    recommendations["warning_signs"].append({
+                        "sign": intervention,
+                        "severity": "monitor",
+                        "mechanism": "Potential indicator of complication",
+                        "action": "Contact healthcare provider if observed",
+                        "timeframe": "Variable"
+                    })
+
         return recommendations
     
     def _critical_evaluation(self, medical_input: MedicalInput, organs: List[str], 
@@ -699,36 +751,77 @@ class MedicalReasoningAgent:
             {"evaluation_criteria": ["evidence_quality", "clinical_relevance", "safety_profile"]}
         )
         
-        # Create organ analyses with detailed information
+        # Create organ analyses with detailed information preserved
         organ_analyses = []
         for organ in organs:
             if organ in recommendations:
                 organ_data = recommendations[organ]
-                
-                # Extract simple lists for backward compatibility
+
+                # Preserve full detailed recommendations as JSON strings for backward compatibility
+                # This allows the OrganAnalysis to store the data without changing its structure
                 known_recs = []
                 potential_recs = []
                 debunked_claims = []
-                
-                # Handle both detailed and simple formats
+
+                # Store detailed recommendations as formatted strings
                 for rec in organ_data.get("known_recommendations", []):
                     if isinstance(rec, dict):
-                        known_recs.append(rec.get("intervention", str(rec)))
+                        # Format as detailed string preserving all information
+                        intervention = rec.get("intervention", "")
+                        rationale = rec.get("rationale", "")
+                        evidence = rec.get("evidence_level", "")
+                        timing = rec.get("timing", "")
+                        implementation = rec.get("implementation", "")
+
+                        formatted = f"{intervention}"
+                        if rationale:
+                            formatted += f" | Rationale: {rationale}"
+                        if evidence:
+                            formatted += f" | Evidence: {evidence}"
+                        if timing:
+                            formatted += f" | Timing: {timing}"
+                        if implementation:
+                            formatted += f" | Implementation: {implementation}"
+
+                        known_recs.append(formatted)
                     else:
-                        known_recs.append(rec)
-                
+                        known_recs.append(str(rec))
+
                 for rec in organ_data.get("potential_recommendations", []):
                     if isinstance(rec, dict):
-                        potential_recs.append(rec.get("intervention", str(rec)))
+                        intervention = rec.get("intervention", "")
+                        rationale = rec.get("rationale", "")
+                        evidence = rec.get("evidence_level", "")
+                        limitations = rec.get("limitations", "")
+
+                        formatted = f"{intervention}"
+                        if rationale:
+                            formatted += f" | Rationale: {rationale}"
+                        if evidence:
+                            formatted += f" | Evidence: {evidence}"
+                        if limitations:
+                            formatted += f" | Limitations: {limitations}"
+
+                        potential_recs.append(formatted)
                     else:
-                        potential_recs.append(rec)
-                
+                        potential_recs.append(str(rec))
+
                 for claim in organ_data.get("debunked_claims", []):
                     if isinstance(claim, dict):
-                        debunked_claims.append(claim.get("claim", str(claim)))
+                        claim_text = claim.get("claim", "")
+                        reason = claim.get("reason_debunked", "")
+                        harmful = claim.get("why_harmful", "")
+
+                        formatted = f"{claim_text}"
+                        if reason:
+                            formatted += f" | Why debunked: {reason}"
+                        if harmful:
+                            formatted += f" | Why harmful: {harmful}"
+
+                        debunked_claims.append(formatted)
                     else:
-                        debunked_claims.append(claim)
-                
+                        debunked_claims.append(str(claim))
+
                 analysis = OrganAnalysis(
                     organ_name=organ,
                     affected_by_procedure=True,

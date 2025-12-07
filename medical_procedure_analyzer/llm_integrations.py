@@ -425,15 +425,35 @@ class LLMManager:
         provider = self.get_available_provider()
         if not provider:
             raise RuntimeError("No LLM provider available for DSPy")
-        
+
         # Configure DSPy with the available provider
         if self.current_provider == LLMProvider.CLAUDE:
-            # DSPy Claude integration would go here
-            pass
+            # Configure DSPy with Claude/Anthropic
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise RuntimeError("ANTHROPIC_API_KEY not set")
+
+            # DSPy 3.x uses different import for Anthropic
+            lm = dspy.Claude(
+                model=self.configs[0].model,
+                api_key=api_key,
+                temperature=self.configs[0].temperature,
+                max_tokens=self.configs[0].max_tokens
+            )
+            dspy.settings.configure(lm=lm)
+
         elif self.current_provider == LLMProvider.OPENAI:
-            dspy.configure(lm=dspy.OpenAI(model=self.configs[0].model))
-        
+            api_key = os.getenv("OPENAI_API_KEY")
+            lm = dspy.OpenAI(
+                model=self.configs[0].model,
+                api_key=api_key,
+                temperature=self.configs[0].temperature,
+                max_tokens=self.configs[0].max_tokens
+            )
+            dspy.settings.configure(lm=lm)
+
         self.logger.info(f"DSPy configured with {self.current_provider.value}")
+        return True
 
 
 # Factory function for easy setup

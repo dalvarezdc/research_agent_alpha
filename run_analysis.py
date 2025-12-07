@@ -11,11 +11,17 @@ import argparse
 from datetime import datetime
 from typing import Any, Dict, Tuple
 
+# Import cost tracking
+from cost_tracker import get_cost_summary
+
 # Import medical procedure analyzer
-from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput
+from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput as ProcedureInput
 
 # Import medical fact checker
 from medical_fact_checker import MedicalFactChecker
+
+# Import medication analyzer
+from medical_procedure_analyzer.medication_analyzer import MedicationAnalyzer, MedicationInput
 
 
 class AgentOrchestrator:
@@ -26,6 +32,11 @@ class AgentOrchestrator:
             "name": "Medical Procedure Analyzer",
             "description": "Analyzes medical procedures with organ-focused reasoning",
             "class": MedicalReasoningAgent,
+        },
+        "medication": {
+            "name": "Medication Analyzer",
+            "description": "Comprehensive medication analysis with interactions and recommendations",
+            "class": MedicationAnalyzer,
         },
         "factcheck": {
             "name": "Medical Fact Checker",
@@ -60,7 +71,7 @@ class AgentOrchestrator:
                 config.timeout = timeout
 
         # Create input
-        medical_input = MedicalInput(
+        medical_input = ProcedureInput(
             procedure=procedure,
             details=details,
             objectives=(
@@ -170,6 +181,90 @@ class AgentOrchestrator:
         files = self._save_fact_check_analysis(session, subject)
 
         return session, files
+
+    def run_medication_analyzer(
+        self,
+        medication: str,
+        indication: str = None,
+        other_medications: list = None,
+        llm_provider: str = "claude",
+        timeout: int = 300,
+    ) -> Tuple[Any, Dict[str, str]]:
+        """Run the Medication Analyzer"""
+        print("=" * 80)
+        print("💊 Medication Analyzer - Comprehensive Drug Analysis")
+        print("=" * 80)
+        print()
+
+        # Initialize agent
+        print(f"🤖 Initializing agent with {llm_provider} (timeout: {timeout}s)...")
+        agent = MedicationAnalyzer(
+            primary_llm_provider=llm_provider,
+            fallback_providers=["openai"],
+            enable_logging=True,
+        )
+        # Update timeout if agent's LLM manager exists
+        if hasattr(agent, "llm_manager") and agent.llm_manager:
+            for config in agent.llm_manager.configs:
+                config.timeout = timeout
+
+        # Create input
+        med_input = MedicationInput(
+            medication_name=medication,
+            indication=indication,
+            patient_medications=other_medications or [],
+        )
+
+        print(f"💊 Analyzing: {med_input.medication_name}")
+        if med_input.indication:
+            print(f"   Indication: {med_input.indication}")
+        if med_input.patient_medications:
+            print(f"   Other Medications: {', '.join(med_input.patient_medications)}")
+        print()
+        print("⏳ Running comprehensive medication analysis...")
+        print("   Phase 1: Pharmacology Analysis")
+        print("   Phase 2: Interaction Analysis (Drug-Drug, Drug-Food, Environmental)")
+        print("   Phase 3: Safety Profile Assessment")
+        print("   Phase 4: Clinical Recommendations")
+        print("   Phase 5: Monitoring Requirements")
+        print()
+
+        # Run analysis
+        result = agent.analyze_medication(med_input)
+
+        print()
+        print("=" * 80)
+        print("✅ Analysis Complete!")
+        print("=" * 80)
+        print(f"💊 Medication: {result.medication_name}")
+        print(f"🧬 Drug Class: {result.drug_class}")
+        print(f"📊 Analysis Confidence: {result.analysis_confidence:.2f}")
+        print()
+
+        # Display brief results
+        print("🔍 Analysis Summary:")
+        print(f"   🔗 Drug-Drug Interactions: {len(result.drug_interactions)}")
+        if result.drug_interactions:
+            severe = [i for i in result.drug_interactions if i.severity.value == "severe"]
+            if severe:
+                print(f"      ⚠️  SEVERE: {len(severe)} interactions requiring immediate attention")
+
+        print(f"   🍎 Food Interactions: {len(result.food_interactions)}")
+        print(f"   ⚕️  Contraindications: {len(result.contraindications)}")
+        print(f"   ✅ Evidence-Based Recommendations: {len(result.evidence_based_recommendations)}")
+        print(f"   🔬 Investigational Approaches: {len(result.investigational_approaches)}")
+        print(f"   ❌ Debunked Claims: {len(result.debunked_claims)}")
+
+        if result.black_box_warnings:
+            print(f"   ⚠️  BLACK BOX WARNINGS: {len(result.black_box_warnings)}")
+
+        print()
+
+        # Save outputs
+        print("💾 Saving outputs...")
+        files = self._save_medication_analysis(result, medication)
+
+        return result, files
 
     def _save_procedure_analysis(
         self, result: Any, procedure_name: str
@@ -297,6 +392,119 @@ class AgentOrchestrator:
             f.write(summary)
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
+
+        return files
+
+    def _save_medication_analysis(
+        self, result: Any, medication_name: str
+    ) -> Dict[str, str]:
+        """Save medication analysis results"""
+        base_name = medication_name.replace(" ", "_").lower()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        files = {}
+
+        # 1. Analysis result (JSON)
+        result_file = f"{self.output_dir}/{base_name}_medication_analysis_{timestamp}.json"
+        analysis_data = {
+            "timestamp": datetime.now().isoformat(),
+            "agent_type": "medication_analyzer",
+            "medication_name": result.medication_name,
+            "drug_class": result.drug_class,
+            "mechanism_of_action": result.mechanism_of_action,
+            "pharmacokinetics": {
+                "absorption": result.absorption,
+                "metabolism": result.metabolism,
+                "elimination": result.elimination,
+                "half_life": result.half_life,
+            },
+            "clinical_use": {
+                "approved_indications": result.approved_indications,
+                "off_label_uses": result.off_label_uses,
+                "standard_dosing": result.standard_dosing,
+                "dose_adjustments": result.dose_adjustments,
+            },
+            "safety_profile": {
+                "common_adverse_effects": result.common_adverse_effects,
+                "serious_adverse_effects": result.serious_adverse_effects,
+                "contraindications": result.contraindications,
+                "black_box_warnings": result.black_box_warnings,
+            },
+            "interactions": {
+                "drug_interactions": [
+                    {
+                        "type": i.interaction_type.value,
+                        "agent": i.interacting_agent,
+                        "severity": i.severity.value,
+                        "mechanism": i.mechanism,
+                        "clinical_effect": i.clinical_effect,
+                        "management": i.management,
+                        "time_separation": i.time_separation,
+                        "evidence_level": i.evidence_level,
+                    }
+                    for i in result.drug_interactions
+                ],
+                "food_interactions": [
+                    {
+                        "type": i.interaction_type.value,
+                        "agent": i.interacting_agent,
+                        "severity": i.severity.value,
+                        "mechanism": i.mechanism,
+                        "clinical_effect": i.clinical_effect,
+                        "management": i.management,
+                    }
+                    for i in result.food_interactions
+                ],
+                "environmental_considerations": result.environmental_considerations,
+            },
+            "recommendations": {
+                "evidence_based": result.evidence_based_recommendations,
+                "investigational": result.investigational_approaches,
+                "debunked_claims": result.debunked_claims,
+            },
+            "monitoring": {
+                "requirements": result.monitoring_requirements,
+                "warning_signs": result.warning_signs,
+            },
+            "metadata": {
+                "evidence_quality": result.evidence_quality,
+                "analysis_confidence": result.analysis_confidence,
+                "reasoning_steps_count": len(result.reasoning_trace),
+            },
+        }
+
+        # Add cost information
+        cost_summary = get_cost_summary()
+        analysis_data["cost_analysis"] = cost_summary
+
+        with open(result_file, "w") as f:
+            json.dump(analysis_data, f, indent=2)
+        print(f"✓ Analysis result: {os.path.basename(result_file)}")
+        files["result"] = result_file
+
+        # 2. Cost report (JSON)
+        cost_file = f"{self.output_dir}/{base_name}_cost_report_{timestamp}.json"
+        with open(cost_file, "w") as f:
+            json.dump(cost_summary, f, indent=2)
+        print(f"✓ Cost report: {os.path.basename(cost_file)}")
+        files["cost"] = cost_file
+
+        # 3. Summary report (Markdown)
+        summary_file = f"{self.output_dir}/{base_name}_medication_summary_{timestamp}.md"
+        summary = self._generate_medication_summary(result, cost_summary)
+
+        with open(summary_file, "w") as f:
+            f.write(summary)
+        print(f"✓ Summary report: {os.path.basename(summary_file)}")
+        files["summary"] = summary_file
+
+        # 4. Comprehensive report (detailed Markdown)
+        detailed_file = f"{self.output_dir}/{base_name}_medication_detailed_{timestamp}.md"
+        detailed = self._generate_medication_detailed_report(result, cost_summary)
+
+        with open(detailed_file, "w") as f:
+            f.write(detailed)
+        print(f"✓ Detailed report: {os.path.basename(detailed_file)}")
+        files["detailed"] = detailed_file
 
         return files
 
@@ -429,6 +637,357 @@ See the detailed output file for the complete analysis.
 
         return summary
 
+    def _generate_medication_summary(self, result: Any, cost_summary: Dict = None) -> str:
+        """Generate markdown summary for medication analysis"""
+        cost_info = ""
+        if cost_summary and cost_summary.get('total_cost', 0) > 0:
+            cost_info = f"""
+**Analysis Cost:** ${cost_summary['total_cost']:.4f}
+**Duration:** {cost_summary['total_duration']:.1f}s
+"""
+
+        summary = f"""# Medication Analysis Report
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Analysis System:** MedicationAnalyzer (Comprehensive Drug Analysis){cost_info}
+
+---
+
+## Medication Overview
+**Name:** {result.medication_name}
+**Drug Class:** {result.drug_class}
+**Analysis Confidence:** {result.analysis_confidence:.2f}/1.00
+
+---
+
+## Mechanism of Action
+{result.mechanism_of_action[:300] + '...' if len(result.mechanism_of_action) > 300 else result.mechanism_of_action}
+
+---
+
+## Pharmacokinetics Summary
+- **Absorption:** {result.absorption[:100] + '...' if len(result.absorption) > 100 else result.absorption}
+- **Metabolism:** {result.metabolism[:100] + '...' if len(result.metabolism) > 100 else result.metabolism}
+- **Elimination:** {result.elimination[:100] + '...' if len(result.elimination) > 100 else result.elimination}
+- **Half-Life:** {result.half_life}
+
+---
+
+## Key Safety Information
+
+"""
+
+        if result.black_box_warnings:
+            summary += "### ⚠️ BLACK BOX WARNINGS\n\n"
+            for i, warning in enumerate(result.black_box_warnings, 1):
+                summary += f"{i}. {warning}\n"
+            summary += "\n"
+
+        if result.contraindications:
+            summary += f"### Contraindications ({len(result.contraindications)} identified)\n\n"
+            for contra in result.contraindications[:3]:  # Show top 3
+                if isinstance(contra, dict):
+                    summary += f"- **{contra.get('condition', 'N/A')}** ({contra.get('severity', 'N/A')})\n"
+            if len(result.contraindications) > 3:
+                summary += f"- _(and {len(result.contraindications) - 3} more - see detailed report)_\n"
+            summary += "\n"
+
+        summary += f"""---
+
+## Interactions Summary
+
+"""
+
+        if result.drug_interactions:
+            severe = [i for i in result.drug_interactions if i.severity.value == "severe"]
+            moderate = [i for i in result.drug_interactions if i.severity.value == "moderate"]
+
+            if severe:
+                summary += f"### 🔴 SEVERE Drug Interactions ({len(severe)})\n\n"
+                for interaction in severe[:3]:
+                    summary += f"- **{interaction.interacting_agent}**\n"
+                    summary += f"  - Effect: {interaction.clinical_effect[:100]}...\n"
+                    summary += f"  - Management: {interaction.management[:100]}...\n\n"
+
+            if moderate:
+                summary += f"### 🟡 Moderate Drug Interactions ({len(moderate)})\n\n"
+                for interaction in moderate[:3]:
+                    summary += f"- **{interaction.interacting_agent}**: {interaction.clinical_effect[:80]}...\n"
+
+        if result.food_interactions:
+            summary += f"\n### Food Interactions ({len(result.food_interactions)})\n\n"
+            for interaction in result.food_interactions[:3]:
+                summary += f"- **{interaction.interacting_agent}**: {interaction.management[:100]}...\n"
+
+        summary += """
+---
+
+## Evidence-Based Recommendations
+
+"""
+
+        if result.evidence_based_recommendations:
+            for i, rec in enumerate(result.evidence_based_recommendations[:5], 1):
+                if isinstance(rec, dict):
+                    summary += f"{i}. **{rec.get('intervention', 'N/A')}**\n"
+                    summary += f"   - {rec.get('rationale', 'N/A')[:150]}...\n\n"
+
+        summary += """
+---
+
+**For complete details including all interactions, dosing adjustments, and comprehensive recommendations, see the detailed report.**
+
+⚠️ **DISCLAIMER:** This analysis is for educational and research purposes only. Always consult qualified healthcare providers for medication decisions.
+"""
+
+        return summary
+
+    def _generate_medication_detailed_report(self, result: Any, cost_summary: Dict = None) -> str:
+        """Generate comprehensive detailed report for medication"""
+        cost_header = ""
+        if cost_summary and cost_summary.get('total_cost', 0) > 0:
+            cost_header = f"\n**Analysis Cost:** ${cost_summary['total_cost']:.4f}\n**Duration:** {cost_summary['total_duration']:.1f}s"
+
+        report = f"""# Comprehensive Medication Analysis: {result.medication_name}
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Analysis Confidence:** {result.analysis_confidence:.2f}
+**Evidence Quality:** {result.evidence_quality}{cost_header}
+
+---
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Pharmacology](#pharmacology)
+3. [Clinical Use](#clinical-use)
+4. [Interactions](#interactions)
+5. [Safety Profile](#safety-profile)
+6. [Recommendations](#recommendations)
+7. [Monitoring](#monitoring)
+
+---
+
+## Overview
+
+### Drug Classification
+**Drug Class:** {result.drug_class}
+
+### Mechanism of Action
+{result.mechanism_of_action}
+
+---
+
+## Pharmacology
+
+### Absorption
+{result.absorption}
+
+### Distribution & Metabolism
+{result.metabolism}
+
+### Elimination
+{result.elimination}
+
+**Half-Life:** {result.half_life}
+
+---
+
+## Clinical Use
+
+### Approved Indications
+"""
+
+        for i, indication in enumerate(result.approved_indications, 1):
+            report += f"{i}. {indication}\n"
+
+        if result.off_label_uses:
+            report += "\n### Off-Label Uses\n"
+            for i, use in enumerate(result.off_label_uses, 1):
+                report += f"{i}. {use}\n"
+
+        report += f"""
+### Standard Dosing
+{result.standard_dosing}
+
+"""
+
+        if result.dose_adjustments:
+            report += "### Dose Adjustments\n"
+            for adjustment_type, adjustment_info in result.dose_adjustments.items():
+                report += f"**{adjustment_type.replace('_', ' ').title()}:**\n{adjustment_info}\n\n"
+
+        report += """
+---
+
+## Interactions
+
+### Drug-Drug Interactions
+"""
+
+        if result.drug_interactions:
+            for interaction in result.drug_interactions:
+                severity_emoji = "🔴" if interaction.severity.value == "severe" else "🟡" if interaction.severity.value == "moderate" else "🟢"
+                report += f"\n#### {severity_emoji} {interaction.interacting_agent} ({interaction.severity.value.upper()})\n\n"
+                report += f"**Mechanism:** {interaction.mechanism}\n\n"
+                report += f"**Clinical Effect:** {interaction.clinical_effect}\n\n"
+                report += f"**Management:** {interaction.management}\n\n"
+                if interaction.time_separation:
+                    report += f"**Time Separation:** {interaction.time_separation}\n\n"
+                report += f"**Evidence Level:** {interaction.evidence_level}\n\n"
+        else:
+            report += "No significant drug-drug interactions identified.\n\n"
+
+        report += "### Food & Lifestyle Interactions\n\n"
+
+        if result.food_interactions:
+            for interaction in result.food_interactions:
+                report += f"#### {interaction.interacting_agent}\n\n"
+                report += f"**Mechanism:** {interaction.mechanism}\n\n"
+                report += f"**Clinical Effect:** {interaction.clinical_effect}\n\n"
+                report += f"**Management:** {interaction.management}\n\n"
+        else:
+            report += "No significant food interactions identified.\n\n"
+
+        if result.environmental_considerations:
+            report += "### Environmental Considerations\n\n"
+            for consideration in result.environmental_considerations:
+                if isinstance(consideration, dict):
+                    report += f"- **{consideration.get('type', 'N/A')}:** {consideration.get('description', 'N/A')}\n"
+                else:
+                    report += f"- {consideration}\n"
+
+        report += """
+---
+
+## Safety Profile
+
+"""
+
+        if result.black_box_warnings:
+            report += "### ⚠️ BLACK BOX WARNINGS\n\n"
+            for i, warning in enumerate(result.black_box_warnings, 1):
+                report += f"{i}. {warning}\n\n"
+
+        report += "### Adverse Effects\n\n"
+
+        if result.common_adverse_effects:
+            report += "**Common (>10%):**\n"
+            for effect in result.common_adverse_effects:
+                report += f"- {effect}\n"
+            report += "\n"
+
+        if result.serious_adverse_effects:
+            report += "**Serious (Any Frequency):**\n"
+            for effect in result.serious_adverse_effects:
+                report += f"- {effect}\n"
+            report += "\n"
+
+        if result.contraindications:
+            report += "### Contraindications\n\n"
+            for contra in result.contraindications:
+                if isinstance(contra, dict):
+                    report += f"**{contra.get('condition', 'N/A')}** ({contra.get('severity', 'N/A')})\n"
+                    report += f"- Reason: {contra.get('reason', 'N/A')}\n"
+                    if contra.get('alternative'):
+                        report += f"- Alternative: {contra.get('alternative')}\n"
+                    report += "\n"
+
+        if result.warning_signs:
+            report += "### Warning Signs\n\n"
+            for sign in result.warning_signs:
+                if isinstance(sign, dict):
+                    report += f"**{sign.get('sign', 'N/A')}** ({sign.get('severity', 'N/A')})\n"
+                    report += f"- Action: {sign.get('action', 'N/A')}\n\n"
+
+        report += """
+---
+
+## Recommendations
+
+### What TO DO: Evidence-Based Recommendations
+
+"""
+
+        if result.evidence_based_recommendations:
+            for i, rec in enumerate(result.evidence_based_recommendations, 1):
+                if isinstance(rec, dict):
+                    report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
+                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
+                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
+                    report += f"**Implementation:** {rec.get('implementation', 'N/A')}\n\n"
+                    if rec.get('expected_outcome'):
+                        report += f"**Expected Outcome:** {rec.get('expected_outcome')}\n\n"
+
+        if result.investigational_approaches:
+            report += "### Investigational Approaches (Limited Evidence)\n\n"
+            for i, rec in enumerate(result.investigational_approaches, 1):
+                if isinstance(rec, dict):
+                    report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
+                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
+                    report += f"**Limitations:** {rec.get('limitations', 'N/A')}\n\n"
+
+        if result.debunked_claims:
+            report += "### What NOT TO DO: Debunked Claims\n\n"
+            for i, claim in enumerate(result.debunked_claims, 1):
+                if isinstance(claim, dict):
+                    report += f"#### ❌ {i}. {claim.get('claim', 'N/A')}\n\n"
+                    report += f"**Why Debunked:** {claim.get('reason_debunked', 'N/A')}\n\n"
+                    report += f"**Evidence Against:** {claim.get('evidence', 'N/A')}\n\n"
+                    report += f"**Why Harmful:** {claim.get('why_harmful', 'N/A')}\n\n"
+
+        report += """
+---
+
+## Monitoring Requirements
+
+"""
+
+        if result.monitoring_requirements:
+            for i, req in enumerate(result.monitoring_requirements, 1):
+                if isinstance(req, dict):
+                    report += f"{i}. **{req.get('parameter', 'N/A')}**\n"
+                    report += f"   - Frequency: {req.get('frequency', 'N/A')}\n"
+                    report += f"   - Rationale: {req.get('rationale', 'N/A')}\n\n"
+                else:
+                    report += f"{i}. {req}\n"
+
+        report += f"""
+---
+
+**Analysis Completed:** {datetime.now().isoformat()}
+**Reasoning Steps:** {len(result.reasoning_trace)}
+"""
+
+        # Add cost breakdown if available
+        if cost_summary and cost_summary.get('total_cost', 0) > 0:
+            report += f"""
+---
+
+## Cost Analysis
+
+**Total Cost:** ${cost_summary['total_cost']:.4f}
+**Total Duration:** {cost_summary['total_duration']:.1f}s
+
+### Phase Breakdown
+
+"""
+            for phase in cost_summary.get('phases', []):
+                pct = (phase['cost'] / cost_summary['total_cost'] * 100) if cost_summary['total_cost'] > 0 else 0
+                report += f"- **{phase['phase']}**: ${phase['cost']:.4f} ({pct:.1f}%) - {phase['duration']:.1f}s\n"
+
+        report += """
+---
+
+⚠️ **IMPORTANT DISCLAIMER:** This analysis is for educational and research purposes only.
+It does not constitute medical advice. Always consult qualified healthcare professionals for
+medication decisions, dosing, and management of health conditions.
+
+---
+
+*Generated by Medical Analysis Agent*
+"""
+
+        return report
+
     @classmethod
     def list_agents(cls):
         """List all available agents"""
@@ -452,6 +1011,9 @@ Examples:
   # Run procedure analyzer
   python run_analysis.py procedure --subject "MRI Scanner" --details "With gadolinium contrast"
 
+  # Run medication analyzer
+  python run_analysis.py medication --subject "Metformin" --indication "Type 2 Diabetes" --other-meds "Lisinopril" "Atorvastatin"
+
   # Run fact checker
   python run_analysis.py factcheck --subject "Vitamin D supplementation" --context "optimal dosing"
 
@@ -469,8 +1031,8 @@ Examples:
     parser.add_argument(
         "agent",
         nargs="?",
-        choices=["procedure", "factcheck"],
-        help="Which agent to run (procedure or factcheck)",
+        choices=["procedure", "medication", "factcheck"],
+        help="Which agent to run (procedure, medication, or factcheck)",
     )
 
     parser.add_argument("--list", action="store_true", help="List all available agents")
@@ -491,6 +1053,18 @@ Examples:
         type=str,
         default="",
         help="Context or scope for fact checker",
+    )
+
+    parser.add_argument(
+        "--indication",
+        type=str,
+        help="Primary indication for medication analyzer",
+    )
+
+    parser.add_argument(
+        "--other-meds",
+        nargs="*",
+        help="Other medications patient is taking (for medication analyzer)",
     )
 
     parser.add_argument(
@@ -525,7 +1099,7 @@ Examples:
     # Validate arguments
     if not args.agent:
         parser.print_help()
-        print("\n❌ Error: Please specify an agent (procedure or factcheck)")
+        print("\n❌ Error: Please specify an agent (procedure, medication, or factcheck)")
         print("   Use --list to see available agents")
         sys.exit(1)
 
@@ -542,6 +1116,15 @@ Examples:
             details = args.details or "Standard procedure"
             result, files = orchestrator.run_procedure_analyzer(
                 procedure=args.subject, details=details, llm_provider=args.llm, timeout=args.timeout
+            )
+
+        elif args.agent == "medication":
+            result, files = orchestrator.run_medication_analyzer(
+                medication=args.subject,
+                indication=args.indication,
+                other_medications=args.other_meds,
+                llm_provider=args.llm,
+                timeout=args.timeout,
             )
 
         elif args.agent == "factcheck":

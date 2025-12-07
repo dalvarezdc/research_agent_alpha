@@ -1,0 +1,292 @@
+{
+  "timestamp": "2025-12-07T16:59:26.315262",
+  "agent_type": "medication_analyzer",
+  "medication_name": "doxycycline",
+  "drug_class": "Tetracycline antibiotic; Broad-spectrum bacteriostatic antimicrobial agent",
+  "mechanism_of_action": "Doxycycline reversibly binds to the 30S ribosomal subunit of susceptible bacteria, blocking the binding of aminoacyl-tRNA to the mRNA-ribosome complex. This inhibits bacterial protein synthesis by preventing the addition of amino acids to the growing peptide chain. The drug enters bacterial cells via passive diffusion and active transport. Doxycycline also exhibits anti-inflammatory properties through inhibition of matrix metalloproteinases (MMPs), phospholipase A2, and modulation of cytokine production independent of its antimicrobial effects.",
+  "pharmacokinetics": {
+    "absorption": "Oral bioavailability is approximately 90-100%, making it one of the most completely absorbed tetracyclines. Peak plasma concentrations occur 2-3 hours after oral administration. Food and dairy products have minimal effect on absorption compared to other tetracyclines, though absorption may be slightly reduced. Absorption is not significantly affected by milk or moderate amounts of calcium. Onset of action occurs within 1-2 hours.",
+    "metabolism": "Doxycycline undergoes minimal hepatic metabolism. Unlike other tetracyclines, it does not undergo significant biotransformation by CYP450 enzymes. Small amounts may be metabolized to inactive metabolites. The drug is primarily eliminated unchanged. Enterohepatic recirculation occurs, with chelation in the intestine by calcium and excretion in feces as inactive chelates.",
+    "elimination": "Primary route of elimination is fecal excretion (20-40% as active drug and chelated inactive forms) via bile and direct intestinal secretion. Renal excretion accounts for 20-40% of elimination, with approximately 40-60% excreted unchanged in urine within 72 hours. Glomerular filtration is the primary renal mechanism. Unlike other tetracyclines, doxycycline does not accumulate significantly in renal failure due to increased fecal elimination as a compensatory mechanism.",
+    "half_life": "15-25 hours in adults with normal renal and hepatic function. Half-life may be prolonged to 18-22 hours in patients with severe renal impairment but does not require dose adjustment. In patients with hepatic impairment, half-life may be extended."
+  },
+  "clinical_use": {
+    "approved_indications": [
+      "Respiratory tract infections (pneumonia, bronchitis) caused by susceptible organisms",
+      "Urinary tract infections caused by susceptible organisms",
+      "Sexually transmitted infections (chlamydia, gonorrhea, syphilis, lymphogranuloma venereum)",
+      "Rickettsial infections (Rocky Mountain spotted fever, typhus fever, Q fever)",
+      "Acne vulgaris (inflammatory lesions)",
+      "Rosacea (inflammatory lesions, papulopustular)",
+      "Anthrax (treatment and post-exposure prophylaxis)",
+      "Malaria prophylaxis (Plasmodium falciparum)",
+      "Lyme disease (early and some late manifestations)",
+      "Plague (Yersinia pestis)",
+      "Tularemia",
+      "Cholera",
+      "Brucellosis (in combination with other agents)",
+      "Periodontal disease (adjunctive therapy)",
+      "Intestinal amebiasis (adjunctive therapy)"
+    ],
+    "off_label_uses": [
+      "Community-acquired pneumonia",
+      "Chronic obstructive pulmonary disease (COPD) exacerbations",
+      "Pelvic inflammatory disease",
+      "Epididymitis",
+      "Mycobacterium marinum infections",
+      "Ehrlichiosis and anaplasmosis",
+      "Scrub typhus",
+      "Leptospirosis",
+      "Actinomycosis",
+      "Nocardiosis (alternative agent)",
+      "Melioidosis (in combination)",
+      "Hidradenitis suppurativa",
+      "Bullous pemphigoid (anti-inflammatory effect)",
+      "Periodontitis (subantimicrobial dose)",
+      "Malaria treatment (in combination with quinine)",
+      "Prophylaxis for leptospirosis",
+      "Bartonella infections",
+      "Whipple disease (initial therapy)"
+    ],
+    "standard_dosing": "Adults: 100 mg orally or IV every 12 hours on day 1 (loading dose 200 mg), then 100 mg once or twice daily depending on indication. For severe infections: 100 mg every 12 hours. For acne/rosacea: 40-100 mg once daily. For malaria prophylaxis: 100 mg once daily starting 1-2 days before travel, continuing during travel and for 4 weeks after leaving endemic area. For anthrax post-exposure: 100 mg twice daily for 60 days. Pediatric (>8 years, weight-based): 2-4 mg/kg/day divided every 12-24 hours (maximum 200 mg/day). Take with adequate fluid to reduce esophageal irritation. May be taken with food to minimize GI upset.",
+    "dose_adjustments": {
+      "renal_impairment": "No dose adjustment required for any degree of renal impairment including end-stage renal disease or dialysis. Doxycycline is not significantly removed by hemodialysis or peritoneal dialysis. This is a unique advantage among tetracyclines.",
+      "hepatic_impairment": "Use with caution in severe hepatic impairment. Consider reducing dose or extending dosing interval in severe hepatic dysfunction, though specific guidelines are not established. Monitor for increased adverse effects. Half-life may be prolonged.",
+      "elderly": "No specific dose adjustment required based on age alone. Consider renal and hepatic function. Increased risk of esophageal irritation; ensure adequate fluid intake and upright position after administration.",
+      "pregnancy": "Contraindicated in pregnancy (Category D). Tetracyclines can cause permanent tooth discoloration, enamel hypoplasia, and inhibition of bone growth in the fetus. Use only if potential benefit justifies potential risk to fetus and no alternatives are available.",
+      "pediatric": "Generally avoided in children <8 years due to risk of permanent tooth discoloration and enamel hypoplasia. May be used for serious infections (e.g., Rocky Mountain spotted fever, anthrax) when benefits outweigh risks. Short courses (\u226421 days) may have lower risk of dental staining."
+    }
+  },
+  "safety_profile": {
+    "common_adverse_effects": [],
+    "serious_adverse_effects": [],
+    "contraindications": [],
+    "black_box_warnings": []
+  },
+  "interactions": {
+    "drug_interactions": [
+      {
+        "type": "drug-drug",
+        "agent": "Isotretinoin",
+        "severity": "severe",
+        "mechanism": "Additive risk of intracranial hypertension (pseudotumor cerebri)",
+        "clinical_effect": "Increased risk of benign intracranial hypertension with papilledema, headache, visual disturbances",
+        "management": "Avoid concurrent use. If combination necessary, monitor closely for signs of intracranial hypertension",
+        "time_separation": null,
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Methoxyflurane",
+        "severity": "severe",
+        "mechanism": "Tetracyclines may potentiate nephrotoxicity of methoxyflurane",
+        "clinical_effect": "Fatal renal toxicity, acute tubular necrosis",
+        "management": "Contraindicated. Avoid concurrent use",
+        "time_separation": null,
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Warfarin",
+        "severity": "severe",
+        "mechanism": "Doxycycline may enhance anticoagulant effect by reducing vitamin K-producing gut flora and possibly direct anticoagulant effects",
+        "clinical_effect": "Increased INR and bleeding risk",
+        "management": "Monitor INR closely when initiating or discontinuing doxycycline. Adjust warfarin dose as needed",
+        "time_separation": null,
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Antacids (aluminum, calcium, magnesium)",
+        "severity": "moderate",
+        "mechanism": "Polyvalent cations form chelation complexes with doxycycline, reducing absorption",
+        "clinical_effect": "Decreased doxycycline bioavailability and therapeutic efficacy",
+        "management": "Separate administration by at least 2-3 hours",
+        "time_separation": "2-3 hours",
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Iron supplements",
+        "severity": "moderate",
+        "mechanism": "Ferrous ions chelate with tetracyclines in the GI tract",
+        "clinical_effect": "Reduced absorption of both doxycycline and iron, decreased efficacy",
+        "management": "Separate administration by at least 2-3 hours",
+        "time_separation": "2-3 hours",
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Calcium supplements",
+        "severity": "moderate",
+        "mechanism": "Calcium forms insoluble chelates with doxycycline",
+        "clinical_effect": "Decreased doxycycline absorption by up to 50%",
+        "management": "Separate administration by at least 2 hours",
+        "time_separation": "2 hours",
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Barbiturates (phenobarbital)",
+        "severity": "moderate",
+        "mechanism": "Enzyme induction increases hepatic metabolism of doxycycline",
+        "clinical_effect": "Reduced doxycycline half-life and serum concentrations, potential treatment failure",
+        "management": "Consider increasing doxycycline dose or using alternative antibiotic. Monitor clinical response",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Carbamazepine",
+        "severity": "moderate",
+        "mechanism": "CYP450 enzyme induction increases doxycycline metabolism",
+        "clinical_effect": "Decreased doxycycline half-life (from 15-24 hours to 7-12 hours), reduced efficacy",
+        "management": "Consider dose adjustment or alternative antibiotic. Monitor clinical response",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Phenytoin",
+        "severity": "moderate",
+        "mechanism": "Hepatic enzyme induction accelerates doxycycline metabolism",
+        "clinical_effect": "Shortened doxycycline half-life, subtherapeutic levels",
+        "management": "May require increased doxycycline dose or alternative therapy. Monitor clinical efficacy",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Rifampin",
+        "severity": "moderate",
+        "mechanism": "Potent CYP450 induction increases doxycycline clearance",
+        "clinical_effect": "Significantly reduced doxycycline serum levels and half-life",
+        "management": "Avoid combination if possible. Consider alternative antibiotic or significantly increased doxycycline dose",
+        "time_separation": null,
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Oral contraceptives",
+        "severity": "moderate",
+        "mechanism": "Possible reduction in enterohepatic circulation of estrogens or alteration of gut flora",
+        "clinical_effect": "Potential decreased contraceptive efficacy (controversial, rare)",
+        "management": "Advise backup contraception during treatment and for 7 days after completion",
+        "time_separation": null,
+        "evidence_level": "low"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Penicillins",
+        "severity": "moderate",
+        "mechanism": "Bacteriostatic action of tetracyclines may antagonize bactericidal activity of penicillins",
+        "clinical_effect": "Potential reduced efficacy of penicillin therapy",
+        "management": "Avoid concurrent use when bactericidal activity is critical (e.g., meningitis, endocarditis)",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Bismuth subsalicylate",
+        "severity": "moderate",
+        "mechanism": "Chelation with bismuth reduces doxycycline absorption",
+        "clinical_effect": "Decreased doxycycline bioavailability",
+        "management": "Separate administration by at least 2 hours",
+        "time_separation": "2 hours",
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Methotrexate",
+        "severity": "moderate",
+        "mechanism": "Tetracyclines may decrease methotrexate clearance and displace from protein binding",
+        "clinical_effect": "Increased methotrexate toxicity risk",
+        "management": "Monitor methotrexate levels and toxicity signs. Consider dose adjustment",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Digoxin",
+        "severity": "moderate",
+        "mechanism": "Doxycycline may increase digoxin absorption by altering gut flora that metabolize digoxin",
+        "clinical_effect": "Increased digoxin levels and potential toxicity in approximately 10% of patients",
+        "management": "Monitor digoxin levels when initiating or discontinuing doxycycline",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Dairy products",
+        "severity": "minor",
+        "mechanism": "Calcium in dairy products may chelate with doxycycline",
+        "clinical_effect": "Minimal reduction in absorption (unlike other tetracyclines, doxycycline absorption less affected)",
+        "management": "Generally can be taken with food including dairy, but optimal absorption on empty stomach",
+        "time_separation": null,
+        "evidence_level": "high"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Zinc supplements",
+        "severity": "minor",
+        "mechanism": "Chelation with zinc may reduce absorption",
+        "clinical_effect": "Decreased doxycycline absorption",
+        "management": "Separate administration by 2 hours if concerned",
+        "time_separation": "2 hours",
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Magnesium supplements",
+        "severity": "minor",
+        "mechanism": "Chelation reduces absorption",
+        "clinical_effect": "Decreased bioavailability",
+        "management": "Separate by 2 hours",
+        "time_separation": "2 hours",
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Alcohol",
+        "severity": "minor",
+        "mechanism": "Chronic alcohol use may induce hepatic enzymes",
+        "clinical_effect": "Possible decreased doxycycline levels in chronic alcoholics",
+        "management": "Monitor clinical response. Moderate alcohol consumption generally acceptable",
+        "time_separation": null,
+        "evidence_level": "low"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Quinapril",
+        "severity": "minor",
+        "mechanism": "Magnesium carbonate in quinapril formulation may chelate doxycycline",
+        "clinical_effect": "Reduced doxycycline absorption",
+        "management": "Separate administration by 2 hours",
+        "time_separation": "2 hours",
+        "evidence_level": "moderate"
+      }
+    ],
+    "food_interactions": [],
+    "environmental_considerations": []
+  },
+  "recommendations": {
+    "evidence_based": [],
+    "investigational": [],
+    "debunked_claims": []
+  },
+  "monitoring": {
+    "requirements": [],
+    "warning_signs": []
+  },
+  "metadata": {
+    "evidence_quality": "moderate",
+    "analysis_confidence": 0.75,
+    "reasoning_steps_count": 4
+  },
+  "cost_analysis": {
+    "total_cost": 0,
+    "total_duration": 0,
+    "phases": [],
+    "most_expensive": []
+  }
+}
