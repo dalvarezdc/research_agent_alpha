@@ -1,0 +1,64 @@
+{
+  "total_cost": 0.427452,
+  "total_duration": 545.911387,
+  "phases": [
+    {
+      "phase": "Phase 1: Pharmacology Analysis",
+      "cost": 0.030888,
+      "duration": 38.828144,
+      "input_tokens": 791,
+      "output_tokens": 1901
+    },
+    {
+      "phase": "Phase 2: Interaction Analysis",
+      "cost": 0.210654,
+      "duration": 266.87504,
+      "input_tokens": 1458,
+      "output_tokens": 13752
+    },
+    {
+      "phase": "Phase 3: Safety Profile Assessment",
+      "cost": 0.062459999999999995,
+      "duration": 74.811623,
+      "input_tokens": 340,
+      "output_tokens": 4096
+    },
+    {
+      "phase": "Phase 4: Recommendation Synthesis",
+      "cost": 0.06231,
+      "duration": 94.207441,
+      "input_tokens": 290,
+      "output_tokens": 4096
+    },
+    {
+      "phase": "Phase 5: Monitoring Requirements",
+      "cost": 0.06114,
+      "duration": 71.189139,
+      "input_tokens": 165,
+      "output_tokens": 4043
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 2: Interaction Analysis",
+      "cost": 0.210654,
+      "duration": 266.87504,
+      "input_tokens": 1458,
+      "output_tokens": 13752
+    },
+    {
+      "phase": "Phase 3: Safety Profile Assessment",
+      "cost": 0.062459999999999995,
+      "duration": 74.811623,
+      "input_tokens": 340,
+      "output_tokens": 4096
+    },
+    {
+      "phase": "Phase 4: Recommendation Synthesis",
+      "cost": 0.06231,
+      "duration": 94.207441,
+      "input_tokens": 290,
+      "output_tokens": 4096
+    }
+  ]
+}

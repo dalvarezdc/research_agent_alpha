@@ -181,6 +181,9 @@ class MedicationAnalyzer(MedicalReasoningAgent):
         self.reasoning_trace = []  # Reset trace
         reset_tracking()  # Reset cost tracking for this analysis
 
+        # Initialize token usage tracker for this analysis
+        self.total_token_usage = TokenUsage()
+
         try:
             # Phase 1: Pharmacology basics
             pharmacology = self._analyze_pharmacology(medication_input)
@@ -270,6 +273,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 structured_prompt, system_prompt
             )
+
+            # Accumulate token usage for cost tracking
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             pharmacology = self._parse_pharmacology_response(response)
             return pharmacology
@@ -361,6 +368,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                 prompt, system_prompt
             )
 
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
+
             interactions_data = self._parse_with_pydantic(
                 response,
                 DrugInteractionsData,
@@ -439,6 +450,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                 prompt, system_prompt
             )
 
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
+
             return self._parse_interaction_response(response, InteractionType.DRUG_FOOD)
 
         except Exception as e:
@@ -476,6 +491,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 prompt, system_prompt
             )
+
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             return self._parse_interaction_response(response, InteractionType.DRUG_SUPPLEMENT)
 
@@ -524,6 +543,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 prompt, system_prompt
             )
+
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             return self._parse_environmental_response(response)
 
@@ -589,6 +612,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                 prompt, system_prompt
             )
 
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
+
             return self._parse_safety_profile_response(response)
 
         except Exception as e:
@@ -649,6 +676,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                 prompt, system_prompt
             )
 
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
+
             return self._parse_recommendations_response(response)
 
         except Exception as e:
@@ -694,6 +725,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 prompt, system_prompt
             )
+
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             return self._parse_monitoring_response(response)
 

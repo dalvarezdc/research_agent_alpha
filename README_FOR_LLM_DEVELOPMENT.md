@@ -201,11 +201,208 @@ response, token_usage = self.llm_manager.get_available_provider().generate_respo
     prompt, system_prompt
 )
 
+# Accumulate token usage for cost tracking
+if token_usage:
+    self.total_token_usage.add(token_usage)
+
 # Bad - direct API calls
 response = anthropic.messages.create(...)
 ```
 
-### 3. **Phase-Based Analysis Pattern**
+### 3. **DSPy Structured Output Pattern** ⭐ **CRITICAL**
+
+**ALWAYS use DSPy for structured outputs.** Manual JSON parsing is fragile and leads to errors.
+
+#### Why DSPy?
+- **Type Safety**: Pydantic models enforce structure
+- **Validation**: Automatic validation of LLM outputs
+- **Reliability**: No more JSON parsing errors
+- **Documentation**: Schema serves as documentation
+- **Maintainability**: Changes to schema propagate automatically
+
+#### Step 1: Define Pydantic Schemas
+
+Create structured models in a dedicated schema file (e.g., `dspy_schemas.py`):
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class PharmacologyData(BaseModel):
+    """Structured pharmacology information"""
+    drug_class: str = Field(description="Pharmacologic and therapeutic class")
+    mechanism_of_action: str = Field(description="Detailed mechanism at molecular level")
+    absorption: str = Field(description="Bioavailability, onset, peak concentration")
+    metabolism: str = Field(description="CYP enzymes, active metabolites")
+    elimination: str = Field(description="Primary route, elimination half-life")
+    half_life: str = Field(description="Elimination half-life value")
+    approved_indications: List[str] = Field(description="FDA-approved indications")
+    off_label_uses: List[str] = Field(default_factory=list)
+    standard_dosing: str = Field(description="Standard adult dosing")
+    dose_adjustments: dict = Field(default_factory=dict)
+```
+
+#### Step 2: Setup DSPy in Agent Initialization
+
+```python
+class MedicationAnalyzer(MedicalReasoningAgent):
+    def __init__(self, primary_llm_provider: str = "claude", **kwargs):
+        super().__init__(primary_llm_provider, **kwargs)
+
+        # Setup DSPy for structured output
+        try:
+            self.llm_manager.setup_dspy_integration()
+            self.use_dspy = True
+            self.logger.info("DSPy structured output enabled")
+        except Exception as e:
+            self.logger.warning(f"DSPy setup failed: {e}. Falling back to manual parsing.")
+            self.use_dspy = False
+```
+
+#### Step 3: Use Pydantic Schemas in Prompts
+
+Include the JSON schema in your prompts:
+
+```python
+import json
+
+def _analyze_pharmacology(self, medication: str) -> Dict[str, Any]:
+    # Get schema from Pydantic model
+    schema = PharmacologyData.model_json_schema()
+
+    prompt = f"""
+    Provide comprehensive pharmacology information for {medication}.
+
+    CRITICAL: Respond with ONLY valid JSON matching this exact schema:
+    {json.dumps(schema, indent=2)}
+
+    Include detailed information for all fields.
+    Start with {{ and end with }}. No other text.
+    """
+
+    system_prompt = """You are a clinical pharmacologist.
+    Respond ONLY with valid JSON matching the schema. No explanatory text."""
+
+    response, token_usage = self.llm_manager.get_available_provider().generate_response(
+        prompt, system_prompt
+    )
+
+    # Accumulate token usage
+    if token_usage:
+        self.total_token_usage.add(token_usage)
+
+    # Parse with Pydantic validation
+    pharmacology = self._parse_with_pydantic(response, PharmacologyData)
+    return pharmacology.model_dump() if pharmacology else {}
+```
+
+#### Step 4: Create Robust Parsing Helper
+
+```python
+def _parse_with_pydantic(self, response: str, model_class: type, fallback_value: Any = None) -> Any:
+    """
+    Parse LLM response using Pydantic model validation.
+
+    Args:
+        response: Raw LLM response
+        model_class: Pydantic model class to validate against
+        fallback_value: Value to return if parsing fails
+
+    Returns:
+        Validated Pydantic model instance or fallback value
+    """
+    import re
+
+    # Extract JSON from response
+    json_str = None
+
+    # Try code block first
+    code_block_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', response, re.DOTALL)
+    if code_block_match:
+        json_str = code_block_match.group(1)
+    else:
+        # Try to find JSON object/array
+        json_match = re.search(r'(\{.*\}|\[.*\])', response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+
+    if not json_str:
+        self.logger.warning(f"No JSON found in response for {model_class.__name__}")
+        return fallback_value
+
+    # Clean JSON
+    json_str = re.sub(r'//.*?\n', '\n', json_str)  # Remove comments
+    json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+    json_str = re.sub(r',\s*}', '}', json_str)  # Trailing commas
+    json_str = re.sub(r',\s*]', ']', json_str)
+
+    # Parse and validate with Pydantic
+    try:
+        data = json.loads(json_str)
+        validated = model_class.model_validate(data)
+        self.logger.info(f"Successfully parsed {model_class.__name__}")
+        return validated
+    except json.JSONDecodeError as e:
+        self.logger.warning(f"JSON decode error for {model_class.__name__}: {e}")
+        return fallback_value
+    except Exception as e:
+        self.logger.warning(f"Pydantic validation error for {model_class.__name__}: {e}")
+        return fallback_value
+```
+
+#### ❌ **NEVER Do This** (Manual JSON Parsing)
+
+```python
+# BAD - Fragile manual parsing
+def _parse_response(self, response: str) -> dict:
+    json_match = re.search(r'\{.*\}', response)
+    if json_match:
+        try:
+            return json.loads(json_match.group(0))
+        except:
+            return {}  # Silent failure!
+    return {}
+```
+
+#### ✅ **ALWAYS Do This** (DSPy + Pydantic)
+
+```python
+# GOOD - Robust structured parsing
+def _analyze_medication(self, medication: str) -> Dict[str, Any]:
+    schema = MedicationData.model_json_schema()
+
+    prompt = f"""
+    Analyze {medication}.
+
+    Respond with ONLY valid JSON matching this schema:
+    {json.dumps(schema, indent=2)}
+    """
+
+    response, token_usage = self.llm_manager.generate_response(prompt, system_prompt)
+
+    # Accumulate token usage
+    if token_usage:
+        self.total_token_usage.add(token_usage)
+
+    # Parse with validation
+    result = self._parse_with_pydantic(response, MedicationData, fallback_value=None)
+    return result.model_dump() if result else self._get_fallback_data()
+```
+
+#### DSPy Structured Output Checklist
+
+Before implementing LLM calls, ensure:
+
+- [ ] Created Pydantic model for expected output structure
+- [ ] DSPy is initialized in agent `__init__`
+- [ ] JSON schema is included in prompt
+- [ ] Using `_parse_with_pydantic()` helper
+- [ ] Have fallback values for parsing failures
+- [ ] Logging parsing success/failures
+- [ ] Token usage is accumulated after each call
+- [ ] Tests cover both successful and failed parsing
+
+### 4. **Phase-Based Analysis Pattern**
 
 Complex agents should use phases:
 
@@ -226,7 +423,7 @@ class MultiPhaseAgent:
         return self._synthesize_results()
 ```
 
-### 4. **Data Flow Pattern**
+### 5. **Data Flow Pattern**
 
 ```
 Input Validation → LLM Analysis → Response Parsing → Output Formatting → Export
@@ -234,7 +431,7 @@ Input Validation → LLM Analysis → Response Parsing → Output Formatting →
  Reject invalid    Track tokens    Handle errors      Add metadata    Save JSON/MD
 ```
 
-### 5. **Orchestrator Pattern**
+### 6. **Orchestrator Pattern**
 
 `run_analysis.py` demonstrates the orchestrator pattern:
 
@@ -798,11 +995,29 @@ response = llm.generate(prompt)
 
 **Good:**
 ```python
-# Always track token usage
+# Initialize token tracker at start of analysis
+self.total_token_usage = TokenUsage()
+
+# Always accumulate token usage after EVERY LLM call
 response, token_usage = llm.generate(prompt)
-self.total_usage.add(token_usage)
-self.logger.info(f"Tokens used: {token_usage.total_tokens}")
+if token_usage:
+    self.total_token_usage.add(token_usage)
+
+# Use @track_cost decorator for phase-based cost tracking
+@track_cost("Phase 1: Analysis")
+def _phase1_analysis(self, input_data):
+    # Token accumulation happens here
+    response, token_usage = self.llm_manager.generate_response(prompt)
+    if token_usage:
+        self.total_token_usage.add(token_usage)
+    return result
 ```
+
+**Requirements for Cost Tracking:**
+1. Initialize `self.total_token_usage = TokenUsage()` at the start of each analysis
+2. Add `if token_usage: self.total_token_usage.add(token_usage)` after EVERY `generate_response()` call
+3. Use `@track_cost("Phase Name")` decorator on phase methods
+4. The decorator will automatically calculate costs based on token differences
 
 ### 6. **Forgetting Disclaimers**
 
@@ -821,7 +1036,32 @@ It does not constitute medical advice. Always consult qualified healthcare
 professionals for medical decisions."""
 ```
 
-### 7. **Synchronous Processing of Independent Tasks**
+### 7. **Manual JSON Parsing Instead of DSPy**
+
+**Bad:**
+```python
+# Fragile manual parsing
+json_match = re.search(r'\{.*\}', response)
+if json_match:
+    try:
+        return json.loads(json_match.group(0))
+    except:
+        return {}
+```
+
+**Good:**
+```python
+# Use DSPy + Pydantic for structured output
+schema = MedicationData.model_json_schema()
+prompt = f"Analyze {med}. Respond with JSON matching: {json.dumps(schema)}"
+response, token_usage = self.llm_manager.generate_response(prompt)
+if token_usage:
+    self.total_token_usage.add(token_usage)
+result = self._parse_with_pydantic(response, MedicationData)
+return result.model_dump() if result else {}
+```
+
+### 8. **Synchronous Processing of Independent Tasks**
 
 **Bad:**
 ```python
@@ -1070,6 +1310,12 @@ If something isn't clear:
 
 ---
 
-**Last Updated:** 2025-12-05
-**Version:** 1.0.0
+**Last Updated:** 2025-12-07
+**Version:** 1.1.0
 **Maintainer:** Research Agent Alpha Team
+
+**Recent Changes:**
+- Added comprehensive DSPy Structured Output Pattern (Section 3)
+- Added cost tracking requirements and best practices
+- Added pitfall: Manual JSON parsing instead of DSPy
+- Updated all examples to include token accumulation
