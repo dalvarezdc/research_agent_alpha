@@ -392,7 +392,7 @@ class MedicalReportGenerator:
         
         # Header
         report_lines.extend([
-            "# Medical Procedure Analysis Report",
+            "# 🔬 Medical Procedure Analysis Report",
             "",
             f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"**Procedure:** {analysis_result.procedure_summary}",
@@ -565,7 +565,7 @@ class MedicalReportGenerator:
         
         # Header
         report_lines.extend([
-            f"# {analysis_result.procedure_summary} - Analysis Summary",
+            f"# 🔬 {analysis_result.procedure_summary} - Analysis Summary",
             "",
             f"**Confidence:** {analysis_result.confidence_score:.2f} | **Organs:** {len(analysis_result.organs_analyzed)} | **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             ""
@@ -635,7 +635,7 @@ class MedicalReportGenerator:
         
         # Clinical Header
         report_lines.extend([
-            "# MEDICAL PROCEDURE ANALYSIS",
+            "# 🔬 MEDICAL PROCEDURE ANALYSIS",
             "",
             f"**PROCEDURE:** {analysis_result.procedure_summary}",
             f"**ANALYSIS DATE:** {datetime.now().strftime('%d %b %Y %H:%M')}",

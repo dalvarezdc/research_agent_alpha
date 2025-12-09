@@ -402,9 +402,8 @@ class AgentOrchestrator:
         # 3. Final output (markdown) with references appended
         output_file = f"{self.output_dir}/{base_name}_output_{timestamp}.md"
         output_with_refs = self._append_references_section(session.final_output, session)
-        output_with_cost = self._append_cost_section(output_with_refs, cost_summary)
         with open(output_file, "w") as f:
-            f.write(output_with_cost)
+            f.write(output_with_refs)
         print(f"✓ Final output: {os.path.basename(output_file)}")
         files["output"] = output_file
 
@@ -540,13 +539,13 @@ class AgentOrchestrator:
 **Analysis Cost:** ${cost_summary['total_cost']:.4f}
 **Duration:** {cost_summary['total_duration']:.1f}s"""
 
-        summary = f"""# Medical Procedure Analysis Report
+        summary = f"""# 🔬 Medical Procedure Analysis Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis System:** MedicalReasoningAgent (5-Phase Pipeline){cost_info}
 
 ---
 
-## Procedure Overview
+## 📋 Procedure Overview
 **Procedure:** {result.procedure_summary}
 **Analysis Confidence:** {result.confidence_score:.2f}/1.00
 **Total Organs Analyzed:** {len(result.organs_analyzed)}
@@ -554,7 +553,7 @@ class AgentOrchestrator:
 
 ---
 
-## Detailed Organ-Specific Analysis
+## 🫀 Detailed Organ-Specific Analysis
 
 """
 
@@ -589,14 +588,14 @@ class AgentOrchestrator:
 
             summary += "\n---\n\n"
 
-        summary += """## General Recommendations
+        summary += """## 💡 General Recommendations
 
 """
         for i, rec in enumerate(result.general_recommendations, 1):
             summary += f"{i}. {rec}\n"
 
         summary += """
-## Research Gaps
+## 🔬 Research Gaps
 
 """
         for i, gap in enumerate(result.research_gaps, 1):
@@ -607,7 +606,7 @@ class AgentOrchestrator:
 
 ---
 
-## References
+## 📚 References
 
 _Note: This analysis synthesizes information from medical literature, clinical guidelines, and evidence-based medicine databases. Specific citations would be included for claims about individual studies and recommendations._
 
@@ -619,7 +618,7 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 
 ---
 
-## Cost Analysis
+## 💰 Cost Analysis
 
 """
             summary += f"**Total Cost:** ${cost_summary['total_cost']:.4f}\n"
@@ -682,7 +681,7 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 
 ---
 
-## Analysis Cost Summary
+## 💰 Analysis Cost Summary
 
 **Total Cost:** ${cost_summary['total_cost']:.4f}
 **Total Duration:** {cost_summary['total_duration']:.1f}s
@@ -703,20 +702,20 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 **Analysis Cost:** ${cost_summary['total_cost']:.4f}
 **Duration:** {cost_summary['total_duration']:.1f}s"""
 
-        summary = f"""# Medical Fact Check Report
+        summary = f"""# 🔎 Medical Fact Check Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis System:** MedicalFactChecker (Independent Bio-Investigator){cost_info}
 
 ---
 
-## Subject
+## 📋 Subject
 **Topic:** {session.subject}
 **Analysis Started:** {session.started_at.strftime('%Y-%m-%d %H:%M:%S')}
 **Phases Completed:** {len(session.phase_results)}
 
 ---
 
-## Analysis Pipeline
+## 🔬 Analysis Pipeline
 
 """
 
@@ -741,7 +740,7 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 
             summary += "\n---\n\n"
 
-        summary += """## Final Output
+        summary += """## 📄 Final Output
 
 See the detailed output file for the complete analysis.
 
@@ -764,25 +763,25 @@ See the detailed output file for the complete analysis.
 **Duration:** {cost_summary['total_duration']:.1f}s
 """
 
-        summary = f"""# Medication Analysis Report
+        summary = f"""# 💊 Medication Analysis Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis System:** MedicationAnalyzer (Comprehensive Drug Analysis){cost_info}
 
 ---
 
-## Medication Overview
+## 📋 Medication Overview
 **Name:** {result.medication_name}
 **Drug Class:** {result.drug_class}
 **Analysis Confidence:** {result.analysis_confidence:.2f}/1.00
 
 ---
 
-## Mechanism of Action
+## 🧬 Mechanism of Action
 {result.mechanism_of_action[:300] + '...' if len(result.mechanism_of_action) > 300 else result.mechanism_of_action}
 
 ---
 
-## Pharmacokinetics Summary
+## ⚗️ Pharmacokinetics Summary
 - **Absorption:** {result.absorption[:100] + '...' if len(result.absorption) > 100 else result.absorption}
 - **Metabolism:** {result.metabolism[:100] + '...' if len(result.metabolism) > 100 else result.metabolism}
 - **Elimination:** {result.elimination[:100] + '...' if len(result.elimination) > 100 else result.elimination}
@@ -790,7 +789,7 @@ See the detailed output file for the complete analysis.
 
 ---
 
-## Key Safety Information
+## ⚠️ Key Safety Information
 
 """
 
@@ -811,7 +810,7 @@ See the detailed output file for the complete analysis.
 
         summary += f"""---
 
-## Interactions Summary
+## 🔗 Interactions Summary
 
 """
 
@@ -839,7 +838,7 @@ See the detailed output file for the complete analysis.
         summary += """
 ---
 
-## Evidence-Based Recommendations
+## ✅ Evidence-Based Recommendations
 
 """
 
@@ -865,7 +864,7 @@ See the detailed output file for the complete analysis.
         if cost_summary and cost_summary.get('total_cost', 0) > 0:
             cost_header = f"\n**Analysis Cost:** ${cost_summary['total_cost']:.4f}\n**Duration:** {cost_summary['total_duration']:.1f}s"
 
-        report = f"""# Comprehensive Medication Analysis: {result.medication_name}
+        report = f"""# 💊 Comprehensive Medication Analysis: {result.medication_name}
 
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis Confidence:** {result.analysis_confidence:.2f}
@@ -873,7 +872,7 @@ See the detailed output file for the complete analysis.
 
 ---
 
-## Table of Contents
+## 📑 Table of Contents
 1. [Overview](#overview)
 2. [Pharmacology](#pharmacology)
 3. [Clinical Use](#clinical-use)
@@ -884,17 +883,17 @@ See the detailed output file for the complete analysis.
 
 ---
 
-## Overview
+## 📋 Overview
 
-### Drug Classification
+### 🧬 Drug Classification
 **Drug Class:** {result.drug_class}
 
-### Mechanism of Action
+### 🔬 Mechanism of Action
 {result.mechanism_of_action}
 
 ---
 
-## Pharmacology
+## ⚗️ Pharmacology
 
 ### Absorption
 {result.absorption}
@@ -909,7 +908,7 @@ See the detailed output file for the complete analysis.
 
 ---
 
-## Clinical Use
+## 💉 Clinical Use
 
 ### Approved Indications
 """
@@ -936,9 +935,9 @@ See the detailed output file for the complete analysis.
         report += """
 ---
 
-## Interactions
+## 🔗 Interactions
 
-### Drug-Drug Interactions
+### 💊 Drug-Drug Interactions
 """
 
         if result.drug_interactions:
@@ -954,7 +953,7 @@ See the detailed output file for the complete analysis.
         else:
             report += "No significant drug-drug interactions identified.\n\n"
 
-        report += "### Food & Lifestyle Interactions\n\n"
+        report += "### 🍎 Food & Lifestyle Interactions\n\n"
 
         if result.food_interactions:
             for interaction in result.food_interactions:
@@ -976,12 +975,12 @@ See the detailed output file for the complete analysis.
         report += """
 ---
 
-## Safety Profile
+## ⚠️ Safety Profile
 
 """
 
         if result.black_box_warnings:
-            report += "### ⚠️ BLACK BOX WARNINGS\n\n"
+            report += "### 🚨 BLACK BOX WARNINGS\n\n"
             for i, warning in enumerate(result.black_box_warnings, 1):
                 report += f"{i}. {warning}\n\n"
 
@@ -1019,9 +1018,9 @@ See the detailed output file for the complete analysis.
         report += """
 ---
 
-## Recommendations
+## 💡 Recommendations
 
-### What TO DO: Evidence-Based Recommendations
+### ✅ What TO DO: Evidence-Based Recommendations
 
 """
 
@@ -1036,7 +1035,7 @@ See the detailed output file for the complete analysis.
                         report += f"**Expected Outcome:** {rec.get('expected_outcome')}\n\n"
 
         if result.investigational_approaches:
-            report += "### Investigational Approaches (Limited Evidence)\n\n"
+            report += "### 🔬 Investigational Approaches (Limited Evidence)\n\n"
             for i, rec in enumerate(result.investigational_approaches, 1):
                 if isinstance(rec, dict):
                     report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
@@ -1044,7 +1043,7 @@ See the detailed output file for the complete analysis.
                     report += f"**Limitations:** {rec.get('limitations', 'N/A')}\n\n"
 
         if result.debunked_claims:
-            report += "### What NOT TO DO: Debunked Claims\n\n"
+            report += "### ❌ What NOT TO DO: Debunked Claims\n\n"
             for i, claim in enumerate(result.debunked_claims, 1):
                 if isinstance(claim, dict):
                     report += f"#### ❌ {i}. {claim.get('claim', 'N/A')}\n\n"
@@ -1055,7 +1054,7 @@ See the detailed output file for the complete analysis.
         report += """
 ---
 
-## Monitoring Requirements
+## 📊 Monitoring Requirements
 
 """
 
@@ -1080,7 +1079,7 @@ See the detailed output file for the complete analysis.
             report += f"""
 ---
 
-## Cost Analysis
+## 💰 Cost Analysis
 
 **Total Cost:** ${cost_summary['total_cost']:.4f}
 **Total Duration:** {cost_summary['total_duration']:.1f}s
