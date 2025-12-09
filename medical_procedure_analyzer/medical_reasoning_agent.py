@@ -13,6 +13,12 @@ from datetime import datetime
 
 # Add caching for efficiency
 from functools import lru_cache
+import sys
+from pathlib import Path
+
+# Add parent directory to path for cost_tracker import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from cost_tracker import track_cost, print_cost_summary, reset_tracking
 
 
 @dataclass
@@ -83,6 +89,7 @@ class MedicalOutput:
     research_gaps: List[str]
     confidence_score: float
     reasoning_trace: List[ReasoningStep]
+    validation_report: Optional[Any] = None  # Reference validation report
 
 
 class MedicalReasoningAgent:
@@ -91,21 +98,36 @@ class MedicalReasoningAgent:
     Follows the analytical pattern: broad → specific → critical evaluation.
     """
     
-    def __init__(self, 
+    def __init__(self,
                  primary_llm_provider: str = "claude",
                  fallback_providers: List[str] = None,
-                 enable_logging: bool = True):
+                 enable_logging: bool = True,
+                 enable_reference_validation: bool = False):
         """
         Initialize the medical reasoning agent.
-        
+
         Args:
             primary_llm_provider: Primary LLM to use (claude, openai, etc.)
             fallback_providers: List of fallback LLM providers
             enable_logging: Whether to enable detailed reasoning logging
+            enable_reference_validation: Whether to validate references
         """
         self.primary_llm = primary_llm_provider
         self.fallback_providers = fallback_providers or ["openai", "ollama"]
         self.reasoning_trace: List[ReasoningStep] = []
+        self.enable_reference_validation = enable_reference_validation
+        self.reference_validator = None
+
+        # Initialize reference validator if enabled
+        if enable_reference_validation:
+            try:
+                from reference_validation import ReferenceValidator, ValidationConfig
+                self.reference_validator = ReferenceValidator(ValidationConfig(
+                    cache_backend="sqlite",
+                    min_credibility_score=70
+                ))
+            except ImportError:
+                self.logger.warning("Reference validation not available") if enable_logging else None
         
         # Setup logging
         if enable_logging:
@@ -160,7 +182,10 @@ class MedicalReasoningAgent:
         except ValidationError as e:
             self.logger.error(f"Input validation failed: {e}")
             raise ValueError(f"Invalid medical input: {e}")
-        
+
+        # Reset cost tracking for new analysis
+        reset_tracking()
+
         self.reasoning_trace = []  # Reset trace
         
         try:
@@ -190,13 +215,17 @@ class MedicalReasoningAgent:
             final_output = self._critical_evaluation(
                 medical_input, affected_organs, recommendations
             )
-            
+
+            # Print cost summary
+            print_cost_summary()
+
             return final_output
             
         except Exception as e:
             self.logger.error(f"Error in medical analysis pipeline: {str(e)}")
             raise
     
+    @track_cost("Stage 2: Organ Identification")
     def _identify_affected_organs(self, medical_input: MedicalInput) -> List[str]:
         """Identify organs potentially affected by the medical procedure using LLM analysis."""
         self._log_reasoning_step(
@@ -298,7 +327,8 @@ class MedicalReasoningAgent:
                     found_organs.append(organ)
         
         return list(set(found_organs)) if found_organs else ["kidneys", "brain"]
-    
+
+    @track_cost("Stage 3: Evidence Gathering")
     @lru_cache(maxsize=64)
     def _gather_evidence(self, medical_input: MedicalInput, organs: tuple) -> Dict[str, Any]:
         """Gather evidence for each identified organ system using LLM analysis."""
@@ -454,7 +484,8 @@ class MedicalReasoningAgent:
                     evidence["protective_factors"].append("monitoring")
         
         return evidence
-    
+
+    @track_cost("Stage 4: Risk Assessment")
     def _assess_risks(self, medical_input: MedicalInput, organs: List[str], evidence: Dict[str, Any]) -> Dict[str, Any]:
         """Assess risks for each organ system."""
         self._log_reasoning_step(
@@ -493,8 +524,9 @@ class MedicalReasoningAgent:
             })
         
         return results
-    
-    def _synthesize_recommendations(self, medical_input: MedicalInput, organs: List[str], 
+
+    @track_cost("Stage 5: Recommendation Synthesis")
+    def _synthesize_recommendations(self, medical_input: MedicalInput, organs: List[str],
                                   evidence: Dict[str, Any], risks: Dict[str, Any]) -> Dict[str, Any]:
         """Synthesize recommendations based on evidence and risk assessment using LLM analysis."""
         self._log_reasoning_step(
@@ -740,8 +772,9 @@ class MedicalReasoningAgent:
                     })
 
         return recommendations
-    
-    def _critical_evaluation(self, medical_input: MedicalInput, organs: List[str], 
+
+    @track_cost("Stage 6: Critical Evaluation")
+    def _critical_evaluation(self, medical_input: MedicalInput, organs: List[str],
                            recommendations: Dict[str, Any]) -> MedicalOutput:
         """Critical evaluation of recommendations and evidence quality."""
         self._log_reasoning_step(
@@ -834,8 +867,9 @@ class MedicalReasoningAgent:
                     evidence_quality="moderate"
                 )
                 organ_analyses.append(analysis)
-        
-        return MedicalOutput(
+
+        # Create output
+        output = MedicalOutput(
             procedure_summary=f"{medical_input.procedure} - {medical_input.details}",
             organs_analyzed=organ_analyses,
             general_recommendations=["Consult healthcare provider", "Monitor for adverse effects"],
@@ -843,6 +877,12 @@ class MedicalReasoningAgent:
             confidence_score=0.75,
             reasoning_trace=self.reasoning_trace
         )
+
+        # Validate references if enabled
+        if self.enable_reference_validation and self.reference_validator:
+            output.validation_report = self.reference_validator.validate_analysis(output)
+
+        return output
     
     def _log_reasoning_step(self, stage: ReasoningStage, input_data: Dict[str, Any], 
                            reasoning: str, output: Dict[str, Any], confidence: float = 0.8):

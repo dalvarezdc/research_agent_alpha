@@ -21,6 +21,11 @@ import dspy
 from medical_procedure_analyzer.llm_integrations import LLMManager, create_llm_manager
 from medical_procedure_analyzer.medical_reasoning_agent import TokenUsage
 
+# Add parent directory to path for cost_tracker import
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from cost_tracker import track_cost, print_cost_summary, reset_tracking
+
 
 class AnalysisPhase(Enum):
     """Phases of the medical fact checking process"""
@@ -58,6 +63,7 @@ class FactCheckSession:
     phase_results: List[PhaseResult] = field(default_factory=list)
     total_token_usage: TokenUsage = field(default_factory=TokenUsage)
     final_output: Optional[str] = None
+    validation_report: Optional[Any] = None  # Reference validation report
 
 
 # DSPy Signatures for different phases
@@ -102,7 +108,8 @@ class MedicalFactChecker:
                  primary_llm_provider: str = "claude",
                  fallback_providers: List[str] = None,
                  enable_logging: bool = True,
-                 interactive: bool = True):
+                 interactive: bool = True,
+                 enable_reference_validation: bool = False):
         """
         Initialize the medical fact checker.
 
@@ -111,8 +118,11 @@ class MedicalFactChecker:
             fallback_providers: List of fallback LLM providers
             enable_logging: Whether to enable detailed logging
             interactive: Whether to pause for user input between phases
+            enable_reference_validation: Validate evidence sources
         """
         self.interactive = interactive
+        self.enable_reference_validation = enable_reference_validation
+        self.reference_validator = None
 
         # Setup logging
         if enable_logging:
@@ -121,6 +131,17 @@ class MedicalFactChecker:
         else:
             self.logger = logging.getLogger(__name__)
             self.logger.disabled = True
+
+        # Initialize reference validator if enabled
+        if enable_reference_validation:
+            try:
+                from reference_validation import ReferenceValidator, ValidationConfig
+                self.reference_validator = ReferenceValidator(ValidationConfig(
+                    cache_backend="sqlite",
+                    min_credibility_score=75  # Higher for fact-checking
+                ))
+            except ImportError:
+                self.logger.warning("Reference validation not available") if enable_logging else None
 
         # Initialize LLM manager
         try:
@@ -149,6 +170,9 @@ class MedicalFactChecker:
         """
         self.logger.info(f"Starting analysis for subject: {subject}")
         self.current_session = FactCheckSession(subject=subject)
+
+        # Reset cost tracking for new analysis
+        reset_tracking()
 
         # Phase 1: Conflict & Hypothesis Scan
         phase1_result = self._phase1_conflict_scan(subject, clarifying_info)
@@ -202,8 +226,16 @@ class MedicalFactChecker:
 
         self.current_session.final_output = final_output
 
+        # Validate references if enabled
+        if self.enable_reference_validation and self.reference_validator:
+            self.current_session.validation_report = self.reference_validator.validate_analysis(self.current_session)
+
+        # Print cost summary
+        print_cost_summary()
+
         return self.current_session
 
+    @track_cost("Phase 1: Conflict Scan")
     def _phase1_conflict_scan(self, subject: str, context: str) -> PhaseResult:
         """Phase 1: Identify official vs counter-narrative"""
         self.logger.info("=== PHASE 1: Conflict & Hypothesis Scan ===")
@@ -248,6 +280,7 @@ class MedicalFactChecker:
             self.logger.error(f"Phase 1 failed: {e}")
             raise
 
+    @track_cost("Phase 2: Evidence Stress Test")
     def _phase2_evidence_stress_test(self, subject: str, phase1_content: Dict, angle: str) -> PhaseResult:
         """Phase 2: Deep evidence analysis with funding and methodology focus"""
         self.logger.info("=== PHASE 2: Evidence Stress-Test ===")
@@ -290,6 +323,7 @@ class MedicalFactChecker:
             self.logger.error(f"Phase 2 failed: {e}")
             raise
 
+    @track_cost("Phase 3: Synthesis Menu")
     def _phase3_synthesis_menu(self, subject: str, phase1_content: Dict, phase2_content: Dict) -> PhaseResult:
         """Phase 3: Synthesize findings and prepare menu options"""
         self.logger.info("=== PHASE 3: Synthesis & Menu ===")
@@ -334,6 +368,7 @@ class MedicalFactChecker:
             self.logger.error(f"Phase 3 failed: {e}")
             raise
 
+    @track_cost("Phase 4: Complex Output Generation")
     def _phase4_generate_output(self, subject: str, synthesis: Dict, output_type: OutputType) -> str:
         """Phase 4: Generate complex output based on user selection"""
         self.logger.info(f"=== PHASE 4: Complex Output Generation ({output_type.value}) ===")
@@ -480,6 +515,7 @@ class MedicalFactChecker:
             self.logger.error(f"Phase 4 failed: {e}")
             raise
 
+    @track_cost("Phase 5: Simplified Output")
     def _phase5_simplify_output(self, complex_output: str) -> str:
         """Phase 5: Simplify output for general audience"""
         self.logger.info("=== PHASE 5: Simplified Output Generation ===")

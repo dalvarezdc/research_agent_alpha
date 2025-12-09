@@ -136,6 +136,7 @@ class MedicationOutput:
     analysis_confidence: float = 0.75
     reasoning_trace: List[ReasoningStep] = field(default_factory=list)
     total_token_usage: TokenUsage = field(default_factory=TokenUsage)
+    validation_report: Optional[Any] = None  # Reference validation report
 
 
 class MedicationAnalyzer(MedicalReasoningAgent):
@@ -147,7 +148,8 @@ class MedicationAnalyzer(MedicalReasoningAgent):
     def __init__(self,
                  primary_llm_provider: str = "claude",
                  fallback_providers: List[str] = None,
-                 enable_logging: bool = True):
+                 enable_logging: bool = True,
+                 enable_reference_validation: bool = False):
         """
         Initialize medication analyzer.
 
@@ -155,8 +157,9 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             primary_llm_provider: Primary LLM to use
             fallback_providers: Fallback LLM providers
             enable_logging: Enable detailed logging
+            enable_reference_validation: Validate drug interaction references
         """
-        super().__init__(primary_llm_provider, fallback_providers, enable_logging)
+        super().__init__(primary_llm_provider, fallback_providers, enable_logging, enable_reference_validation)
 
         # Setup DSPy for structured output
         try:
@@ -1017,6 +1020,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             analysis_confidence=0.75,
             reasoning_trace=self.reasoning_trace
         )
+
+        # Validate references if enabled
+        if self.enable_reference_validation and self.reference_validator:
+            output.validation_report = self.reference_validator.validate_analysis(output)
 
         return output
 
