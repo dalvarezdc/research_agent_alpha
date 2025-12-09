@@ -14,6 +14,9 @@ from typing import Any, Dict, Tuple
 # Import cost tracking
 from cost_tracker import get_cost_summary
 
+# Import PDF generator
+from pdf_generator import convert_markdown_to_pdf_safe
+
 # Import medical procedure analyzer
 from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput as ProcedureInput
 
@@ -346,6 +349,12 @@ class AgentOrchestrator:
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
 
+        # 5. Generate PDF version of summary
+        pdf_file = convert_markdown_to_pdf_safe(summary_file)
+        if pdf_file:
+            print(f"✓ Summary PDF: {os.path.basename(pdf_file)}")
+            files["summary_pdf"] = pdf_file
+
         return files
 
     def _save_fact_check_analysis(
@@ -407,6 +416,12 @@ class AgentOrchestrator:
         print(f"✓ Final output: {os.path.basename(output_file)}")
         files["output"] = output_file
 
+        # 3.5. Generate PDF version of output
+        output_pdf = convert_markdown_to_pdf_safe(output_file)
+        if output_pdf:
+            print(f"✓ Output PDF: {os.path.basename(output_pdf)}")
+            files["output_pdf"] = output_pdf
+
         # 4. Summary report
         summary_file = f"{self.output_dir}/{base_name}_summary_{timestamp}.md"
         summary = self._generate_fact_check_summary(session, cost_summary)
@@ -415,6 +430,12 @@ class AgentOrchestrator:
             f.write(summary)
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
+
+        # 4.5. Generate PDF version of summary
+        summary_pdf = convert_markdown_to_pdf_safe(summary_file)
+        if summary_pdf:
+            print(f"✓ Summary PDF: {os.path.basename(summary_pdf)}")
+            files["summary_pdf"] = summary_pdf
 
         return files
 
@@ -520,6 +541,12 @@ class AgentOrchestrator:
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
 
+        # 3.5. Generate PDF version of summary
+        summary_pdf = convert_markdown_to_pdf_safe(summary_file)
+        if summary_pdf:
+            print(f"✓ Summary PDF: {os.path.basename(summary_pdf)}")
+            files["summary_pdf"] = summary_pdf
+
         # 4. Comprehensive report (detailed Markdown)
         detailed_file = f"{self.output_dir}/{base_name}_medication_detailed_{timestamp}.md"
         detailed = self._generate_medication_detailed_report(result, cost_summary)
@@ -528,6 +555,12 @@ class AgentOrchestrator:
             f.write(detailed)
         print(f"✓ Detailed report: {os.path.basename(detailed_file)}")
         files["detailed"] = detailed_file
+
+        # 4.5. Generate PDF version of detailed report
+        detailed_pdf = convert_markdown_to_pdf_safe(detailed_file)
+        if detailed_pdf:
+            print(f"✓ Detailed PDF: {os.path.basename(detailed_pdf)}")
+            files["detailed_pdf"] = detailed_pdf
 
         return files
 
@@ -641,36 +674,59 @@ _Note: This analysis synthesizes information from medical literature, clinical g
         return summary
 
     def _append_references_section(self, output: str, session: Any) -> str:
-        """Append references section to output if not already present"""
-        if "## References" in output or "## REFERENCES" in output.upper():
-            # References already present
-            return output
+        """Append aggregated references section from all phases"""
+        # Check if references already embedded in output
+        if "## 📚 References" in output or "## References" in output or "## REFERENCES" in output.upper():
+            # References already present in the LLM-generated output
+            # But still append phase-collected references if available
+            pass
 
-        # Extract references from phase results
-        references = []
-        ref_counter = 1
+        # Aggregate references from all phases
+        all_references = []
+        seen_refs = set()  # Deduplicate by DOI, PMID, or title
 
         for phase_result in session.phase_results:
-            if isinstance(phase_result.content, dict):
-                # Look for sources, citations, or studies mentioned
-                for key, value in phase_result.content.items():
-                    if 'source' in key.lower() or 'citation' in key.lower() or 'study' in key.lower():
-                        if isinstance(value, list):
-                            for item in value:
-                                if item and item not in references:
-                                    references.append(item)
-                        elif value and value not in references:
-                            references.append(value)
+            if hasattr(phase_result, 'references') and phase_result.references:
+                for ref in phase_result.references:
+                    if isinstance(ref, dict):
+                        # Create unique key for deduplication
+                        unique_key = (
+                            ref.get('doi') or
+                            ref.get('pmid') or
+                            ref.get('raw_citation', '')[:100].lower()
+                        )
 
-        # Append references section
-        refs_section = "\n\n---\n\n## References\n\n"
-        if references:
-            for i, ref in enumerate(references[:20], 1):  # Limit to 20 references
-                refs_section += f"[{i}] {ref}\n"
-        else:
-            refs_section += "_Note: This analysis synthesizes information from multiple medical databases, peer-reviewed literature, and clinical guidelines. Specific citations would be included for claims made about individual studies._\n"
+                        if unique_key and unique_key not in seen_refs:
+                            seen_refs.add(unique_key)
+                            all_references.append(ref)
 
-        return output + refs_section
+        # If no phase references and no embedded references, add note
+        if not all_references and ("## 📚 References" not in output and "## References" not in output):
+            refs_section = "\n\n---\n\n## 📚 References\n\n"
+            refs_section += "_Note: This analysis synthesizes information from medical literature, clinical guidelines, and evidence-based medicine databases. Specific citations are included for individual studies and recommendations throughout the analysis._\n"
+            return output + refs_section
+
+        # If we have collected references from phases, append them
+        if all_references:
+            refs_section = "\n\n---\n\n## 📚 Additional Phase References\n\n"
+            refs_section += "_References collected during analysis phases:_\n\n"
+
+            for i, ref in enumerate(all_references[:30], 1):  # Limit to 30 references
+                citation = ref.get('raw_citation', '')
+
+                # Enhance with extracted metadata
+                if ref.get('doi'):
+                    citation += f" https://doi.org/{ref['doi']}"
+                if ref.get('pmid'):
+                    citation += f" PMID: {ref['pmid']}"
+                if ref.get('url') and 'doi.org' not in citation:
+                    citation += f" {ref['url']}"
+
+                refs_section += f"[{i}] {citation}\n\n"
+
+            return output + refs_section
+
+        return output
 
     def _append_cost_section(self, output: str, cost_summary: Dict) -> str:
         """Append cost analysis section to output"""

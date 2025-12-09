@@ -53,6 +53,7 @@ class PhaseResult:
     content: Dict[str, Any]
     user_choice: Optional[str] = None
     token_usage: Optional[TokenUsage] = None
+    references: List[Dict[str, Any]] = field(default_factory=list)  # Collected references from this phase
 
 
 @dataclass
@@ -259,11 +260,23 @@ class MedicalFactChecker:
         - Consider evolutionary biology as a tie-breaker
         - Do not dismiss anecdotal evidence - label it as "Emerging Signal"
         - Favor natural mechanisms over synthetic when efficacy is comparable
+
+        CRITICAL: At the end, provide a "References" section with 3-5 key sources in APA 7 format.
+        Include DOI/PMID/URLs when available. These should be specific, real studies or guidelines,
+        not generic database mentions.
+
+        Format:
+        ```
+        REFERENCES:
+        [1] Authors (Year). Title. Journal. DOI/PMID/URL
+        [2] ...
+        ```
         """
 
         system_prompt = """You are an independent medical researcher and "Red Teamer"
         uncovering unfiltered biological reality. You are skeptical of consensus driven
-        by inertia or corporate interest. Weight methodological quality over institutional authority."""
+        by inertia or corporate interest. Weight methodological quality over institutional authority.
+        ALWAYS cite specific peer-reviewed sources with full citations."""
 
         try:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
@@ -277,11 +290,15 @@ class MedicalFactChecker:
             # Parse the response
             content = self._parse_conflict_scan_response(response)
 
+            # Extract references from response
+            references = self._extract_references_from_text(response)
+
             return PhaseResult(
                 phase=AnalysisPhase.CONFLICT_SCAN,
                 timestamp=datetime.now(),
                 content=content,
-                token_usage=token_usage
+                token_usage=token_usage,
+                references=references
             )
         except Exception as e:
             self.logger.error(f"Phase 1 failed: {e}")
@@ -307,11 +324,22 @@ class MedicalFactChecker:
 
         If small lab study has rigorous design but contradicts industry-funded study,
         highlight the small lab finding as "Priority Signal".
+
+        CRITICAL: At the end, provide a "References" section with 3-5 key sources in APA 7 format.
+        Include specific studies with DOI/PMID/URLs. These should be actual research papers or guidelines.
+
+        Format:
+        ```
+        REFERENCES:
+        [1] Authors (Year). Title. Journal. DOI/PMID/URL
+        [2] ...
+        ```
         """
 
         system_prompt = """You are a medical research auditor focused on uncovering
         methodological quality and funding biases. Small, well-designed independent studies
-        trump large industry-funded studies. Recent evidence overturns old dogma."""
+        trump large industry-funded studies. Recent evidence overturns old dogma.
+        ALWAYS cite specific studies with full citations."""
 
         try:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
@@ -324,11 +352,15 @@ class MedicalFactChecker:
 
             content = self._parse_evidence_response(response)
 
+            # Extract references from response
+            references = self._extract_references_from_text(response)
+
             return PhaseResult(
                 phase=AnalysisPhase.EVIDENCE_STRESS_TEST,
                 timestamp=datetime.now(),
                 content=content,
-                token_usage=token_usage
+                token_usage=token_usage,
+                references=references
             )
         except Exception as e:
             self.logger.error(f"Phase 2 failed: {e}")
@@ -392,124 +424,166 @@ class MedicalFactChecker:
             OutputType.EVOLUTIONARY: f"""
             Write "The Evolutionary Protocol" for {subject} in first person.
 
-            Structure:
-            # The Evolutionary Protocol: {subject}
+            IMPORTANT: Use relevant emojis in ALL titles and subtitles for better readability.
 
-            ## The Ancestral Logic
+            Structure:
+            # 🧬 The Evolutionary Protocol: {subject}
+
+            ## 🌿 The Ancestral Logic
             Why this matters evolutionarily (e.g., "Humans have always...")
 
-            ## The Toxic Load
+            ## ⚠️ The Toxic Load
             Modern ingredients/factors to eliminate (focus on disruptors)
 
-            ## The Bio-Identical Swap
+            ## 🔄 The Bio-Identical Swap
             Natural alternatives to the chemical standard
 
-            ## The Protocol
+            ## 📋 The Protocol
             A routine aligned with circadian/biological rhythms
 
-            ## References
+            ## 📚 References
             APA 7 format with URLs
 
             Synthesis data:
             {json.dumps(synthesis, indent=2)}
 
+            CRITICAL: Include comprehensive references section with 5-10 specific citations.
+            Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Use actual, verifiable studies - not generic database mentions.
+
             Write densely, first person, collaborative investigative tone.
+            Add useful emojis throughout the content for emphasis and clarity.
             """,
 
             OutputType.BIOHACKER: f"""
             Write "The Bio-Hacker's Guide" for {subject} in first person.
 
-            Structure:
-            # The Bio-Hacker's Optimization Guide: {subject}
+            IMPORTANT: Use relevant emojis in ALL titles and subtitles for better readability.
 
-            ## The Optimization Target
+            Structure:
+            # 🚀 The Bio-Hacker's Optimization Guide: {subject}
+
+            ## 🎯 The Optimization Target
             What mechanism are we exploiting?
 
-            ## The "Underground" Data
+            ## 🔬 The "Underground" Data
             Findings from small labs/new research the mainstream ignores
 
-            ## The Stack
+            ## 💊 The Stack
             Specific compounds/routines (including promising but insufficient data)
 
-            ## Risk Management
+            ## ⚠️ Risk Management
             How to mitigate side effects while pushing boundaries
 
-            ## References
+            ## 📚 References
             APA 7 format with URLs
 
             Synthesis data:
             {json.dumps(synthesis, indent=2)}
 
+            CRITICAL: Include comprehensive references section with 5-10 specific citations.
+            Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Use actual, verifiable studies - not generic database mentions.
+
             Write densely, first person, optimization-focused tone.
+            Add useful emojis throughout the content for emphasis and clarity.
             """,
 
             OutputType.PARADIGM_SHIFT: f"""
             Write "The Paradigm Shift" article for {subject} in first person.
 
-            Structure:
-            # The New Science of {subject}
+            IMPORTANT: Use relevant emojis in ALL titles and subtitles for better readability.
 
-            ## The Old Dogma
+            Structure:
+            # 🔬 The New Science of {subject}
+
+            ## 📜 The Old Dogma
             "We were told that..."
 
-            ## The Conflict
+            ## ⚡ The Conflict
             "However, when we remove industry-funded data, we see..."
 
-            ## The New Reality
+            ## 🌟 The New Reality
             "Recent independent research (2020-2025) suggests..."
 
-            ## The Takeaway
+            ## 💡 The Takeaway
             Actionable advice based on the new reality
 
-            ## References
+            ## 📚 References
             APA 7 format with URLs
 
             Synthesis data:
             {json.dumps(synthesis, indent=2)}
 
+            CRITICAL: Include comprehensive references section with 5-10 specific citations.
+            Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Use actual, verifiable studies - not generic database mentions.
+
             Write densely, first person, paradigm-shifting tone.
+            Add useful emojis throughout the content for emphasis and clarity.
             """,
 
             OutputType.VILLAGE_WISDOM: f"""
             Write "The Village Wisdom Guide" for {subject} in first person.
 
-            Structure:
-            # Village Wisdom: {subject}
+            IMPORTANT: Use relevant emojis in ALL titles and subtitles for better readability.
 
-            ## The Story
+            Structure:
+            # 🌾 Village Wisdom: {subject}
+
+            ## 📖 The Story
             A simple analogy (e.g., "Your gut is like a garden, not a battlefield")
 
-            ## The Misunderstanding
+            ## ❌ The Misunderstanding
             Why the "sterile/chemical" approach fails
 
-            ## The Return to Roots
+            ## 🌱 The Return to Roots
             3 simple, natural behavioral changes
 
-            ## References
+            ## 📚 References
             APA 7 format with URLs
 
             Synthesis data:
             {json.dumps(synthesis, indent=2)}
 
+            CRITICAL: Include comprehensive references section with 5-10 specific citations.
+            Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Use actual, verifiable studies - not generic database mentions.
+
             Write simply, first person, friendly teaching tone. Use analogies.
+            Add useful emojis throughout the content for emphasis and clarity.
             """,
 
             OutputType.PROCEED: f"""
             Write a simplified guide for {subject} in friendly teaching tone.
 
-            Use simple language (high school level), explain complex ideas simply,
-            use analogies for abstract concepts.
+            IMPORTANT: Use relevant emojis in ALL titles and subtitles for better readability.
 
-            Include:
-            - Key findings in plain language
-            - Practical recommendations
-            - What to avoid and why
+            Structure:
+            # 🔬 Simplified Guide: {subject}
 
-            ## References
+            ## 📋 Key Findings
+            Plain language explanation of the most important insights
+
+            ## ✅ Practical Recommendations
+            What you should do based on the evidence
+
+            ## ❌ What to Avoid
+            What doesn't work and why
+
+            ## 📚 References
             APA 7 format with URLs
 
             Synthesis data:
             {json.dumps(synthesis, indent=2)}
+
+            CRITICAL: Include comprehensive references section with 5-10 specific citations.
+            Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Use actual, verifiable studies - not generic database mentions.
+
+            Use simple language (high school level), explain complex ideas simply,
+            use analogies for abstract concepts.
+            Add useful emojis throughout the content for emphasis and clarity.
             """
         }
 
@@ -518,7 +592,8 @@ class MedicalFactChecker:
         system_prompt = """You are a medical writer creating evidence-based guides.
         Write in first person, as the user's private researcher. Be collaborative,
         investigative, slightly conspiratorial but grounded in data. Include proper APA 7
-        references with URLs to actual papers (PubMed/Nature preferred)."""
+        references with URLs to actual papers (PubMed/Nature preferred).
+        IMPORTANT: Use emojis in ALL titles, subtitles, and throughout the content for better readability."""
 
         try:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
@@ -543,6 +618,9 @@ class MedicalFactChecker:
         Simplify this medical guide for a general audience:
 
         {complex_output}
+
+        IMPORTANT: Keep all emojis from the original and add more where helpful.
+        Ensure ALL titles and subtitles have relevant emojis for better readability.
 
         Requirements:
         - High school reading level
@@ -657,6 +735,70 @@ class MedicalFactChecker:
             content['biological_truth'] = response
 
         return content
+
+    def _extract_references_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract references from text response using simple parsing"""
+        references = []
+
+        # Look for REFERENCES: section or similar
+        ref_section_start = -1
+        lines = text.split('\n')
+
+        for i, line in enumerate(lines):
+            line_lower = line.lower().strip()
+            if any(keyword in line_lower for keyword in ['references:', 'citations:', 'sources:']):
+                ref_section_start = i + 1
+                break
+
+        if ref_section_start == -1:
+            return references  # No references section found
+
+        # Extract reference lines
+        for line in lines[ref_section_start:]:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            # Look for lines that look like references
+            # Format: [1] Authors (Year). Title. Journal. DOI/URL
+            if line.startswith('[') or line.startswith('- [') or any(char.isdigit() for char in line[:5]):
+                # Clean up the line
+                ref_line = line.lstrip('- ').lstrip('[').split(']', 1)
+                if len(ref_line) > 1:
+                    ref_text = ref_line[1].strip()
+                else:
+                    ref_text = line
+
+                # Try to extract structured data
+                ref_dict = {
+                    'raw_citation': ref_text,
+                    'extracted': True
+                }
+
+                # Try to extract year
+                import re
+                year_match = re.search(r'\((\d{4})\)', ref_text)
+                if year_match:
+                    ref_dict['year'] = int(year_match.group(1))
+
+                # Try to extract DOI
+                doi_match = re.search(r'10\.\d{4,}/[^\s]+', ref_text)
+                if doi_match:
+                    ref_dict['doi'] = doi_match.group(0)
+
+                # Try to extract PMID
+                pmid_match = re.search(r'PMID:\s*(\d+)', ref_text)
+                if pmid_match:
+                    ref_dict['pmid'] = pmid_match.group(1)
+
+                # Try to extract URL
+                url_match = re.search(r'https?://[^\s]+', ref_text)
+                if url_match:
+                    ref_dict['url'] = url_match.group(0)
+
+                references.append(ref_dict)
+
+        return references
 
     # Interactive prompts
     def _prompt_user_phase1(self) -> str:

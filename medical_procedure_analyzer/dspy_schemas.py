@@ -8,6 +8,52 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
 
+# =============== Reference/Citation Schema ===============
+
+class Reference(BaseModel):
+    """Single academic or medical reference with full citation details"""
+    authors: str = Field(description="Author names (e.g., 'Smith J, Jones A, et al.')")
+    year: int = Field(description="Publication year")
+    title: str = Field(description="Full title of the paper/guideline")
+    source: str = Field(description="Journal name, organization, or source")
+    doi: Optional[str] = Field(default=None, description="DOI if available")
+    pmid: Optional[str] = Field(default=None, description="PubMed ID if available")
+    url: Optional[str] = Field(default=None, description="Direct URL to the resource")
+    reference_type: str = Field(
+        default="peer_reviewed",
+        description="Type: peer_reviewed, guideline, meta_analysis, review, case_study, clinical_trial"
+    )
+    relevance: str = Field(description="Why this reference is cited (1-2 sentences)")
+
+    def to_apa_format(self) -> str:
+        """Convert to APA 7 citation format"""
+        citation = f"{self.authors} ({self.year}). {self.title}. {self.source}."
+        if self.doi:
+            citation += f" https://doi.org/{self.doi}"
+        elif self.url:
+            citation += f" {self.url}"
+        if self.pmid:
+            citation += f" PMID: {self.pmid}"
+        return citation
+
+
+class ReferencesCollection(BaseModel):
+    """Collection of references from a specific analysis phase or section"""
+    phase_name: str = Field(description="Name of the phase/section these references support")
+    references: List[Reference] = Field(default_factory=list, description="List of references")
+
+    def get_unique_references(self) -> List[Reference]:
+        """Get unique references (deduplicate by DOI/PMID/title)"""
+        seen = set()
+        unique = []
+        for ref in self.references:
+            key = ref.doi or ref.pmid or ref.title.lower()
+            if key not in seen:
+                seen.add(key)
+                unique.append(ref)
+        return unique
+
+
 # =============== Pharmacology Schema ===============
 
 class PharmacologyData(BaseModel):

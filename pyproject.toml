@@ -39,6 +39,9 @@ dependencies = [
     "numpy>=1.24.0",
     "tavily-python>=0.7.12",
     "vulture>=2.14",
+    "markdown>=3.5.0",
+    "weasyprint>=60.0",
+    "pygments>=2.17.0",
 ]
 
 [project.optional-dependencies]
