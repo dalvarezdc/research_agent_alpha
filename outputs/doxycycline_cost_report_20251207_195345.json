@@ -1,62 +1,62 @@
 {
-  "total_cost": 0.427452,
-  "total_duration": 545.911387,
+  "total_cost": 0.402867,
+  "total_duration": 506.091816,
   "phases": [
     {
       "phase": "Phase 1: Pharmacology Analysis",
-      "cost": 0.030888,
-      "duration": 38.828144,
+      "cost": 0.032823000000000005,
+      "duration": 40.523704,
       "input_tokens": 791,
-      "output_tokens": 1901
+      "output_tokens": 2030
     },
     {
       "phase": "Phase 2: Interaction Analysis",
-      "cost": 0.210654,
-      "duration": 266.87504,
+      "cost": 0.191844,
+      "duration": 243.092191,
       "input_tokens": 1458,
-      "output_tokens": 13752
+      "output_tokens": 12498
     },
     {
       "phase": "Phase 3: Safety Profile Assessment",
       "cost": 0.062459999999999995,
-      "duration": 74.811623,
+      "duration": 73.620427,
       "input_tokens": 340,
       "output_tokens": 4096
     },
     {
       "phase": "Phase 4: Recommendation Synthesis",
       "cost": 0.06231,
-      "duration": 94.207441,
+      "duration": 87.771074,
       "input_tokens": 290,
       "output_tokens": 4096
     },
     {
       "phase": "Phase 5: Monitoring Requirements",
-      "cost": 0.06114,
-      "duration": 71.189139,
+      "cost": 0.053430000000000005,
+      "duration": 61.08442,
       "input_tokens": 165,
-      "output_tokens": 4043
+      "output_tokens": 3529
     }
   ],
   "most_expensive": [
     {
       "phase": "Phase 2: Interaction Analysis",
-      "cost": 0.210654,
-      "duration": 266.87504,
+      "cost": 0.191844,
+      "duration": 243.092191,
       "input_tokens": 1458,
-      "output_tokens": 13752
+      "output_tokens": 12498
     },
     {
       "phase": "Phase 3: Safety Profile Assessment",
       "cost": 0.062459999999999995,
-      "duration": 74.811623,
+      "duration": 73.620427,
       "input_tokens": 340,
       "output_tokens": 4096
     },
     {
       "phase": "Phase 4: Recommendation Synthesis",
       "cost": 0.06231,
-      "duration": 94.207441,
+      "duration": 87.771074,
       "input_tokens": 290,
       "output_tokens": 4096
     }
