@@ -174,6 +174,9 @@ class MedicalFactChecker:
         # Reset cost tracking for new analysis
         reset_tracking()
 
+        # Initialize token usage tracker for this analysis
+        self.total_token_usage = TokenUsage()
+
         # Phase 1: Conflict & Hypothesis Scan
         phase1_result = self._phase1_conflict_scan(subject, clarifying_info)
         self.current_session.phase_results.append(phase1_result)
@@ -267,6 +270,10 @@ class MedicalFactChecker:
                 prompt, system_prompt
             )
 
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
+
             # Parse the response
             content = self._parse_conflict_scan_response(response)
 
@@ -310,6 +317,10 @@ class MedicalFactChecker:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 prompt, system_prompt
             )
+
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             content = self._parse_evidence_response(response)
 
@@ -355,6 +366,10 @@ class MedicalFactChecker:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 prompt, system_prompt
             )
+
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             content = self._parse_synthesis_response(response)
 
@@ -510,6 +525,10 @@ class MedicalFactChecker:
                 prompt, system_prompt
             )
 
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
+
             return response
         except Exception as e:
             self.logger.error(f"Phase 4 failed: {e}")
@@ -540,6 +559,10 @@ class MedicalFactChecker:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
                 prompt, system_prompt
             )
+
+            # Accumulate token usage
+            if token_usage:
+                self.total_token_usage.add(token_usage)
 
             return response
         except Exception as e:
