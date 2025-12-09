@@ -87,7 +87,7 @@ class AgentOrchestrator:
         print(f"📋 Analyzing: {medical_input.procedure}")
         print(f"   Details: {medical_input.details}")
         print()
-        print("⏳ Running 6-stage analysis pipeline...")
+        print("⏳ Running 5-phase analysis pipeline...")
         print()
 
         # Run analysis
@@ -274,6 +274,9 @@ class AgentOrchestrator:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
+        # Get cost summary
+        cost_summary = get_cost_summary()
+
         # 1. Reasoning trace
         trace_file = f"{self.output_dir}/{base_name}_reasoning_trace_{timestamp}.json"
         trace_data = []
@@ -319,6 +322,7 @@ class AgentOrchestrator:
             "general_recommendations": result.general_recommendations,
             "research_gaps": result.research_gaps,
             "reasoning_steps_count": len(result.reasoning_trace),
+            "cost_analysis": cost_summary,
         }
 
         with open(result_file, "w") as f:
@@ -326,9 +330,16 @@ class AgentOrchestrator:
         print(f"✓ Analysis result: {os.path.basename(result_file)}")
         files["result"] = result_file
 
-        # 3. Summary report
+        # 3. Cost report (JSON)
+        cost_file = f"{self.output_dir}/{base_name}_cost_report_{timestamp}.json"
+        with open(cost_file, "w") as f:
+            json.dump(cost_summary, f, indent=2)
+        print(f"✓ Cost report: {os.path.basename(cost_file)}")
+        files["cost"] = cost_file
+
+        # 4. Summary report
         summary_file = f"{self.output_dir}/{base_name}_summary_report_{timestamp}.md"
-        summary = self._generate_procedure_summary(result)
+        summary = self._generate_procedure_summary(result, cost_summary)
 
         with open(summary_file, "w") as f:
             f.write(summary)
@@ -344,6 +355,9 @@ class AgentOrchestrator:
         base_name = subject.replace(" ", "_").lower()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
+
+        # Get cost summary
+        cost_summary = get_cost_summary()
 
         # 1. Session data (phases and choices)
         session_file = f"{self.output_dir}/{base_name}_session_{timestamp}.json"
@@ -370,6 +384,7 @@ class AgentOrchestrator:
                 }
                 for pr in session.phase_results
             ],
+            "cost_analysis": cost_summary,
         }
 
         with open(session_file, "w") as f:
@@ -377,16 +392,25 @@ class AgentOrchestrator:
         print(f"✓ Session data: {os.path.basename(session_file)}")
         files["session"] = session_file
 
-        # 2. Final output (markdown)
+        # 2. Cost report (JSON)
+        cost_file = f"{self.output_dir}/{base_name}_cost_report_{timestamp}.json"
+        with open(cost_file, "w") as f:
+            json.dump(cost_summary, f, indent=2)
+        print(f"✓ Cost report: {os.path.basename(cost_file)}")
+        files["cost"] = cost_file
+
+        # 3. Final output (markdown) with references appended
         output_file = f"{self.output_dir}/{base_name}_output_{timestamp}.md"
+        output_with_refs = self._append_references_section(session.final_output, session)
+        output_with_cost = self._append_cost_section(output_with_refs, cost_summary)
         with open(output_file, "w") as f:
-            f.write(session.final_output)
+            f.write(output_with_cost)
         print(f"✓ Final output: {os.path.basename(output_file)}")
         files["output"] = output_file
 
-        # 3. Summary report
+        # 4. Summary report
         summary_file = f"{self.output_dir}/{base_name}_summary_{timestamp}.md"
-        summary = self._generate_fact_check_summary(session)
+        summary = self._generate_fact_check_summary(session, cost_summary)
 
         with open(summary_file, "w") as f:
             f.write(summary)
@@ -508,11 +532,17 @@ class AgentOrchestrator:
 
         return files
 
-    def _generate_procedure_summary(self, result: Any) -> str:
+    def _generate_procedure_summary(self, result: Any, cost_summary: Dict = None) -> str:
         """Generate markdown summary for procedure analysis"""
+        cost_info = ""
+        if cost_summary and cost_summary.get('total_cost', 0) > 0:
+            cost_info = f"""
+**Analysis Cost:** ${cost_summary['total_cost']:.4f}
+**Duration:** {cost_summary['total_duration']:.1f}s"""
+
         summary = f"""# Medical Procedure Analysis Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Analysis System:** MedicalReasoningAgent (6-Stage Pipeline)
+**Analysis System:** MedicalReasoningAgent (5-Phase Pipeline){cost_info}
 
 ---
 
@@ -572,7 +602,35 @@ class AgentOrchestrator:
         for i, gap in enumerate(result.research_gaps, 1):
             summary += f"{i}. {gap}\n"
 
+        # Add references section
+        summary += """
+
+---
+
+## References
+
+_Note: This analysis synthesizes information from medical literature, clinical guidelines, and evidence-based medicine databases. Specific citations would be included for claims about individual studies and recommendations._
+
+"""
+
+        # Add cost breakdown if available
+        if cost_summary and cost_summary.get('total_cost', 0) > 0:
+            summary += """
+
+---
+
+## Cost Analysis
+
+"""
+            summary += f"**Total Cost:** ${cost_summary['total_cost']:.4f}\n"
+            summary += f"**Total Duration:** {cost_summary['total_duration']:.1f}s\n\n"
+            summary += "### Phase Breakdown:\n\n"
+            for phase in cost_summary.get('phases', []):
+                pct = (phase['cost'] / cost_summary['total_cost'] * 100) if cost_summary['total_cost'] > 0 else 0
+                summary += f"- **{phase['phase']}**: ${phase['cost']:.4f} ({pct:.1f}%) - {phase['duration']:.1f}s\n"
+
         summary += f"""
+
 ---
 
 **Report Generated By:** MedicalReasoningAgent
@@ -583,11 +641,71 @@ class AgentOrchestrator:
 
         return summary
 
-    def _generate_fact_check_summary(self, session: Any) -> str:
+    def _append_references_section(self, output: str, session: Any) -> str:
+        """Append references section to output if not already present"""
+        if "## References" in output or "## REFERENCES" in output.upper():
+            # References already present
+            return output
+
+        # Extract references from phase results
+        references = []
+        ref_counter = 1
+
+        for phase_result in session.phase_results:
+            if isinstance(phase_result.content, dict):
+                # Look for sources, citations, or studies mentioned
+                for key, value in phase_result.content.items():
+                    if 'source' in key.lower() or 'citation' in key.lower() or 'study' in key.lower():
+                        if isinstance(value, list):
+                            for item in value:
+                                if item and item not in references:
+                                    references.append(item)
+                        elif value and value not in references:
+                            references.append(value)
+
+        # Append references section
+        refs_section = "\n\n---\n\n## References\n\n"
+        if references:
+            for i, ref in enumerate(references[:20], 1):  # Limit to 20 references
+                refs_section += f"[{i}] {ref}\n"
+        else:
+            refs_section += "_Note: This analysis synthesizes information from multiple medical databases, peer-reviewed literature, and clinical guidelines. Specific citations would be included for claims made about individual studies._\n"
+
+        return output + refs_section
+
+    def _append_cost_section(self, output: str, cost_summary: Dict) -> str:
+        """Append cost analysis section to output"""
+        if cost_summary.get('total_cost', 0) == 0:
+            return output
+
+        cost_section = f"""
+
+---
+
+## Analysis Cost Summary
+
+**Total Cost:** ${cost_summary['total_cost']:.4f}
+**Total Duration:** {cost_summary['total_duration']:.1f}s
+
+### Phase Breakdown:
+"""
+        for phase in cost_summary.get('phases', []):
+            pct = (phase['cost'] / cost_summary['total_cost'] * 100) if cost_summary['total_cost'] > 0 else 0
+            cost_section += f"- **{phase['phase']}**: ${phase['cost']:.4f} ({pct:.1f}%) - {phase['duration']:.1f}s\n"
+
+        return output + cost_section
+
+    def _generate_fact_check_summary(self, session: Any, cost_summary: Dict = None) -> str:
         """Generate markdown summary for fact check analysis"""
+        cost_info = ""
+        if cost_summary and cost_summary.get('total_cost', 0) > 0:
+            cost_info = f"""
+**Analysis Cost:** ${cost_summary['total_cost']:.4f}
+**Duration:** {cost_summary['total_duration']:.1f}s"""
+
         summary = f"""# Medical Fact Check Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Analysis System:** MedicalFactChecker (Independent Bio-Investigator)
+**Analysis System:** MedicalFactChecker (Independent Bio-Investigator){cost_info}
 
 ---
 

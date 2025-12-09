@@ -225,7 +225,7 @@ class MedicalReasoningAgent:
             self.logger.error(f"Error in medical analysis pipeline: {str(e)}")
             raise
     
-    @track_cost("Stage 2: Organ Identification")
+    @track_cost("Phase 1: Organ Identification")
     def _identify_affected_organs(self, medical_input: MedicalInput) -> List[str]:
         """Identify organs potentially affected by the medical procedure using LLM analysis."""
         self._log_reasoning_step(
@@ -328,7 +328,7 @@ class MedicalReasoningAgent:
         
         return list(set(found_organs)) if found_organs else ["kidneys", "brain"]
 
-    @track_cost("Stage 3: Evidence Gathering")
+    @track_cost("Phase 2: Evidence Gathering")
     @lru_cache(maxsize=64)
     def _gather_evidence(self, medical_input: MedicalInput, organs: tuple) -> Dict[str, Any]:
         """Gather evidence for each identified organ system using LLM analysis."""
@@ -485,7 +485,7 @@ class MedicalReasoningAgent:
         
         return evidence
 
-    @track_cost("Stage 4: Risk Assessment")
+    @track_cost("Phase 3: Risk Assessment")
     def _assess_risks(self, medical_input: MedicalInput, organs: List[str], evidence: Dict[str, Any]) -> Dict[str, Any]:
         """Assess risks for each organ system."""
         self._log_reasoning_step(
@@ -525,7 +525,7 @@ class MedicalReasoningAgent:
         
         return results
 
-    @track_cost("Stage 5: Recommendation Synthesis")
+    @track_cost("Phase 4: Recommendation Synthesis")
     def _synthesize_recommendations(self, medical_input: MedicalInput, organs: List[str],
                                   evidence: Dict[str, Any], risks: Dict[str, Any]) -> Dict[str, Any]:
         """Synthesize recommendations based on evidence and risk assessment using LLM analysis."""
@@ -773,7 +773,7 @@ class MedicalReasoningAgent:
 
         return recommendations
 
-    @track_cost("Stage 6: Critical Evaluation")
+    @track_cost("Phase 5: Critical Evaluation")
     def _critical_evaluation(self, medical_input: MedicalInput, organs: List[str],
                            recommendations: Dict[str, Any]) -> MedicalOutput:
         """Critical evaluation of recommendations and evidence quality."""
