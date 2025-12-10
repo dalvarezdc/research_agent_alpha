@@ -340,12 +340,13 @@ class AgentOrchestrator:
         print(f"✓ Cost report: {os.path.basename(cost_file)}")
         files["cost"] = cost_file
 
-        # 4. Summary report
+        # 4. Summary report (with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_summary_report_{timestamp}.md"
         summary = self._generate_procedure_summary(result, cost_summary)
+        summary_complete = self._append_hardcoded_disclaimer(summary)
 
         with open(summary_file, "w") as f:
-            f.write(summary)
+            f.write(summary_complete)
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
 
@@ -408,11 +409,12 @@ class AgentOrchestrator:
         print(f"✓ Cost report: {os.path.basename(cost_file)}")
         files["cost"] = cost_file
 
-        # 3. Final output (markdown) with references appended
+        # 3. Final output (markdown) with references and disclaimer appended
         output_file = f"{self.output_dir}/{base_name}_output_{timestamp}.md"
         output_with_refs = self._append_references_section(session.final_output, session)
+        output_complete = self._append_hardcoded_disclaimer(output_with_refs)
         with open(output_file, "w") as f:
-            f.write(output_with_refs)
+            f.write(output_complete)
         print(f"✓ Final output: {os.path.basename(output_file)}")
         files["output"] = output_file
 
@@ -422,12 +424,13 @@ class AgentOrchestrator:
             print(f"✓ Output PDF: {os.path.basename(output_pdf)}")
             files["output_pdf"] = output_pdf
 
-        # 4. Summary report
+        # 4. Summary report (with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_summary_{timestamp}.md"
         summary = self._generate_fact_check_summary(session, cost_summary)
+        summary_complete = self._append_hardcoded_disclaimer(summary)
 
         with open(summary_file, "w") as f:
-            f.write(summary)
+            f.write(summary_complete)
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
 
@@ -532,12 +535,13 @@ class AgentOrchestrator:
         print(f"✓ Cost report: {os.path.basename(cost_file)}")
         files["cost"] = cost_file
 
-        # 3. Summary report (Markdown)
+        # 3. Summary report (Markdown with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_medication_summary_{timestamp}.md"
         summary = self._generate_medication_summary(result, cost_summary)
+        summary_complete = self._append_hardcoded_disclaimer(summary)
 
         with open(summary_file, "w") as f:
-            f.write(summary)
+            f.write(summary_complete)
         print(f"✓ Summary report: {os.path.basename(summary_file)}")
         files["summary"] = summary_file
 
@@ -547,12 +551,13 @@ class AgentOrchestrator:
             print(f"✓ Summary PDF: {os.path.basename(summary_pdf)}")
             files["summary_pdf"] = summary_pdf
 
-        # 4. Comprehensive report (detailed Markdown)
+        # 4. Comprehensive report (detailed Markdown with disclaimer)
         detailed_file = f"{self.output_dir}/{base_name}_medication_detailed_{timestamp}.md"
         detailed = self._generate_medication_detailed_report(result, cost_summary)
+        detailed_complete = self._append_hardcoded_disclaimer(detailed)
 
         with open(detailed_file, "w") as f:
-            f.write(detailed)
+            f.write(detailed_complete)
         print(f"✓ Detailed report: {os.path.basename(detailed_file)}")
         files["detailed"] = detailed_file
 
@@ -672,6 +677,37 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 """
 
         return summary
+
+    def _append_hardcoded_disclaimer(self, output: str) -> str:
+        """
+        Append mandatory hardcoded disclaimer to ALL outputs.
+
+        This saves tokens by not requiring the LLM to generate disclaimers,
+        and ensures consistency and completeness across all reports.
+        """
+        # Check if disclaimer already exists (avoid duplication)
+        if "⚠️ **DISCLAIMER:**" in output or "DISCLAIMER:" in output:
+            return output
+
+        disclaimer = """
+
+---
+
+⚠️ **DISCLAIMER:** This analysis is for research and educational purposes only. It provides critical analysis of medical literature and evidence-based information but does **not** constitute medical advice, diagnosis, or treatment recommendations.
+
+**Always consult qualified healthcare professionals** for medical decisions, treatment plans, and health-related questions. The information presented here should not replace professional medical judgment or be used as the sole basis for healthcare choices.
+
+**Key Limitations:**
+- Medical knowledge evolves rapidly; information may become outdated
+- Individual health situations vary significantly
+- Not all studies are equal in quality or applicability
+- Risk-benefit assessments must be personalized
+- Drug interactions and contraindications require professional evaluation
+
+This analysis aims to inform and educate, not to direct medical care. When in doubt, seek professional medical guidance.
+"""
+
+        return output + disclaimer
 
     def _append_references_section(self, output: str, session: Any) -> str:
         """Append aggregated references section from all phases"""

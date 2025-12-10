@@ -14,192 +14,246 @@ from weasyprint.text.fonts import FontConfiguration
 
 # Custom CSS for medical reports with emoji support
 PDF_CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-
+/* Use system fonts that WeasyPrint can access reliably */
 body {
-    font-family: 'Inter', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
-    line-height: 1.6;
-    color: #2d3748;
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 20px;
+    font-family: 'DejaVu Sans', 'Arial', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+    line-height: 1.8;
+    color: #1a1a1a;
+    max-width: 100%;
+    margin: 0;
+    padding: 30px 40px;
     font-size: 11pt;
+    background: white;
 }
 
+/* Main title - prominent and clear */
 h1 {
-    color: #1a202c;
-    font-size: 28pt;
-    font-weight: 700;
+    color: #000000;
+    font-size: 26pt;
+    font-weight: bold;
     margin-top: 0;
-    margin-bottom: 20px;
-    border-bottom: 3px solid #4299e1;
-    padding-bottom: 10px;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #333;
+    line-height: 1.3;
 }
 
+/* Section headers - clear hierarchy */
 h2 {
-    color: #2d3748;
-    font-size: 20pt;
-    font-weight: 600;
-    margin-top: 30px;
+    color: #1a1a1a;
+    font-size: 18pt;
+    font-weight: bold;
+    margin-top: 35px;
     margin-bottom: 15px;
-    border-bottom: 2px solid #cbd5e0;
     padding-bottom: 8px;
+    border-bottom: 2px solid #666;
+    line-height: 1.3;
 }
 
+/* Subsection headers */
 h3 {
-    color: #4a5568;
-    font-size: 16pt;
-    font-weight: 600;
-    margin-top: 20px;
-    margin-bottom: 10px;
+    color: #2a2a2a;
+    font-size: 14pt;
+    font-weight: bold;
+    margin-top: 25px;
+    margin-bottom: 12px;
+    line-height: 1.3;
 }
 
 h4 {
-    color: #718096;
-    font-size: 14pt;
-    font-weight: 600;
-    margin-top: 15px;
-    margin-bottom: 8px;
+    color: #3a3a3a;
+    font-size: 12pt;
+    font-weight: bold;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    line-height: 1.3;
 }
 
+/* Paragraphs - spacious and readable */
 p {
-    margin: 10px 0;
-    text-align: justify;
+    margin: 12px 0;
+    text-align: left;
+    line-height: 1.8;
 }
 
+/* Lists - better spacing */
 ul, ol {
-    margin: 10px 0;
-    padding-left: 30px;
+    margin: 15px 0;
+    padding-left: 35px;
+    line-height: 1.8;
 }
 
 li {
-    margin: 5px 0;
+    margin: 8px 0;
 }
 
+/* Nested lists */
+li > ul, li > ol {
+    margin: 8px 0;
+    padding-left: 25px;
+}
+
+/* Strong text */
 strong {
-    font-weight: 600;
-    color: #1a202c;
+    font-weight: bold;
+    color: #000;
 }
 
+/* Emphasis */
 em {
     font-style: italic;
-    color: #4a5568;
+    color: #2a2a2a;
 }
 
+/* Inline code */
 code {
-    background-color: #f7fafc;
+    background-color: #f5f5f5;
     padding: 2px 6px;
     border-radius: 3px;
-    font-family: 'Courier New', monospace;
+    font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 10pt;
-    color: #e53e3e;
+    color: #c7254e;
+    border: 1px solid #e1e1e1;
 }
 
+/* Code blocks */
 pre {
-    background-color: #f7fafc;
+    background-color: #f8f8f8;
     padding: 15px;
-    border-radius: 5px;
-    border-left: 4px solid #4299e1;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    border-left: 4px solid #666;
     overflow-x: auto;
-    font-size: 9pt;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    margin: 20px 0;
 }
 
 pre code {
     background-color: transparent;
     padding: 0;
-    color: #2d3748;
+    border: none;
+    color: #1a1a1a;
 }
 
+/* Blockquotes */
 blockquote {
-    border-left: 4px solid #e2e8f0;
+    border-left: 4px solid #ccc;
     padding-left: 20px;
-    margin: 15px 0;
-    color: #4a5568;
+    margin: 20px 0;
+    color: #3a3a3a;
     font-style: italic;
 }
 
+/* Tables - clean and readable */
 table {
     width: 100%;
     border-collapse: collapse;
-    margin: 15px 0;
+    margin: 20px 0;
     font-size: 10pt;
+    border: 1px solid #ddd;
 }
 
 th {
-    background-color: #4299e1;
+    background-color: #333;
     color: white;
-    padding: 10px;
+    padding: 12px 10px;
     text-align: left;
-    font-weight: 600;
+    font-weight: bold;
+    border: 1px solid #222;
 }
 
 td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 10px;
+    border: 1px solid #ddd;
 }
 
 tr:nth-child(even) {
-    background-color: #f7fafc;
+    background-color: #f9f9f9;
 }
 
+/* Horizontal rules - clear section breaks */
 hr {
     border: none;
-    border-top: 2px solid #e2e8f0;
+    border-top: 2px solid #ccc;
+    margin: 40px 0;
+}
+
+/* Warning/Disclaimer boxes - highly visible */
+p:contains("⚠️"), p:contains("DISCLAIMER") {
+    background-color: #fff3cd;
+    border: 2px solid #ff6b6b;
+    border-left: 6px solid #ff6b6b;
+    padding: 20px;
     margin: 30px 0;
-}
-
-/* Emoji styling */
-.emoji {
-    font-size: 1.2em;
-}
-
-/* Warning/disclaimer boxes */
-p:has(> strong:first-child) {
-    background-color: #fff5f5;
-    border-left: 4px solid #fc8181;
-    padding: 15px;
-    margin: 20px 0;
     border-radius: 4px;
+    font-weight: normal;
 }
 
-/* Footer styling */
-footer {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 2px solid #e2e8f0;
-    font-size: 9pt;
-    color: #718096;
-    text-align: center;
+/* Links - clear and readable */
+a {
+    color: #0066cc;
+    text-decoration: underline;
 }
 
-/* Page break handling */
-h1, h2, h3 {
+/* Page break handling - keep logical sections together */
+h1, h2, h3, h4 {
     page-break-after: avoid;
+}
+
+h2, h3, h4 {
+    page-break-before: auto;
+}
+
+p, li {
+    orphans: 3;
+    widows: 3;
 }
 
 table, pre, blockquote {
     page-break-inside: avoid;
 }
 
-/* Links */
-a {
-    color: #4299e1;
-    text-decoration: none;
-}
-
-a:hover {
-    text-decoration: underline;
-}
-
-/* Print-specific styles */
+/* Page setup - proper margins and numbering */
 @page {
     size: A4;
-    margin: 2cm;
-    @bottom-center {
-        content: "Page " counter(page) " of " counter(pages);
+    margin: 2.5cm 2cm;
+
+    @top-right {
+        content: string(doctitle);
         font-size: 9pt;
-        color: #718096;
+        color: #666;
     }
+
+    @bottom-center {
+        content: "Page " counter(page);
+        font-size: 9pt;
+        color: #666;
+    }
+}
+
+/* Specific styling for disclaimer sections */
+p strong:first-child {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 12pt;
+}
+
+/* Better spacing around headers */
+h1 + p, h2 + p, h3 + p {
+    margin-top: 0;
+}
+
+/* References section styling */
+h2:contains("References") ~ p,
+h2:contains("📚") ~ p {
+    margin-left: 20px;
+    text-indent: -20px;
+}
+
+/* Cost analysis section */
+h2:contains("Cost") ~ p {
+    line-height: 1.6;
 }
 """
 

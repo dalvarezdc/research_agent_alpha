@@ -1,0 +1,57 @@
+{
+  "total_cost": 0.254571,
+  "total_duration": 346.662665,
+  "phases": [
+    {
+      "phase": "Phase 1: Conflict Scan",
+      "cost": 0.043155,
+      "duration": 63.418102,
+      "input_tokens": 335,
+      "output_tokens": 2810
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test",
+      "cost": 0.06920699999999999,
+      "duration": 81.715503,
+      "input_tokens": 2589,
+      "output_tokens": 4096
+    },
+    {
+      "phase": "Phase 3: Synthesis Menu",
+      "cost": 0.068949,
+      "duration": 108.84654,
+      "input_tokens": 4098,
+      "output_tokens": 3777
+    },
+    {
+      "phase": "Phase 4: Complex Output Generation",
+      "cost": 0.07325999999999999,
+      "duration": 92.68252,
+      "input_tokens": 3940,
+      "output_tokens": 4096
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 4: Complex Output Generation",
+      "cost": 0.07325999999999999,
+      "duration": 92.68252,
+      "input_tokens": 3940,
+      "output_tokens": 4096
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test",
+      "cost": 0.06920699999999999,
+      "duration": 81.715503,
+      "input_tokens": 2589,
+      "output_tokens": 4096
+    },
+    {
+      "phase": "Phase 3: Synthesis Menu",
+      "cost": 0.068949,
+      "duration": 108.84654,
+      "input_tokens": 4098,
+      "output_tokens": 3777
+    }
+  ]
+}
