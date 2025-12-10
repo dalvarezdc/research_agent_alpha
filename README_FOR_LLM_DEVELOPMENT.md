@@ -638,14 +638,22 @@ Each agent directory must have a README.md with:
    - `weasyprint>=60.0` - Convert HTML to PDF
    - `pygments>=2.17.0` - Syntax highlighting in code blocks
 
-   **Features:**
-   - Beautiful formatting with proper spacing and typography
-   - Full emoji support (🔬 💊 🔎 etc.)
-   - Syntax highlighting for code blocks
-   - Professional medical report styling
-   - Automatic page numbering and headers
-   - Table of contents generation
-   - Responsive table and image handling
+   **Features (Updated 2025-12-10):**
+   - **Markdown-like appearance** - PDFs now closely match the markdown file layout
+   - **Improved readability** - 1.8 line-height, better spacing, left-aligned text
+   - **Clear visual hierarchy** - Bold headers with underlines, proper section breaks
+   - **System fonts** - Uses DejaVu Sans for reliable rendering in WeasyPrint
+   - **Full emoji support** - Proper fallback fonts (🔬 💊 🔎 etc.)
+   - **Professional styling** - Clean borders, alternating table rows, highlighted disclaimers
+   - **Smart page breaks** - Keeps sections together, proper orphan/widow control
+   - **Page numbering** - Bottom center on each page
+   - **Syntax highlighting** - Code blocks with proper formatting
+
+   **CSS Location:** `pdf_generator.py` lines 16-258
+   - Updated to match markdown appearance (no more cramped layout)
+   - Better spacing between paragraphs and list items
+   - Disclaimer sections highlighted with yellow background and red border
+   - Professional typography with proper margins
 
 2. **Emoji Formatting for Titles and Subtitles** ⭐ **REQUIRED**
    - All report titles and section headers MUST use relevant emojis
@@ -1401,20 +1409,62 @@ def _phase1_analysis(self, input_data):
 
 ### 6. **Forgetting Disclaimers**
 
-**Bad:**
+**Bad - No Disclaimer:**
 ```python
 summary = "You should take X medication for Y condition."
+# Missing disclaimer entirely - dangerous!
 ```
 
-**Good:**
+**Bad - LLM-Generated Disclaimer (Wastes Tokens):**
 ```python
-summary = """Analysis Summary:
-[Content]
+prompt = """
+Write analysis of {topic}.
 
-⚠️ DISCLAIMER: This analysis is for educational and research purposes only.
-It does not constitute medical advice. Always consult qualified healthcare
-professionals for medical decisions."""
+Include a disclaimer at the end about consulting healthcare professionals.
+"""
+# This wastes tokens on every run and may be inconsistent
 ```
+
+**BEST - Hardcoded Disclaimer (Automatic, Token-Efficient):**
+```python
+# Use the centralized hardcoded disclaimer function
+summary = generate_report_content(analysis_result)
+summary_complete = self._append_hardcoded_disclaimer(summary)
+
+with open(output_file, "w") as f:
+    f.write(summary_complete)
+```
+
+**Implementation in run_analysis.py:**
+```python
+def _append_hardcoded_disclaimer(self, output: str) -> str:
+    """
+    Append mandatory hardcoded disclaimer to ALL outputs.
+    This saves tokens and ensures consistency.
+    """
+    if "⚠️ **DISCLAIMER:**" in output or "DISCLAIMER:" in output:
+        return output  # Avoid duplication
+
+    disclaimer = """
+
+---
+
+⚠️ **DISCLAIMER:** This analysis is for research and educational purposes only...
+[Full disclaimer text - see run_analysis.py line 687-703]
+"""
+    return output + disclaimer
+
+# Usage in all report generation methods:
+output_with_refs = self._append_references_section(content, session)
+output_complete = self._append_hardcoded_disclaimer(output_with_refs)
+```
+
+**Why This Approach?**
+- ✅ Saves ~200-300 tokens per report (no LLM generation needed)
+- ✅ Ensures legal consistency across all outputs
+- ✅ Comprehensive coverage (all limitations, key points)
+- ✅ Automatic - works for all agents without code changes
+- ✅ Easy to update in one place if legal requirements change
 
 ### 7. **Manual JSON Parsing Instead of DSPy**
 
@@ -1691,10 +1741,25 @@ If something isn't clear:
 ---
 
 **Last Updated:** 2025-12-10
-**Version:** 1.5.0
+**Version:** 1.6.0
 **Maintainer:** Research Agent Alpha Team
 
-**Recent Changes:**
+**Recent Changes (v1.6.0 - 2025-12-10):**
+- ⭐ **NEW: Hardcoded disclaimer system** - Automatically appends disclaimers to all reports
+  - Saves ~200-300 tokens per report (no LLM generation needed)
+  - Ensures legal consistency across all outputs
+  - Implementation in run_analysis.py `_append_hardcoded_disclaimer()` method
+  - Applied to all agents: fact checker, procedure analyzer, medication analyzer
+- ⭐ **IMPROVED: PDF CSS styling** - PDFs now look much more like markdown files
+  - Better spacing (1.8 line-height, improved margins)
+  - Clearer visual hierarchy with bold headers and underlines
+  - System fonts (DejaVu Sans) for reliable WeasyPrint rendering
+  - Professional typography with proper page breaks
+  - Disclaimer sections highlighted with yellow background and red border
+  - Updated documentation in "Common Pitfalls" section #6
+- Updated `.gitignore` to exclude `outputs/older_results/`
+
+**Changes (v1.5.0 - Previous):**
 - ⭐ **MANDATORY: References collected in EVERY phase using DSPy extraction**
 - ⭐ **MANDATORY: Automatic PDF generation for all markdown output files**
 - ⭐ **MANDATORY: Added emoji formatting standard for all report titles and subtitles**
