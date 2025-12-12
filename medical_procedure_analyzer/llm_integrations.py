@@ -51,12 +51,22 @@ except ImportError:
     except ImportError:
         Ollama = None
 
+try:
+    from xai_sdk import Client as XAIClient
+    from xai_sdk.chat import user as xai_user
+except ImportError:
+    XAIClient = None
+    xai_user = None
+
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
     CLAUDE = "claude"
     OPENAI = "openai"
     OLLAMA = "ollama"
+    GROK4 = "grok4"
+    GROK4_CODE = "grok4-code"
+    GROK4_REASONING = "grok4-reasoning"
 
 
 @dataclass
@@ -129,6 +139,13 @@ class ClaudeLLM(LLMInterface):
             raise RuntimeError("Claude client not initialized")
 
         try:
+            # Record model usage for cost tracking
+            try:
+                from cost_tracker import record_model_usage
+                record_model_usage(self.config.model)
+            except:
+                pass  # Cost tracking optional
+
             messages = []
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
@@ -219,6 +236,13 @@ class OpenAILLM(LLMInterface):
             raise RuntimeError("OpenAI client not initialized")
 
         try:
+            # Record model usage for cost tracking
+            try:
+                from cost_tracker import record_model_usage
+                record_model_usage(self.config.model)
+            except:
+                pass  # Cost tracking optional
+
             messages = []
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
@@ -303,6 +327,13 @@ class OllamaLLM(LLMInterface):
             raise RuntimeError("Ollama client not initialized")
 
         try:
+            # Record model usage for cost tracking
+            try:
+                from cost_tracker import record_model_usage
+                record_model_usage(self.config.model)
+            except:
+                pass  # Cost tracking optional
+
             full_prompt = prompt
             if system_prompt:
                 full_prompt = f"{system_prompt}\n\n{prompt}"
@@ -352,6 +383,119 @@ class OllamaLLM(LLMInterface):
             return False
 
 
+class XaiLLM(LLMInterface):
+    """xAI Grok LLM implementation"""
+
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        if XAIClient is None:
+            raise ImportError("XAIClient not available. Install xai-sdk: pip install xai-sdk")
+
+        try:
+            self.client = XAIClient(
+                api_key=config.api_key or os.getenv("GROK_API_KEY"),
+                timeout=config.timeout
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to initialize xAI client: {e}")
+            self.client = None
+
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        """Generate response using xAI Grok"""
+        if self.client is None:
+            raise RuntimeError("xAI client not initialized")
+
+        try:
+            # Record model usage for cost tracking
+            try:
+                from cost_tracker import record_model_usage
+                record_model_usage(self.config.model)
+            except:
+                pass  # Cost tracking optional
+
+            # Create chat session
+            chat = self.client.chat.create(
+                model=self.config.model,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature
+            )
+
+            # Build the prompt with system message if provided
+            full_prompt = prompt
+            if system_prompt:
+                full_prompt = f"{system_prompt}\n\n{prompt}"
+
+            # Append user message and sample response
+            chat.append(xai_user(full_prompt))
+            response = chat.sample()
+
+            # Extract token usage from response
+            token_usage = TokenUsage()
+            if hasattr(response, 'usage') and response.usage:
+                # Try dictionary access first, then attribute access
+                if isinstance(response.usage, dict):
+                    token_usage.input_tokens = response.usage.get('prompt_tokens', 0)
+                    token_usage.output_tokens = response.usage.get('completion_tokens', 0)
+                    token_usage.total_tokens = response.usage.get('total_tokens', 0)
+                else:
+                    # Access as object attributes
+                    token_usage.input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                    token_usage.output_tokens = getattr(response.usage, 'completion_tokens', 0)
+                    token_usage.total_tokens = getattr(response.usage, 'total_tokens', 0)
+
+                # Calculate total if not provided
+                if not token_usage.total_tokens:
+                    token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+
+            # Get the text content from response
+            if hasattr(response, 'message') and hasattr(response.message, 'content'):
+                content = response.message.content
+            elif hasattr(response, 'content'):
+                content = response.content
+            else:
+                content = str(response)
+
+            return content, token_usage
+
+        except Exception as e:
+            self.logger.error(f"xAI API error: {str(e)}")
+            raise
+
+    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+        """Specialized medical analysis using xAI Grok"""
+        system_prompt = """You are a medical reasoning AI that provides systematic analysis
+        of medical procedures with focus on evidence-based recommendations and detailed analysis."""
+
+        prompt = f"""
+        Analyze this medical procedure:
+        Input: {medical_input}
+        Stage: {stage}
+
+        Provide structured analysis with confidence scores and evidence-based recommendations.
+        """
+
+        response, token_usage = self.generate_response(prompt, system_prompt)
+
+        return {
+            "analysis": response,
+            "confidence": 0.8,
+            "sources_needed": [],
+            "token_usage": token_usage
+        }
+
+    def is_available(self) -> bool:
+        """Check if xAI is available"""
+        if self.client is None:
+            return False
+        try:
+            test_response, _ = self.generate_response("Test", "Respond with 'OK'")
+            return "OK" in test_response or len(test_response) > 0
+        except Exception:
+            return False
+
+
 class LLMManager:
     """Manages multiple LLM providers with fallback mechanisms"""
 
@@ -374,9 +518,11 @@ class LLMManager:
                     self.providers[config.provider] = OpenAILLM(config)
                 elif config.provider == LLMProvider.OLLAMA:
                     self.providers[config.provider] = OllamaLLM(config)
-                
+                elif config.provider in [LLMProvider.GROK4, LLMProvider.GROK4_CODE, LLMProvider.GROK4_REASONING]:
+                    self.providers[config.provider] = XaiLLM(config)
+
                 self.logger.info(f"Initialized {config.provider.value} provider")
-                
+
             except Exception as e:
                 self.logger.error(f"Failed to initialize {config.provider.value}: {str(e)}")
     
@@ -473,7 +619,25 @@ def create_llm_manager(primary_provider: str = "claude",
             model="claude-sonnet-4-5-20250929",
             temperature=0.1
         ))
-    
+    elif primary_provider == "grok4":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GROK4,
+            model="grok-4-1-fast-non-reasoning-latest",
+            temperature=0.1
+        ))
+    elif primary_provider == "grok4-code":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GROK4_CODE,
+            model="grok-code-fast",
+            temperature=0.1
+        ))
+    elif primary_provider == "grok4-reasoning":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GROK4_REASONING,
+            model="grok-4-1-fast-reasoning-latest",
+            temperature=0.1
+        ))
+
     # Fallback providers
     for provider in fallback_providers:
         if provider == "openai":
@@ -489,5 +653,23 @@ def create_llm_manager(primary_provider: str = "claude",
                 base_url="http://localhost:11434",
                 temperature=0.1
             ))
-    
+        elif provider == "grok4":
+            configs.append(LLMConfig(
+                provider=LLMProvider.GROK4,
+                model="grok-4-1-fast-non-reasoning-latest",
+                temperature=0.1
+            ))
+        elif provider == "grok4-code":
+            configs.append(LLMConfig(
+                provider=LLMProvider.GROK4_CODE,
+                model="grok-code-fast",
+                temperature=0.1
+            ))
+        elif provider == "grok4-reasoning":
+            configs.append(LLMConfig(
+                provider=LLMProvider.GROK4_REASONING,
+                model="grok-4-1-fast-reasoning-latest",
+                temperature=0.1
+            ))
+
     return LLMManager(configs)

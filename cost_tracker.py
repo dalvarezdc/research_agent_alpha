@@ -10,9 +10,24 @@ from typing import Dict, List
 
 # Model pricing (price per 1M tokens)
 PRICING = {
+    # Claude models
+    "claude": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
     "claude-sonnet-4": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
     "claude-haiku": {"input": 0.80, "output": 4.00, "cache_read": 0.08, "cache_write": 1.00},
+    # OpenAI models
     "openai": {"input": 3.00, "output": 15.00},
+    # xAI Grok models (provider names as used in CLI)
+    "grok4": {"input": 0.20, "output": 0.50},  # grok-4-1-fast-non-reasoning-latest
+    "grok4-reasoning": {"input": 0.20, "output": 0.50},  # grok-4-1-fast-reasoning-latest
+    "grok4-code": {"input": 0.20, "output": 1.50},  # grok-code-fast
+    # xAI Grok models (full model names)
+    "grok-4-1-fast-reasoning-latest": {"input": 0.20, "output": 0.50},
+    "grok-4-1-fast-non-reasoning-latest": {"input": 0.20, "output": 0.50},
+    "grok-4-fast-reasoning": {"input": 0.20, "output": 0.50},
+    "grok-4-fast-non-reasoning": {"input": 0.20, "output": 0.50},
+    "grok-code-fast": {"input": 0.20, "output": 1.50},
+    "grok-4": {"input": 3.00, "output": 15.00},
+    # Default
     "default": {"input": 3.00, "output": 15.00},
 }
 
@@ -32,6 +47,7 @@ def calculate_cost(input_tokens: int, output_tokens: int, model: str = "claude-s
 
 # Global cost tracking
 _phase_costs: List[Dict] = []
+_current_phase_models: List[str] = []  # Track models used in current phase
 
 
 def track_cost(phase_name: str):
@@ -47,7 +63,11 @@ def track_cost(phase_name: str):
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
+            global _current_phase_models
             start = datetime.now()
+
+            # Reset phase models tracking
+            _current_phase_models = []
 
             # Capture token state before
             if hasattr(self, 'total_token_usage'):
@@ -80,15 +100,19 @@ def track_cost(phase_name: str):
                     phase_cache_write
                 )
 
+                # Get unique models used in this phase
+                models_used = list(set(_current_phase_models)) if _current_phase_models else [model]
+
                 _phase_costs.append({
                     "phase": phase_name,
                     "cost": cost,
                     "duration": duration,
                     "input_tokens": phase_input,
                     "output_tokens": phase_output,
+                    "models_used": models_used,
                 })
 
-                print(f"  💰 {phase_name}: ${cost:.4f} ({duration:.1f}s)")
+                print(f"  💰 {phase_name}: ${cost:.4f} ({duration:.1f}s) [{', '.join(models_used)}]")
 
             return result
         return wrapper
@@ -124,7 +148,15 @@ def print_cost_summary():
     print("=" * 60 + "\n")
 
 
+def record_model_usage(model_name: str):
+    """Record that a specific model was used in the current phase"""
+    global _current_phase_models
+    if model_name and model_name not in _current_phase_models:
+        _current_phase_models.append(model_name)
+
+
 def reset_tracking():
     """Clear tracked costs (call at start of new analysis)"""
-    global _phase_costs
+    global _phase_costs, _current_phase_models
     _phase_costs = []
+    _current_phase_models = []

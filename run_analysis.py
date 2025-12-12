@@ -11,6 +11,13 @@ import argparse
 from datetime import datetime
 from typing import Any, Dict, Tuple
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, skip
+
 # Import cost tracking
 from cost_tracker import get_cost_summary
 
@@ -1280,8 +1287,8 @@ Examples:
         "--llm",
         type=str,
         default="claude",
-        choices=["claude", "openai", "ollama"],
-        help="LLM provider to use (default: claude)",
+        choices=["claude", "openai", "ollama", "grok4", "grok4-code", "grok4-reasoning"],
+        help="LLM provider to use (default: claude). Grok options: grok4 (fast non-reasoning), grok4-code (code optimized), grok4-reasoning (reasoning optimized)",
     )
 
     parser.add_argument(

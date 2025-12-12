@@ -43,7 +43,7 @@ class InputValidator:
     MEDICAL_ASPECT_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_]{1,100}$')
     
     # Provider names
-    VALID_PROVIDERS = {'claude', 'openai', 'ollama'}
+    VALID_PROVIDERS = {'claude', 'openai', 'ollama', 'grok4', 'grok4-code', 'grok4-reasoning'}
     
     # File path validation (basic security)
     SAFE_PATH_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_./]{1,500}$')
