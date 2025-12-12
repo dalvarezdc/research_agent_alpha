@@ -347,6 +347,21 @@ class AgentOrchestrator:
         print(f"✓ Cost report: {os.path.basename(cost_file)}")
         files["cost"] = cost_file
 
+        # 3.5. Practitioner report (markdown + PDF) - Detailed technical report for medical professionals
+        if result.practitioner_report:
+            practitioner_file = f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
+            practitioner_complete = self._append_hardcoded_disclaimer(result.practitioner_report)
+            with open(practitioner_file, "w") as f:
+                f.write(practitioner_complete)
+            print(f"✓ Practitioner report: {os.path.basename(practitioner_file)}")
+            files["practitioner_report"] = practitioner_file
+
+            # Generate PDF version of practitioner report
+            practitioner_pdf = convert_markdown_to_pdf_safe(practitioner_file)
+            if practitioner_pdf:
+                print(f"✓ Practitioner PDF: {os.path.basename(practitioner_pdf)}")
+                files["practitioner_pdf"] = practitioner_pdf
+
         # 4. Summary report (with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_summary_report_{timestamp}.md"
         summary = self._generate_procedure_summary(result, cost_summary)
@@ -415,6 +430,22 @@ class AgentOrchestrator:
             json.dump(cost_summary, f, indent=2)
         print(f"✓ Cost report: {os.path.basename(cost_file)}")
         files["cost"] = cost_file
+
+        # 2.5. Practitioner report (markdown + PDF) - Complex output for medical professionals
+        if session.practitioner_report:
+            practitioner_file = f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
+            practitioner_with_refs = self._append_references_section(session.practitioner_report, session)
+            practitioner_complete = self._append_hardcoded_disclaimer(practitioner_with_refs)
+            with open(practitioner_file, "w") as f:
+                f.write(practitioner_complete)
+            print(f"✓ Practitioner report: {os.path.basename(practitioner_file)}")
+            files["practitioner_report"] = practitioner_file
+
+            # Generate PDF version of practitioner report
+            practitioner_pdf = convert_markdown_to_pdf_safe(practitioner_file)
+            if practitioner_pdf:
+                print(f"✓ Practitioner PDF: {os.path.basename(practitioner_pdf)}")
+                files["practitioner_pdf"] = practitioner_pdf
 
         # 3. Final output (markdown) with references and disclaimer appended
         output_file = f"{self.output_dir}/{base_name}_output_{timestamp}.md"
@@ -541,6 +572,21 @@ class AgentOrchestrator:
             json.dump(cost_summary, f, indent=2)
         print(f"✓ Cost report: {os.path.basename(cost_file)}")
         files["cost"] = cost_file
+
+        # 2.5. Practitioner report (markdown + PDF) - Comprehensive report for medical professionals
+        if result.practitioner_report:
+            practitioner_file = f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
+            practitioner_complete = self._append_hardcoded_disclaimer(result.practitioner_report)
+            with open(practitioner_file, "w") as f:
+                f.write(practitioner_complete)
+            print(f"✓ Practitioner report: {os.path.basename(practitioner_file)}")
+            files["practitioner_report"] = practitioner_file
+
+            # Generate PDF version of practitioner report
+            practitioner_pdf = convert_markdown_to_pdf_safe(practitioner_file)
+            if practitioner_pdf:
+                print(f"✓ Practitioner PDF: {os.path.basename(practitioner_pdf)}")
+                files["practitioner_pdf"] = practitioner_pdf
 
         # 3. Summary report (Markdown with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_medication_summary_{timestamp}.md"
@@ -1286,9 +1332,9 @@ Examples:
     parser.add_argument(
         "--llm",
         type=str,
-        default="claude",
-        choices=["claude", "openai", "ollama", "grok4", "grok4-code", "grok4-reasoning"],
-        help="LLM provider to use (default: claude). Grok options: grok4 (fast non-reasoning), grok4-code (code optimized), grok4-reasoning (reasoning optimized)",
+        default="claude-sonnet",
+        choices=["claude-sonnet", "claude-opus", "openai", "ollama", "grok-4-1-fast", "grok-4-1-code", "grok-4-1-reasoning"],
+        help="LLM provider to use (default: claude-sonnet). Options: claude-sonnet (Sonnet 4.5), claude-opus (Opus 4.5), openai (GPT-4), ollama (local), grok-4-1-fast (fast non-reasoning), grok-4-1-code (code optimized), grok-4-1-reasoning (reasoning optimized)",
     )
 
     parser.add_argument(

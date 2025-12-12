@@ -123,7 +123,6 @@ pre {
     border-radius: 4px;
     border: 1px solid #ddd;
     border-left: 4px solid #666;
-    overflow-x: auto;
     font-size: 9.5pt;
     line-height: 1.6;
     margin: 20px 0;
@@ -180,15 +179,8 @@ hr {
 }
 
 /* Warning/Disclaimer boxes - highly visible */
-p:contains("⚠️"), p:contains("DISCLAIMER") {
-    background-color: #fff3cd;
-    border: 2px solid #ff6b6b;
-    border-left: 6px solid #ff6b6b;
-    padding: 20px;
-    margin: 30px 0;
-    border-radius: 4px;
-    font-weight: normal;
-}
+/* Note: :contains() selector not supported in WeasyPrint */
+/* Users should manually style disclaimer sections if needed */
 
 /* Links - clear and readable */
 a {
@@ -244,17 +236,9 @@ h1 + p, h2 + p, h3 + p {
     margin-top: 0;
 }
 
-/* References section styling */
-h2:contains("References") ~ p,
-h2:contains("📚") ~ p {
-    margin-left: 20px;
-    text-indent: -20px;
-}
-
-/* Cost analysis section */
-h2:contains("Cost") ~ p {
-    line-height: 1.6;
-}
+/* References and cost sections */
+/* Note: :contains() selector not supported in WeasyPrint */
+/* These sections will use default styling */
 """
 
 

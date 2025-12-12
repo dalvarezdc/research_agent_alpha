@@ -10,16 +10,21 @@ from typing import Dict, List
 
 # Model pricing (price per 1M tokens)
 PRICING = {
-    # Claude models
-    "claude": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    # Claude models (provider names)
+    "claude-sonnet": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    "claude-opus": {"input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_write": 18.75},
+    # Claude models (full model names)
     "claude-sonnet-4": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    "claude-sonnet-4-5-20250929": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    "claude-opus-4-5-20251101": {"input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_write": 18.75},
     "claude-haiku": {"input": 0.80, "output": 4.00, "cache_read": 0.08, "cache_write": 1.00},
     # OpenAI models
     "openai": {"input": 3.00, "output": 15.00},
+    "gpt-4-turbo-preview": {"input": 3.00, "output": 15.00},
     # xAI Grok models (provider names as used in CLI)
-    "grok4": {"input": 0.20, "output": 0.50},  # grok-4-1-fast-non-reasoning-latest
-    "grok4-reasoning": {"input": 0.20, "output": 0.50},  # grok-4-1-fast-reasoning-latest
-    "grok4-code": {"input": 0.20, "output": 1.50},  # grok-code-fast
+    "grok-4-1-fast": {"input": 0.20, "output": 0.50},
+    "grok-4-1-code": {"input": 0.20, "output": 1.50},
+    "grok-4-1-reasoning": {"input": 0.20, "output": 0.50},
     # xAI Grok models (full model names)
     "grok-4-1-fast-reasoning-latest": {"input": 0.20, "output": 0.50},
     "grok-4-1-fast-non-reasoning-latest": {"input": 0.20, "output": 0.50},

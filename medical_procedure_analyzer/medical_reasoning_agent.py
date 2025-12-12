@@ -89,6 +89,7 @@ class MedicalOutput:
     research_gaps: List[str]
     confidence_score: float
     reasoning_trace: List[ReasoningStep]
+    practitioner_report: Optional[str] = None  # Detailed markdown report for medical practitioners
     validation_report: Optional[Any] = None  # Reference validation report
 
 
@@ -878,6 +879,9 @@ class MedicalReasoningAgent:
             reasoning_trace=self.reasoning_trace
         )
 
+        # Generate practitioner report (detailed markdown version)
+        output.practitioner_report = self._generate_practitioner_report(output)
+
         # Validate references if enabled
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
@@ -900,7 +904,84 @@ class MedicalReasoningAgent:
         self.logger.info(f"[{stage.value}] {reasoning}")
         self.logger.debug(f"Input: {input_data}")
         self.logger.debug(f"Output: {output}")
-    
+
+    def _generate_practitioner_report(self, output: 'MedicalOutput') -> str:
+        """Generate detailed markdown report for medical practitioners."""
+        from datetime import datetime
+
+        report = f"""# Medical Procedure Analysis Report (Practitioner Version)
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Analysis Confidence:** {output.confidence_score:.2f}/1.00
+
+---
+
+## Procedure Overview
+{output.procedure_summary}
+
+**Total Organs Analyzed:** {len(output.organs_analyzed)}
+**Reasoning Steps:** {len(output.reasoning_trace)}
+
+---
+
+## Detailed Organ-Specific Analysis
+
+"""
+
+        for i, organ in enumerate(output.organs_analyzed, 1):
+            report += f"""### {i}. {organ.organ_name.upper()}
+
+**Risk Assessment:**
+- **Risk Level:** {organ.risk_level.upper()}
+- **Directly Affected:** {'Yes' if organ.affected_by_procedure else 'No'}
+- **At Risk:** {'Yes - Requires monitoring' if organ.at_risk else 'No'}
+- **Evidence Quality:** {organ.evidence_quality.upper()}
+
+**Biological Pathways Involved:**
+"""
+            for pathway in organ.pathways_involved:
+                report += f"- {pathway.replace('_', ' ').title()}\n"
+
+            if organ.known_recommendations:
+                report += f"\n**Evidence-Based Recommendations ({len(organ.known_recommendations)} items):**\n"
+                for j, rec in enumerate(organ.known_recommendations, 1):
+                    report += f"{j}. {rec}\n"
+
+            if organ.potential_recommendations:
+                report += f"\n**Investigational Approaches ({len(organ.potential_recommendations)} items):**\n"
+                for j, rec in enumerate(organ.potential_recommendations, 1):
+                    report += f"{j}. {rec}\n"
+
+            if organ.debunked_claims:
+                report += f"\n**Debunked/Harmful Claims ({len(organ.debunked_claims)} items):**\n"
+                for j, claim in enumerate(organ.debunked_claims, 1):
+                    report += f"{j}. {claim}\n"
+
+            report += "\n---\n\n"
+
+        report += f"""## General Recommendations
+
+"""
+        for i, rec in enumerate(output.general_recommendations, 1):
+            report += f"{i}. {rec}\n"
+
+        report += f"""
+
+## Research Gaps & Future Directions
+
+"""
+        for i, gap in enumerate(output.research_gaps, 1):
+            report += f"{i}. {gap}\n"
+
+        report += f"""
+
+---
+
+**Report Generated:** {datetime.now().isoformat()}
+**For Medical Professional Use Only**
+"""
+
+        return report
+
     def export_reasoning_trace(self, filepath: str):
         """Export reasoning trace to JSON file for analysis."""
         trace_data = []

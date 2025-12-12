@@ -136,6 +136,7 @@ class MedicationOutput:
     analysis_confidence: float = 0.75
     reasoning_trace: List[ReasoningStep] = field(default_factory=list)
     total_token_usage: TokenUsage = field(default_factory=TokenUsage)
+    practitioner_report: Optional[str] = None  # Detailed markdown report for medical practitioners
     validation_report: Optional[Any] = None  # Reference validation report
 
 
@@ -1021,6 +1022,9 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             reasoning_trace=self.reasoning_trace
         )
 
+        # Generate practitioner report (detailed markdown version)
+        output.practitioner_report = self._generate_medication_practitioner_report(output)
+
         # Validate references if enabled
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
@@ -1037,6 +1041,210 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             "elimination": "See prescribing information",
             "half_life": "See prescribing information"
         }
+
+    def _generate_medication_practitioner_report(self, output: 'MedicationOutput') -> str:
+        """Generate detailed markdown report for medical practitioners."""
+        from datetime import datetime
+
+        report = f"""# 💊 Medication Analysis Report (Practitioner Version)
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Medication:** {output.medication_name}
+**Drug Class:** {output.drug_class}
+**Analysis Confidence:** {output.analysis_confidence:.2f}/1.00
+
+---
+
+## 🧬 Pharmacology
+
+### 🎯 Mechanism of Action
+{output.mechanism_of_action}
+
+### ⚗️ Pharmacokinetics
+- **Absorption:** {output.absorption}
+- **Metabolism:** {output.metabolism}
+- **Elimination:** {output.elimination}
+- **Half-Life:** {output.half_life}
+
+---
+
+## 💉 Clinical Use
+
+### ✅ Approved Indications
+"""
+        for i, indication in enumerate(output.approved_indications, 1):
+            report += f"{i}. {indication}\n"
+
+        if output.off_label_uses:
+            report += "\n### 🔬 Off-Label Uses\n"
+            for i, use in enumerate(output.off_label_uses, 1):
+                report += f"{i}. {use}\n"
+
+        report += f"""
+
+### 💊 Dosing
+**Standard Dosing:** {output.standard_dosing}
+
+"""
+        if output.dose_adjustments:
+            report += "**Dose Adjustments:**\n"
+            for adjustment_type, adjustment_info in output.dose_adjustments.items():
+                report += f"- **{adjustment_type.replace('_', ' ').title()}:** {adjustment_info}\n"
+
+        report += """
+
+---
+
+## ⚠️ Safety Profile
+
+"""
+        if output.black_box_warnings:
+            report += "### 🚨 BLACK BOX WARNINGS\n\n"
+            for i, warning in enumerate(output.black_box_warnings, 1):
+                report += f"{i}. {warning}\n\n"
+
+        if output.contraindications:
+            report += f"### ❌ Contraindications ({len(output.contraindications)} identified)\n\n"
+            for contra in output.contraindications:
+                if isinstance(contra, dict):
+                    report += f"- **{contra.get('condition', 'N/A')}** ({contra.get('severity', 'N/A')})\n"
+                    report += f"  - Reason: {contra.get('reason', 'N/A')}\n"
+                    if contra.get('alternative'):
+                        report += f"  - Alternative: {contra.get('alternative')}\n"
+                else:
+                    report += f"- {contra}\n"
+            report += "\n"
+
+        report += "### 🔴 Adverse Effects\n\n"
+        if output.common_adverse_effects:
+            report += "**Common (>10%):**\n"
+            for effect in output.common_adverse_effects:
+                report += f"- {effect}\n"
+            report += "\n"
+
+        if output.serious_adverse_effects:
+            report += "**Serious (Any Frequency):**\n"
+            for effect in output.serious_adverse_effects:
+                report += f"- {effect}\n"
+            report += "\n"
+
+        report += """
+
+---
+
+## 🔗 Drug-Drug Interactions
+
+"""
+        if output.drug_interactions:
+            severe = [i for i in output.drug_interactions if i.severity == InteractionSeverity.SEVERE]
+            moderate = [i for i in output.drug_interactions if i.severity == InteractionSeverity.MODERATE]
+            minor = [i for i in output.drug_interactions if i.severity == InteractionSeverity.MINOR]
+
+            if severe:
+                report += f"### 🔴 SEVERE Interactions ({len(severe)})\n\n"
+                for interaction in severe:
+                    report += f"#### {interaction.interacting_agent}\n"
+                    report += f"**Mechanism:** {interaction.mechanism}\n\n"
+                    report += f"**Clinical Effect:** {interaction.clinical_effect}\n\n"
+                    report += f"**Management:** {interaction.management}\n\n"
+                    if interaction.time_separation:
+                        report += f"**Time Separation:** {interaction.time_separation}\n\n"
+                    report += f"**Evidence Level:** {interaction.evidence_level}\n\n"
+
+            if moderate:
+                report += f"### 🟡 Moderate Interactions ({len(moderate)})\n\n"
+                for interaction in moderate:
+                    report += f"**{interaction.interacting_agent}:** {interaction.clinical_effect}\n\n"
+
+            if minor:
+                report += f"### 🟢 Minor Interactions ({len(minor)})\n\n"
+                for interaction in minor:
+                    report += f"- {interaction.interacting_agent}: {interaction.clinical_effect}\n"
+        else:
+            report += "No significant drug-drug interactions identified.\n"
+
+        report += """
+
+---
+
+## 🍎 Food & Lifestyle Interactions
+
+"""
+        if output.food_interactions:
+            for interaction in output.food_interactions:
+                severity_emoji = "🔴" if interaction.severity == InteractionSeverity.SEVERE else "🟡" if interaction.severity == InteractionSeverity.MODERATE else "🟢"
+                report += f"{severity_emoji} **{interaction.interacting_agent}** ({interaction.severity.value.upper()})\n"
+                report += f"- **Mechanism:** {interaction.mechanism}\n"
+                report += f"- **Clinical Effect:** {interaction.clinical_effect}\n"
+                report += f"- **Management:** {interaction.management}\n\n"
+        else:
+            report += "No significant food interactions identified.\n"
+
+        report += """
+
+---
+
+## 🌍 Environmental Considerations
+
+"""
+        if output.environmental_considerations:
+            for i, consideration in enumerate(output.environmental_considerations, 1):
+                if isinstance(consideration, dict):
+                    report += f"{i}. **{consideration.get('type', 'N/A')}:** {consideration.get('description', 'N/A')}\n"
+                else:
+                    report += f"{i}. {consideration}\n"
+        else:
+            report += "No significant environmental considerations identified.\n"
+
+        report += """
+
+---
+
+## ✅ Evidence-Based Recommendations
+
+"""
+        if output.evidence_based_recommendations:
+            for i, rec in enumerate(output.evidence_based_recommendations, 1):
+                if isinstance(rec, dict):
+                    report += f"### {i}. {rec.get('intervention', 'N/A')}\n\n"
+                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
+                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
+                    report += f"**Implementation:** {rec.get('implementation', 'N/A')}\n\n"
+                else:
+                    report += f"{i}. {rec}\n"
+
+        report += """
+
+---
+
+## 📊 Monitoring Requirements
+
+"""
+        if output.monitoring_requirements:
+            for i, req in enumerate(output.monitoring_requirements, 1):
+                if isinstance(req, dict):
+                    report += f"{i}. **{req.get('parameter', 'N/A')}**\n"
+                    report += f"   - Frequency: {req.get('frequency', 'N/A')}\n"
+                    report += f"   - Rationale: {req.get('rationale', 'N/A')}\n\n"
+                else:
+                    report += f"{i}. {req}\n"
+
+        if output.warning_signs:
+            report += "\n### ⚠️ Warning Signs\n\n"
+            for sign in output.warning_signs:
+                if isinstance(sign, dict):
+                    report += f"**{sign.get('sign', 'N/A')}** ({sign.get('severity', 'N/A')})\n"
+                    report += f"- Action: {sign.get('action', 'N/A')}\n\n"
+
+        report += f"""
+
+---
+
+**Report Generated:** {datetime.now().isoformat()}
+**For Medical Professional Use Only**
+**Evidence Quality:** {output.evidence_quality.upper()}
+"""
+
+        return report
 
     def export_medication_analysis(self, output: MedicationOutput, filepath: str):
         """Export medication analysis to JSON"""

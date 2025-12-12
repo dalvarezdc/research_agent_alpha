@@ -1,0 +1,88 @@
+{
+  "total_cost": 0.317553,
+  "total_duration": 415.793591,
+  "phases": [
+    {
+      "phase": "Phase 1: Conflict Scan",
+      "cost": 0.039879000000000005,
+      "duration": 59.538133,
+      "input_tokens": 363,
+      "output_tokens": 2586,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test",
+      "cost": 0.06830399999999999,
+      "duration": 92.7751,
+      "input_tokens": 2288,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 3: Synthesis Menu",
+      "cost": 0.061206,
+      "duration": 78.132591,
+      "input_tokens": 3847,
+      "output_tokens": 3311,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 4: Complex Output Generation",
+      "cost": 0.07302,
+      "duration": 87.599432,
+      "input_tokens": 3860,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 5: Simplified Output",
+      "cost": 0.07514399999999999,
+      "duration": 97.748335,
+      "input_tokens": 4568,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 5: Simplified Output",
+      "cost": 0.07514399999999999,
+      "duration": 97.748335,
+      "input_tokens": 4568,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 4: Complex Output Generation",
+      "cost": 0.07302,
+      "duration": 87.599432,
+      "input_tokens": 3860,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test",
+      "cost": 0.06830399999999999,
+      "duration": 92.7751,
+      "input_tokens": 2288,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ]
+}

@@ -63,6 +63,7 @@ class FactCheckSession:
     started_at: datetime = field(default_factory=datetime.now)
     phase_results: List[PhaseResult] = field(default_factory=list)
     total_token_usage: TokenUsage = field(default_factory=TokenUsage)
+    practitioner_report: Optional[str] = None  # Complex output for medical practitioners (before simplification)
     final_output: Optional[str] = None
     validation_report: Optional[Any] = None  # Reference validation report
 
@@ -218,15 +219,21 @@ class MedicalFactChecker:
 
         # Phase 4: Generate output based on choice
         output_type = OutputType(phase3_result.user_choice)
-        final_output = self._phase4_generate_output(
+        phase4_result = self._phase4_generate_output(
             subject,
             phase3_result.content,
             output_type
         )
+        self.current_session.phase_results.append(phase4_result)
+        final_output = phase4_result.content.get('output', '')
 
-        # Phase 5: Simplified output (if needed)
-        if output_type != OutputType.PROCEED:
-            final_output = self._phase5_simplify_output(final_output)
+        # Save the Phase 4 output as practitioner report (complex, detailed version)
+        self.current_session.practitioner_report = final_output
+
+        # Phase 5: Always simplify for patient-friendly output
+        phase5_result = self._phase5_simplify_output(final_output)
+        self.current_session.phase_results.append(phase5_result)
+        final_output = phase5_result.content.get('simplified_output', final_output)
 
         self.current_session.final_output = final_output
 
@@ -416,7 +423,7 @@ class MedicalFactChecker:
             raise
 
     @track_cost("Phase 4: Complex Output Generation")
-    def _phase4_generate_output(self, subject: str, synthesis: Dict, output_type: OutputType) -> str:
+    def _phase4_generate_output(self, subject: str, synthesis: Dict, output_type: OutputType) -> PhaseResult:
         """Phase 4: Generate complex output based on user selection"""
         self.logger.info(f"=== PHASE 4: Complex Output Generation ({output_type.value}) ===")
 
@@ -555,45 +562,119 @@ class MedicalFactChecker:
             """,
 
             OutputType.PROCEED: f"""
-            Write a simplified guide for {subject} in friendly teaching tone.
+            Write a COMPREHENSIVE, TECHNICAL medical evidence review for {subject} suitable for medical practitioners and researchers.
+            This should read like a clinical practice guideline or systematic review article - objective, third-person, data-dense.
 
-            IMPORTANT: Use relevant emojis in ALL titles and subtitles for better readability.
+            IMPORTANT: Use relevant emojis in ALL titles and subtitles for navigation and visual organization.
 
             Structure:
-            # 🔬 Simplified Guide: {subject}
+            # 🔬 Evidence-Based Clinical Review: {subject}
 
-            ## 📋 Key Findings
-            Plain language explanation of the most important insights
+            ## 📊 Epidemiological Overview
+            - Population-attributable fractions (PAFs) with 95% confidence intervals
+            - Relative risk (RR), odds ratios (OR), hazard ratios (HR) with precision estimates
+            - Dose-response relationships with threshold effects and linear/non-linear modeling
+            - Population-level impact metrics (incidence, mortality, YLLs, DALYs where available)
+            - Subgroup analyses by age, sex, ethnicity, comorbidity status
+            - Temporal trends and geographic variations
 
-            ## ✅ Practical Recommendations
-            What you should do based on the evidence
+            ## 🧬 Molecular & Biological Mechanisms
+            - Detailed cellular signaling pathways (specific kinases, transcription factors, receptors)
+            - Hormonal and metabolic axis disruptions (insulin/IGF-1/mTOR, AMPK, HIF-1α)
+            - Epigenetic modifications (DNA methylation, histone acetylation, miRNA expression)
+            - Inflammatory mediators (specific cytokines, chemokines, prostaglandins)
+            - Oxidative stress and redox signaling (ROS, NOX enzymes, antioxidant systems)
+            - Microbiome composition changes and metabolite production
+            - Angiogenesis and metastatic potential markers
+            - Apoptosis vs autophagy regulation
+            - Specific molecular targets with druggability potential
+            - Validated biomarkers with clinical thresholds
 
-            ## ❌ What to Avoid
-            What doesn't work and why
+            ## 🔬 Evidence Quality Assessment
+            - Hierarchical evaluation: Level I RCTs → Level V expert opinion
+            - For each major finding: sample size, study duration, loss to follow-up
+            - Statistical power calculations and sensitivity analyses performed
+            - Confounding variables addressed (multivariable adjustment, propensity matching)
+            - Effect modifiers and subgroup heterogeneity (I² statistics)
+            - Industry funding influence vs independent replication
+            - Publication bias assessment (funnel plots, Egger's test)
+            - Consistency across diverse populations (WEIRD vs global south)
+            - Biological plausibility from bench to bedside
+            - Bradford Hill causality criteria assessment
 
-            ## 📚 References
-            APA 7 format with URLs
+            ## ✅ Evidence-Based Interventions
+            For each intervention provide comprehensive detail:
+            - Precise mechanism of action at molecular level
+            - Quantified effect sizes: RRR, ARR, NNT with 95% CI
+            - Dose-response curves with optimal therapeutic window
+            - Time to benefit (weeks to years) and durability post-cessation
+            - Responder vs non-responder characteristics (predictive biomarkers)
+            - Adverse effects profile (common, serious, rare but catastrophic)
+            - Drug-drug, drug-food, drug-disease interactions
+            - Contraindications (absolute and relative)
+            - Supporting evidence with specific trial names and effect sizes
+            - Evidence grade (GRADE A/B/C/D) with rationale
+            - Cost-effectiveness data where available (QALY, ICER)
+
+            ## ⚠️ Risk Factors, Safety & Contraindications
+            - Non-modifiable risk factors (genetic, age, sex) with ORs
+            - Modifiable risk factors ranked by PAF
+            - Synergistic interactions (multiplicative vs additive)
+            - Antagonistic protective factors
+            - High-risk populations requiring intensive surveillance
+            - Absolute contraindications with evidence
+            - Relative contraindications requiring risk-benefit analysis
+            - Screening protocols (who, when, what modality, intervals)
+            - Biomarker thresholds for intervention initiation
+            - Monitoring for adverse effects (parameters, frequency)
+            - Red flag symptoms requiring immediate clinical action
+            - Drug-induced complications and their management
+            - Special populations (pregnancy, lactation, pediatrics, geriatrics, hepatic/renal impairment)
+
+            ## 🔄 Clinical Implementation Protocols
+            - Patient selection criteria with inclusion/exclusion checklist
+            - Pre-intervention workup (labs, imaging, consultations)
+            - Stepwise titration protocols with specific milestones
+            - Monitoring parameters and their clinical significance
+            - Expected timelines for biochemical, clinical, and outcome improvements
+            - Criteria for dose adjustment or discontinuation
+            - Integration with standard of care guidelines
+            - Multidisciplinary team involvement
+            - Patient education and shared decision-making tools
+            - Follow-up schedule and transition to long-term management
+
+            ## 📚 Primary Research Citations
+            APA 7 format with DOI/PMID URLs
 
             Synthesis data:
             {json.dumps(synthesis, indent=2)}
 
-            CRITICAL: Include comprehensive references section with 5-10 specific citations.
-            Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
-            Use actual, verifiable studies - not generic database mentions.
+            CRITICAL REQUIREMENTS:
+            - Include 15-20 PRIMARY research citations from high-impact journals
+            - Format: [1] Authors (Year). Title. Journal, Volume(Issue), pages. DOI PMID URL
+            - For each citation, note: study design, sample size, key findings, effect sizes
+            - Prioritize: Phase III RCTs, Cochrane reviews, prospective cohorts n>10,000
+            - Include mechanistic studies from Cell, Nature, Science for pathways
+            - Include safety data from post-marketing surveillance or phase IV trials
+            - Note funding sources and conflicts of interest
+            - Balance contemporary evidence (2020-2025) with seminal older studies
 
-            Use simple language (high school level), explain complex ideas simply,
-            use analogies for abstract concepts.
-            Add useful emojis throughout the content for emphasis and clarity.
+            TONE: Objective, third-person, clinical-academic. Suitable for peer-review or CPG publication.
+            DEPTH: Medical residency to fellowship level understanding. Assume reader is MD/DO/PhD.
+            FOCUS: Evidence-based clinical decision-making with nuanced risk-benefit analysis.
+            STYLE: Data-dense but organized. Use tables where appropriate. Emojis in headers for navigation.
             """
         }
 
         prompt = template_prompts.get(output_type, template_prompts[OutputType.PROCEED])
 
-        system_prompt = """You are a medical writer creating evidence-based guides.
-        Write in first person, as the user's private researcher. Be collaborative,
-        investigative, slightly conspiratorial but grounded in data. Include proper APA 7
-        references with URLs to actual papers (PubMed/Nature preferred).
-        IMPORTANT: Use emojis in ALL titles, subtitles, and throughout the content for better readability."""
+        system_prompt = """You are a clinical researcher writing an evidence-based medical review
+        for healthcare professionals. Write in third-person, objective, professional tone.
+        Use precise medical terminology and cite primary research extensively.
+        Structure: Similar to a systematic review or clinical practice guideline.
+        Citations: APA 7 format with DOI/PMID URLs to actual papers (PubMed/Nature/Lancet preferred).
+        IMPORTANT: Use emojis in section headers and subtitles for navigation, but maintain
+        professional clinical language throughout the body text."""
 
         try:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
@@ -604,34 +685,90 @@ class MedicalFactChecker:
             if token_usage:
                 self.total_token_usage.add(token_usage)
 
-            return response
+            # Extract references from response
+            references = self._extract_references_from_text(response)
+
+            return PhaseResult(
+                phase=AnalysisPhase.COMPLEX_OUTPUT,
+                timestamp=datetime.now(),
+                content={'output': response, 'output_type': output_type.value},
+                token_usage=token_usage,
+                references=references
+            )
         except Exception as e:
             self.logger.error(f"Phase 4 failed: {e}")
             raise
 
     @track_cost("Phase 5: Simplified Output")
-    def _phase5_simplify_output(self, complex_output: str) -> str:
+    def _phase5_simplify_output(self, complex_output: str) -> PhaseResult:
         """Phase 5: Simplify output for general audience"""
         self.logger.info("=== PHASE 5: Simplified Output Generation ===")
 
         prompt = f"""
-        Simplify this medical guide for a general audience:
+        Transform this technical medical analysis into a patient-friendly guide:
 
         {complex_output}
 
         IMPORTANT: Keep all emojis from the original and add more where helpful.
         Ensure ALL titles and subtitles have relevant emojis for better readability.
 
+        Create a simplified version with this structure:
+        # 🔬 Simplified Guide: [Subject]
+
+        ## 📋 Key Findings
+        - Translate statistics into PLAIN NUMBERS without technical notation
+        - DO NOT use: RR, OR, HR, CI, PAF, BMI numbers, p-values, or any medical abbreviations
+        - Instead say: "increases risk by 50%" not "RR=1.52 (95% CI: 1.41-1.64)"
+        - Use everyday analogies for mechanisms (car engines, cleaning, locks and keys)
+        - Convert percentages to practical impact ("5 out of 100 people" vs "5%")
+        - Use relatable comparisons ("similar risk to [everyday activity]")
+
+        ## ✅ Practical Recommendations
+        - Convert protocols into simple action steps anyone can follow
+        - Use conversational, encouraging language ("Try this", "Start with")
+        - Give specific examples, not medical terms
+        - Instead of "16:8 intermittent fasting": "Skip breakfast and eat between noon and 8pm"
+        - Instead of "BMI 18.5-25": "Maintain a healthy weight for your height"
+        - Explain WHY each recommendation works in simple terms
+        - Use strength indicators like "Strongly recommended" vs "May help"
+
+        ## ❌ What to Avoid
+        - Explain harms in concrete, relatable terms
+        - Use real-world examples and situations
+        - No medical jargon - use everyday words
+        - Make risks understandable through comparisons
+
+        ## 📚 References
+        - Preserve ALL references from original
+        - Keep proper APA 7 format (this section can stay technical)
+
+        CRITICAL RULES FOR SIMPLIFICATION:
+        - NEVER write: RR, OR, HR, CI, PAF, 95% CI, p<0.05, statistical notation
+        - NEVER write: BMI numbers, HbA1c, IGF-1, mTOR, AMPK (unless absolutely necessary, then explain)
+        - Instead of "RR=1.5": say "50% higher risk" or "risk increases by half"
+        - Instead of "95% CI: 1.2-1.8": say "studies consistently show..."
+        - Instead of "PAF 4%": say "causes about 1 in 25 cases"
+        - Instead of "BMI >30": say "being significantly overweight"
+        - Use analogies: "your cells clean house", "like rust on a car", "fuel efficiency"
+        - Write at 8th grade reading level - short sentences, common words
+        - First person, supportive tone: "Let's work together", "I've found", "we can"
+
         Requirements:
-        - High school reading level
-        - Simple, friendly language
-        - Analogies for complex ideas
-        - Teaching tone
-        - Preserve all references
+        - 8th grade reading level (use hemingwayapp.com as mental model)
+        - First person, warm, encouraging: "your private researcher helping you understand"
+        - Simple analogies for ALL complex concepts
+        - Convert numbers to practical impact (not statistical precision)
+        - Make it feel like a knowledgeable friend explaining research over coffee
+        - Maintain accuracy but prioritize clarity over precision
+        - If you must mention a technical term, immediately explain it in parentheses
         """
 
-        system_prompt = """You are a medical educator translating complex medical
-        information for the general public. Make it accessible without losing accuracy."""
+        system_prompt = """You are a medical translator making complex research understandable for regular people.
+        Your reader: intelligent non-medical person who wants clear, actionable health information.
+        Your mission: Remove ALL medical jargon, statistical notation, and technical terms.
+        Replace with: everyday language, relatable analogies, practical takeaways.
+        Style: Like explaining research to a friend - warm, clear, supportive, zero condescension.
+        Golden rule: If a 14-year-old couldn't understand it, simplify more."""
 
         try:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
@@ -642,10 +779,26 @@ class MedicalFactChecker:
             if token_usage:
                 self.total_token_usage.add(token_usage)
 
-            return response
+            # Extract references from response
+            references = self._extract_references_from_text(response)
+
+            return PhaseResult(
+                phase=AnalysisPhase.SIMPLIFIED_OUTPUT,
+                timestamp=datetime.now(),
+                content={'simplified_output': response},
+                token_usage=token_usage,
+                references=references
+            )
         except Exception as e:
             self.logger.warning(f"Phase 5 simplification failed: {e}, returning original")
-            return complex_output
+            # Return original output wrapped in PhaseResult
+            return PhaseResult(
+                phase=AnalysisPhase.SIMPLIFIED_OUTPUT,
+                timestamp=datetime.now(),
+                content={'simplified_output': complex_output},
+                token_usage=TokenUsage(),
+                references=[]
+            )
 
     # Response parsing helpers
     def _parse_conflict_scan_response(self, response: str) -> Dict[str, Any]:

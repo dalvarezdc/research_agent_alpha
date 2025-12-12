@@ -4,18 +4,63 @@ LLM Integration Module
 Supports multiple LLM providers with fallback mechanisms using LangChain and DSPy.
 """
 
-from typing import Dict, List, Optional, Any, Union, Tuple
+from typing import Dict, List, Optional, Any, Union, Tuple, Callable
 from abc import ABC, abstractmethod
 import os
 from dataclasses import dataclass
 import logging
 from enum import Enum
+import time
+from functools import wraps
 
 import dspy
 from pydantic import BaseModel
 
 # Import TokenUsage from medical_reasoning_agent
 from .medical_reasoning_agent import TokenUsage
+
+
+def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0, backoff_factor: float = 2.0):
+    """
+    Decorator to retry a function with exponential backoff.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds before first retry
+        backoff_factor: Multiplier for delay after each retry
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+
+                    # Don't retry on final attempt
+                    if attempt == max_retries:
+                        break
+
+                    # Log the retry attempt
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Attempt {attempt + 1}/{max_retries + 1} failed for {func.__name__}: {e}. "
+                        f"Retrying in {delay:.1f}s..."
+                    )
+
+                    # Wait before retrying
+                    time.sleep(delay)
+                    delay *= backoff_factor
+
+            # All retries exhausted, raise the last exception
+            raise last_exception
+
+        return wrapper
+    return decorator
 
 # Backwards compatible imports for LangChain
 try:
@@ -61,12 +106,13 @@ except ImportError:
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
-    CLAUDE = "claude"
+    CLAUDE_SONNET = "claude-sonnet"
+    CLAUDE_OPUS = "claude-opus"
     OPENAI = "openai"
     OLLAMA = "ollama"
-    GROK4 = "grok4"
-    GROK4_CODE = "grok4-code"
-    GROK4_REASONING = "grok4-reasoning"
+    GROK_41_FAST = "grok-4-1-fast"
+    GROK_41_CODE = "grok-4-1-code"
+    GROK_41_REASONING = "grok-4-1-reasoning"
 
 
 @dataclass
@@ -130,9 +176,10 @@ class ClaudeLLM(LLMInterface):
                 timeout=config.timeout
             )
         except Exception as e:
-            self.logger.error(f"Failed to initialize Claude client: {e}")
+            self.logger.warning(f"Failed to initialize Claude client (fallback provider): {e}")
             self.client = None
-    
+
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
     def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using Claude"""
         if self.client is None:
@@ -146,10 +193,19 @@ class ClaudeLLM(LLMInterface):
             except:
                 pass  # Cost tracking optional
 
-            messages = []
+            # Build professional system prompt
+            base_system_prompt = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
             if system_prompt:
-                messages.append(SystemMessage(content=system_prompt))
-            messages.append(HumanMessage(content=prompt))
+                full_system_prompt = f"{base_system_prompt}\n\n{system_prompt}"
+            else:
+                full_system_prompt = base_system_prompt
+
+            # Prefix user message with professional tone instruction
+            professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+            messages = []
+            messages.append(SystemMessage(content=full_system_prompt))
+            messages.append(HumanMessage(content=professional_prompt))
 
             response = self.client.invoke(messages)
 
@@ -227,9 +283,10 @@ class OpenAILLM(LLMInterface):
                 timeout=config.timeout
             )
         except Exception as e:
-            self.logger.error(f"Failed to initialize OpenAI client: {e}")
+            self.logger.warning(f"Failed to initialize OpenAI client (fallback provider): {e}")
             self.client = None
-    
+
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
     def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using OpenAI"""
         if self.client is None:
@@ -243,10 +300,19 @@ class OpenAILLM(LLMInterface):
             except:
                 pass  # Cost tracking optional
 
-            messages = []
+            # Build professional system prompt
+            base_system_prompt = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
             if system_prompt:
-                messages.append(SystemMessage(content=system_prompt))
-            messages.append(HumanMessage(content=prompt))
+                full_system_prompt = f"{base_system_prompt}\n\n{system_prompt}"
+            else:
+                full_system_prompt = base_system_prompt
+
+            # Prefix user message with professional tone instruction
+            professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+            messages = []
+            messages.append(SystemMessage(content=full_system_prompt))
+            messages.append(HumanMessage(content=professional_prompt))
 
             response = self.client.invoke(messages)
 
@@ -318,9 +384,10 @@ class OllamaLLM(LLMInterface):
                 temperature=config.temperature
             )
         except Exception as e:
-            self.logger.error(f"Failed to initialize Ollama client: {e}")
+            self.logger.warning(f"Failed to initialize Ollama client (fallback provider): {e}")
             self.client = None
-    
+
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
     def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using Ollama"""
         if self.client is None:
@@ -334,9 +401,17 @@ class OllamaLLM(LLMInterface):
             except:
                 pass  # Cost tracking optional
 
-            full_prompt = prompt
+            # Build professional system prompt
+            base_system_prompt = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
             if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{prompt}"
+                full_system_prompt = f"{base_system_prompt}\n\n{system_prompt}"
+            else:
+                full_system_prompt = base_system_prompt
+
+            # Prefix user message with professional tone instruction
+            professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+            full_prompt = f"{full_system_prompt}\n\n{professional_prompt}"
 
             response = self.client.invoke(full_prompt)
 
@@ -399,9 +474,10 @@ class XaiLLM(LLMInterface):
                 timeout=config.timeout
             )
         except Exception as e:
-            self.logger.error(f"Failed to initialize xAI client: {e}")
+            self.logger.warning(f"Failed to initialize xAI client (fallback provider): {e}")
             self.client = None
 
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
     def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
         """Generate response using xAI Grok"""
         if self.client is None:
@@ -422,10 +498,18 @@ class XaiLLM(LLMInterface):
                 temperature=self.config.temperature
             )
 
-            # Build the prompt with system message if provided
-            full_prompt = prompt
+            # Build professional system prompt
+            base_system_prompt = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
             if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{prompt}"
+                full_system_prompt = f"{base_system_prompt}\n\n{system_prompt}"
+            else:
+                full_system_prompt = base_system_prompt
+
+            # Prefix user message with professional tone instruction
+            professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+            # Build the full prompt with system message
+            full_prompt = f"{full_system_prompt}\n\n{professional_prompt}"
 
             # Append user message and sample response
             chat.append(xai_user(full_prompt))
@@ -512,13 +596,13 @@ class LLMManager:
         """Initialize all configured LLM providers"""
         for config in self.configs:
             try:
-                if config.provider == LLMProvider.CLAUDE:
+                if config.provider in [LLMProvider.CLAUDE_SONNET, LLMProvider.CLAUDE_OPUS]:
                     self.providers[config.provider] = ClaudeLLM(config)
                 elif config.provider == LLMProvider.OPENAI:
                     self.providers[config.provider] = OpenAILLM(config)
                 elif config.provider == LLMProvider.OLLAMA:
                     self.providers[config.provider] = OllamaLLM(config)
-                elif config.provider in [LLMProvider.GROK4, LLMProvider.GROK4_CODE, LLMProvider.GROK4_REASONING]:
+                elif config.provider in [LLMProvider.GROK_41_FAST, LLMProvider.GROK_41_CODE, LLMProvider.GROK_41_REASONING]:
                     self.providers[config.provider] = XaiLLM(config)
 
                 self.logger.info(f"Initialized {config.provider.value} provider")
@@ -573,7 +657,7 @@ class LLMManager:
             raise RuntimeError("No LLM provider available for DSPy")
 
         # Configure DSPy with the available provider
-        if self.current_provider == LLMProvider.CLAUDE:
+        if self.current_provider in [LLMProvider.CLAUDE_SONNET, LLMProvider.CLAUDE_OPUS]:
             # Configure DSPy with Claude/Anthropic
             api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
@@ -603,37 +687,43 @@ class LLMManager:
 
 
 # Factory function for easy setup
-def create_llm_manager(primary_provider: str = "claude", 
+def create_llm_manager(primary_provider: str = "claude-sonnet",
                       fallback_providers: List[str] = None) -> LLMManager:
     """Create LLM manager with default configurations"""
-    
+
     if fallback_providers is None:
         fallback_providers = ["openai", "ollama"]
     
     configs = []
     
     # Primary provider
-    if primary_provider == "claude":
+    if primary_provider == "claude-sonnet":
         configs.append(LLMConfig(
-            provider=LLMProvider.CLAUDE,
+            provider=LLMProvider.CLAUDE_SONNET,
             model="claude-sonnet-4-5-20250929",
             temperature=0.1
         ))
-    elif primary_provider == "grok4":
+    elif primary_provider == "claude-opus":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK4,
+            provider=LLMProvider.CLAUDE_OPUS,
+            model="claude-opus-4-5-20251101",
+            temperature=0.1
+        ))
+    elif primary_provider == "grok-4-1-fast":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GROK_41_FAST,
             model="grok-4-1-fast-non-reasoning-latest",
             temperature=0.1
         ))
-    elif primary_provider == "grok4-code":
+    elif primary_provider == "grok-4-1-code":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK4_CODE,
+            provider=LLMProvider.GROK_41_CODE,
             model="grok-code-fast",
             temperature=0.1
         ))
-    elif primary_provider == "grok4-reasoning":
+    elif primary_provider == "grok-4-1-reasoning":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK4_REASONING,
+            provider=LLMProvider.GROK_41_REASONING,
             model="grok-4-1-fast-reasoning-latest",
             temperature=0.1
         ))
@@ -653,21 +743,33 @@ def create_llm_manager(primary_provider: str = "claude",
                 base_url="http://localhost:11434",
                 temperature=0.1
             ))
-        elif provider == "grok4":
+        elif provider == "claude-sonnet":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK4,
+                provider=LLMProvider.CLAUDE_SONNET,
+                model="claude-sonnet-4-5-20250929",
+                temperature=0.1
+            ))
+        elif provider == "claude-opus":
+            configs.append(LLMConfig(
+                provider=LLMProvider.CLAUDE_OPUS,
+                model="claude-opus-4-5-20251101",
+                temperature=0.1
+            ))
+        elif provider == "grok-4-1-fast":
+            configs.append(LLMConfig(
+                provider=LLMProvider.GROK_41_FAST,
                 model="grok-4-1-fast-non-reasoning-latest",
                 temperature=0.1
             ))
-        elif provider == "grok4-code":
+        elif provider == "grok-4-1-code":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK4_CODE,
+                provider=LLMProvider.GROK_41_CODE,
                 model="grok-code-fast",
                 temperature=0.1
             ))
-        elif provider == "grok4-reasoning":
+        elif provider == "grok-4-1-reasoning":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK4_REASONING,
+                provider=LLMProvider.GROK_41_REASONING,
                 model="grok-4-1-fast-reasoning-latest",
                 temperature=0.1
             ))
