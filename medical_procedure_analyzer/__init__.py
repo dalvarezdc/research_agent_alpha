@@ -14,8 +14,13 @@ from .medical_reasoning_agent import (
 )
 from .input_validation import InputValidator, ValidationError
 from .validation_scoring import validate_medical_output
-from .llm_integrations import LLMManager
 from .colored_logger import get_colored_logger
+
+# Import LLMManager from root-level llm_integrations
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from llm_integrations import LLMManager
 
 __all__ = [
     "MedicalInput",

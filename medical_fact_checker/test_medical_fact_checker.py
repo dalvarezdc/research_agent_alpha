@@ -21,7 +21,7 @@ from medical_fact_checker.medical_fact_checker_agent import (
     PhaseResult,
     FactCheckSession
 )
-from medical_procedure_analyzer.medical_reasoning_agent import TokenUsage
+from llm_integrations import TokenUsage
 
 
 # Fixtures

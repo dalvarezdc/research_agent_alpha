@@ -16,23 +16,10 @@ from functools import lru_cache
 import sys
 from pathlib import Path
 
-# Add parent directory to path for cost_tracker import
+# Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from cost_tracker import track_cost, print_cost_summary, reset_tracking
-
-
-@dataclass
-class TokenUsage:
-    """Track token usage across pipeline"""
-    input_tokens: int = 0
-    output_tokens: int = 0
-    total_tokens: int = 0
-
-    def add(self, other: 'TokenUsage'):
-        """Add another TokenUsage to this one"""
-        self.input_tokens += other.input_tokens
-        self.output_tokens += other.output_tokens
-        self.total_tokens += other.total_tokens
+from llm_integrations import TokenUsage
 
 
 class ReasoningStage(Enum):
@@ -139,7 +126,7 @@ class MedicalReasoningAgent:
             self.logger.disabled = True
             
         # Initialize LLM manager with Claude as default
-        from .llm_integrations import create_llm_manager
+        from llm_integrations import create_llm_manager
         try:
             self.llm_manager = create_llm_manager(primary_llm_provider, fallback_providers)
             self.logger.info(f"LLM manager initialized with {primary_llm_provider} as primary")

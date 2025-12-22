@@ -16,8 +16,19 @@ from functools import wraps
 import dspy
 from pydantic import BaseModel
 
-# Import TokenUsage from medical_reasoning_agent
-from .medical_reasoning_agent import TokenUsage
+
+@dataclass
+class TokenUsage:
+    """Track token usage across pipeline"""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+    def add(self, other: 'TokenUsage'):
+        """Add another TokenUsage to this one"""
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.total_tokens += other.total_tokens
 
 
 def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0, backoff_factor: float = 2.0):
@@ -775,3 +786,117 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
             ))
 
     return LLMManager(configs)
+
+
+def get_available_models() -> dict[str, str]:
+    """
+    Get all available models mapped to their provider types.
+
+    Returns:
+        Dictionary mapping model names to provider identifiers
+    """
+    return {
+        # Claude models
+        "claude-sonnet-4-5-20250929": "claude-sonnet",
+        "claude-opus-4-5-20251101": "claude-opus",
+        # Grok models
+        "grok-4-1-fast-non-reasoning-latest": "grok-4-1-fast",
+        "grok-code-fast": "grok-4-1-code",
+        "grok-4-1-fast-reasoning-latest": "grok-4-1-reasoning",
+        # OpenAI models
+        "gpt-4-turbo-preview": "openai",
+        "gpt-4o": "openai",
+        "gpt-4o-mini": "openai",
+        "gpt-4-turbo": "openai",
+        "gpt-3.5-turbo": "openai",
+        # Local models
+        "llama2:13b": "ollama",
+    }
+
+
+def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
+    """
+    Universal function to call any available model.
+
+    This is the primary interface for calling LLMs across the project.
+    Supports single-model calls and is designed to be extended for
+    model chaining, ensembles, and cascades in the future.
+
+    Args:
+        model_name: Model identifier (e.g., "gpt-4o", "grok-4-1-fast-reasoning-latest")
+        messages: List of message dicts with 'role' and 'content' keys
+                 Example: [
+                     {"role": "system", "content": "You are a helpful assistant"},
+                     {"role": "user", "content": "What is 2+2?"}
+                 ]
+
+    Returns:
+        LLM response string
+
+    Raises:
+        ValueError: If model_name is not in available models
+        RuntimeError: If LLM call fails
+
+    Example:
+        >>> response = call_model("gpt-4o", [
+        ...     {"role": "system", "content": "You are a math tutor"},
+        ...     {"role": "user", "content": "What is 5+3?"}
+        ... ])
+        >>> print(response)
+        "8"
+    """
+    # Get available models and validate
+    available_models = get_available_models()
+
+    if model_name not in available_models:
+        raise ValueError(
+            f"Model '{model_name}' not available. "
+            f"Available models: {list(available_models.keys())}"
+        )
+
+    # Get provider for this model
+    provider_name = available_models[model_name]
+
+    # Extract system and user messages
+    system_prompt = None
+    user_prompt = None
+
+    for message in messages:
+        role = message.get("role", "").lower()
+        content = message.get("content", "")
+
+        if role == "system":
+            system_prompt = content
+        elif role == "user":
+            # Concatenate multiple user messages if present
+            if user_prompt:
+                user_prompt += "\n" + content
+            else:
+                user_prompt = content
+
+    if not user_prompt:
+        raise ValueError("No user message found in messages list")
+
+    # Create LLM manager for this provider
+    try:
+        llm_manager = create_llm_manager(
+            primary_provider=provider_name,
+            fallback_providers=[]  # No fallbacks for explicit model calls
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to create LLM manager for {provider_name}: {e}")
+
+    # Get the LLM provider interface
+    llm_provider = llm_manager.get_available_provider()
+    if not llm_provider:
+        raise RuntimeError(f"LLM provider {provider_name} not available")
+
+    # Call the LLM
+    try:
+        response_text, token_usage = llm_provider.generate_response(
+            prompt=user_prompt,
+            system_prompt=system_prompt
+        )
+        return response_text
+    except Exception as e:
+        raise RuntimeError(f"LLM call failed for model {model_name}: {e}")

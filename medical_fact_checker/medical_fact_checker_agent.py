@@ -18,8 +18,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import dspy
-from medical_procedure_analyzer.llm_integrations import LLMManager, create_llm_manager
-from medical_procedure_analyzer.medical_reasoning_agent import TokenUsage
+from llm_integrations import LLMManager, create_llm_manager, TokenUsage
 
 # Add parent directory to path for cost_tracker import
 from pathlib import Path
