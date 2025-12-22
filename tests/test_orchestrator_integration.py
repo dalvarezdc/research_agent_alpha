@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from router import route_agent, AgentSpec
-from orchestrator import AgentOrchestrator, AgentExecutionResult
+from run_analysis import AgentOrchestrator
 
 
 def get_test_agents():
@@ -123,11 +123,16 @@ def test_full_execution():
         return False
 
     agents = get_test_agents()
-    orchestrator = AgentOrchestrator(llm_model=model)
+    orchestrator = AgentOrchestrator(output_dir="outputs_test")
+
+    # Map model to provider
+    from llm_integrations import get_available_models
+    available_models_dict = get_available_models()
+    llm_provider = available_models_dict.get(model, "grok-4-1-fast")
 
     test_query = "paracetamol"
 
-    print(f"\nUsing model: {model}")
+    print(f"\nUsing model: {model} (provider: {llm_provider})")
     print(f"Test Query: '{test_query}'")
 
     try:
@@ -139,19 +144,32 @@ def test_full_execution():
 
         # Step 2: Execute
         print(f"\n[2/2] Executing {agent.name}...")
-        result = orchestrator.execute_agent(agent_id, test_query)
 
-        if result.success:
-            print("✓ Execution successful!")
-            print("\n" + "-" * 60)
-            print("SUMMARY:")
-            print("-" * 60)
-            print(result.summary)
-            print("-" * 60)
-            return True
+        if agent_id == "medication_agent":
+            result, files = orchestrator.run_medication_analyzer(
+                medication=test_query,
+                indication=None,
+                other_medications=None,
+                llm_provider=llm_provider,
+                timeout=300
+            )
         else:
-            print(f"✗ Execution failed: {result.error_message}")
-            return False
+            # Fallback to fact checker
+            result, files = orchestrator.run_fact_checker(
+                subject=test_query,
+                context="",
+                llm_provider=llm_provider,
+                timeout=300
+            )
+
+        print("✓ Execution successful!")
+        print("\n" + "-" * 60)
+        print("FILES GENERATED:")
+        print("-" * 60)
+        for file_type, file_path in files.items():
+            print(f"  ✓ {file_type}: {file_path}")
+        print("-" * 60)
+        return True
 
     except Exception as e:
         print(f"\n✗ Test failed: {e}")
@@ -161,28 +179,19 @@ def test_full_execution():
 
 
 def test_orchestrator_initialization():
-    """Test orchestrator can be initialized with different models"""
+    """Test orchestrator can be initialized"""
     print("\n" + "=" * 60)
     print("TEST 3: Orchestrator Initialization")
     print("=" * 60)
 
-    test_models = [
-        "grok-4-1-fast-non-reasoning-latest",
-        "gpt-4o-mini",
-        "claude-sonnet-4-5-20250929"
-    ]
-
-    all_passed = True
-    for model in test_models:
-        try:
-            orchestrator = AgentOrchestrator(llm_model=model)
-            print(f"✓ Initialized with {model}")
-            print(f"  Agents registered: {len(orchestrator.agent_metadata)}")
-        except Exception as e:
-            print(f"✗ Failed with {model}: {e}")
-            all_passed = False
-
-    return all_passed
+    try:
+        orchestrator = AgentOrchestrator(output_dir="outputs_test")
+        print(f"✓ Orchestrator initialized successfully")
+        print(f"  Available agents: {list(orchestrator.AGENTS.keys())}")
+        return True
+    except Exception as e:
+        print(f"✗ Failed to initialize orchestrator: {e}")
+        return False
 
 
 def run_all_tests():

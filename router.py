@@ -126,7 +126,8 @@ Remember: Output only the agent id, nothing else."""
 
 if __name__ == "__main__":
     import sys
-    from orchestrator import AgentOrchestrator, AgentExecutionResult
+    # Import the existing AgentOrchestrator that saves files
+    from run_analysis import AgentOrchestrator
 
     # NOTE: Mock implementation commented out - now using real LLM integration
     # Uncomment below to test without API calls:
@@ -200,17 +201,20 @@ if __name__ == "__main__":
     print(f"\nUsing model: {selected_model}")
     print(f"Available agents: {', '.join(a.id for a in sample_agents)}")
 
-    # Initialize orchestrator with selected model
-    orchestrator = AgentOrchestrator(llm_model=selected_model)
+    # Initialize orchestrator (uses selected model through llm_provider param)
+    orchestrator = AgentOrchestrator(output_dir="outputs")
+
+    # Map model to provider name for orchestrator
+    available_models_dict = get_available_models()
+    llm_provider = available_models_dict.get(selected_model, "grok-4-1-fast")
 
     print("\nCommands:")
     print("  - Type a query to route and execute it")
     print("  - '/models' to list available models")
     print("  - '/model <number>' to change model")
-    print("  - 'full' to see complete analysis of last result")
     print("  - 'quit' or 'exit' to stop\n")
 
-    last_result: Optional[AgentExecutionResult] = None
+    last_files = None  # Track last generated files
 
     while True:
         try:
@@ -238,26 +242,13 @@ if __name__ == "__main__":
                     model_idx = int(parts[1]) - 1
                     if 0 <= model_idx < len(available_models):
                         selected_model = available_models[model_idx]
-                        # Reinitialize orchestrator with new model
-                        orchestrator = AgentOrchestrator(llm_model=selected_model)
-                        print(f"→ Switched to model: {selected_model}\n")
+                        # Update llm_provider for new model
+                        llm_provider = available_models_dict.get(selected_model, "grok-4-1-fast")
+                        print(f"→ Switched to model: {selected_model} (provider: {llm_provider})\n")
                     else:
                         print(f"Invalid model number. Use 1-{len(available_models)}\n")
                 else:
                     print("Usage: /model <number>\n")
-                continue
-
-            # Handle 'full' command to show complete analysis
-            if query.lower() == "full":
-                if last_result and last_result.success:
-                    print("\n" + "=" * 60)
-                    print(f"COMPLETE ANALYSIS: {last_result.agent_name}")
-                    print("=" * 60)
-                    print(f"\nQuery: {last_result.query}\n")
-                    print(last_result.full_output)
-                    print("\n" + "=" * 60 + "\n")
-                else:
-                    print("→ No previous result to display\n")
                 continue
 
             # Route the query
@@ -271,17 +262,50 @@ if __name__ == "__main__":
             selected_agent = next(a for a in sample_agents if a.id == selected_agent_id)
 
             print(f"→ Routed to: {selected_agent_id} ({selected_agent.name})")
-            print(f"→ Executing {selected_agent.name}...\n")
+            print(f"→ Executing {selected_agent.name}...")
+            print()
 
-            # Execute the agent
-            result = orchestrator.execute_agent(selected_agent_id, query)
-            last_result = result
+            # Execute the appropriate analysis method based on agent
+            try:
+                if selected_agent_id == "medication_agent":
+                    result, files = orchestrator.run_medication_analyzer(
+                        medication=query,
+                        indication=None,
+                        other_medications=None,
+                        llm_provider=llm_provider,
+                        timeout=300
+                    )
+                elif selected_agent_id == "procedure_agent":
+                    result, files = orchestrator.run_procedure_analyzer(
+                        procedure=query,
+                        details="User query via router",
+                        llm_provider=llm_provider,
+                        timeout=300
+                    )
+                elif selected_agent_id in ["diagnostic_agent", "general_agent"]:
+                    result, files = orchestrator.run_fact_checker(
+                        subject=query,
+                        context="",
+                        llm_provider=llm_provider,
+                        timeout=300
+                    )
 
-            if result.success:
-                print(result.summary)
+                last_files = files
+
+                # Show generated files
+                print("\n" + "=" * 60)
+                print("📁 Generated Files:")
+                print("=" * 60)
+                for file_type, file_path in files.items():
+                    print(f"✓ {file_type}: {file_path}")
+                print("=" * 60)
                 print()
-            else:
-                print(f"✗ Error: {result.error_message}\n")
+
+            except Exception as e:
+                print(f"✗ Error during analysis: {e}")
+                import traceback
+                traceback.print_exc()
+                print()
 
         except KeyboardInterrupt:
             print("\nGoodbye!")
