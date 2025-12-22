@@ -20,6 +20,7 @@ from .core import (
     ReferenceExtractor,
     ScoringEngine,
 )
+from .core.citation_url_correspondence_validator import CitationURLCorrespondenceValidator
 from .validators import UnifiedReferenceValidator
 from .cache import CacheManager
 
@@ -56,6 +57,13 @@ class ReferenceValidator:
         self.unified_validator = UnifiedReferenceValidator(
             api_key=self.config.pubmed_api_key,
             email=self.config.pubmed_email,
+            timeout=self.config.timeout_seconds,
+            logger=self.logger
+        )
+
+        # NEW: Citation-URL correspondence validator
+        # Validates that URLs actually correspond to cited works
+        self.correspondence_validator = CitationURLCorrespondenceValidator(
             timeout=self.config.timeout_seconds,
             logger=self.logger
         )
@@ -250,7 +258,12 @@ class ReferenceValidator:
         return result
 
     def _validate_thorough(self, citation: str) -> ValidationResult:
-        """Thorough validation - all checks including URL accessibility"""
+        """
+        Thorough validation - all checks including URL-citation correspondence.
+
+        NEW: Now includes citation-URL correspondence validation to ensure
+        URLs actually point to the cited work (not just that they're accessible).
+        """
         start_time = datetime.now()
 
         # Format check
@@ -261,7 +274,7 @@ class ReferenceValidator:
             unified_result = self.unified_validator.validate(citation)
             result = self._merge_results(result, unified_result)
 
-        # URL accessibility check
+        # URL accessibility check (old approach - basic accessibility)
         if result.url:
             url_result = self.url_checker.validate(citation)
 
@@ -275,6 +288,30 @@ class ReferenceValidator:
                 else:
                     result.credibility_score -= 10
                     result.warnings.append("URL is not accessible")
+
+        # NEW: Citation-URL correspondence check (validates URL matches citation)
+        # This checks if the URL actually corresponds to the cited work
+        if self.correspondence_validator.can_validate(citation):
+            correspondence_result = self.correspondence_validator.validate(citation)
+
+            # Merge correspondence results
+            result = self._merge_results(result, correspondence_result)
+
+            # Add correspondence-specific metadata
+            if 'url_matches_citation' in correspondence_result.metadata:
+                result.metadata['url_matches_citation'] = correspondence_result.metadata['url_matches_citation']
+                result.metadata['match_confidence'] = correspondence_result.metadata.get('match_confidence', 0.0)
+
+            # If corrected URL found, add to metadata
+            if 'corrected_url' in correspondence_result.metadata:
+                result.metadata['corrected_url'] = correspondence_result.metadata['corrected_url']
+
+            # Log if URL doesn't match citation
+            if not correspondence_result.metadata.get('url_matches_citation', True):
+                self.logger.warning(
+                    f"URL mismatch detected: {citation[:60]}... "
+                    f"(confidence: {correspondence_result.metadata.get('match_confidence', 0.0):.2f})"
+                )
 
         duration_ms = (datetime.now() - start_time).total_seconds() * 1000
         result.validation_time_ms = duration_ms

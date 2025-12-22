@@ -1,0 +1,88 @@
+{
+  "total_cost": 0.33927,
+  "total_duration": 451.242785,
+  "phases": [
+    {
+      "phase": "Phase 1: Pharmacology Analysis",
+      "cost": 0.031523999999999996,
+      "duration": 43.381805,
+      "input_tokens": 823,
+      "output_tokens": 1937,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 2: Interaction Analysis",
+      "cost": 0.126498,
+      "duration": 170.390113,
+      "input_tokens": 1586,
+      "output_tokens": 8116,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 3: Safety Profile Assessment",
+      "cost": 0.062556,
+      "duration": 78.371038,
+      "input_tokens": 372,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 4: Recommendation Synthesis",
+      "cost": 0.062405999999999996,
+      "duration": 91.876379,
+      "input_tokens": 322,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 5: Monitoring Requirements",
+      "cost": 0.056286,
+      "duration": 67.22345,
+      "input_tokens": 197,
+      "output_tokens": 3713,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 2: Interaction Analysis",
+      "cost": 0.126498,
+      "duration": 170.390113,
+      "input_tokens": 1586,
+      "output_tokens": 8116,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 3: Safety Profile Assessment",
+      "cost": 0.062556,
+      "duration": 78.371038,
+      "input_tokens": 372,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    },
+    {
+      "phase": "Phase 4: Recommendation Synthesis",
+      "cost": 0.062405999999999996,
+      "duration": 91.876379,
+      "input_tokens": 322,
+      "output_tokens": 4096,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ]
+}

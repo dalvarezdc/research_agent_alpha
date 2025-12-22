@@ -1,0 +1,88 @@
+{
+  "total_cost": 0.15867900000000001,
+  "total_duration": 197.040778,
+  "phases": [
+    {
+      "phase": "Phase 1: Conflict Scan",
+      "cost": 0.011628,
+      "duration": 32.802725,
+      "input_tokens": 471,
+      "output_tokens": 681,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test",
+      "cost": 0.014355,
+      "duration": 24.947967,
+      "input_tokens": 815,
+      "output_tokens": 794,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 3: Synthesis Menu",
+      "cost": 0.007434,
+      "duration": 18.816048,
+      "input_tokens": 1053,
+      "output_tokens": 285,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 4: Complex Output Generation",
+      "cost": 0.066441,
+      "duration": 70.313227,
+      "input_tokens": 1667,
+      "output_tokens": 4096,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 5: Simplified Output",
+      "cost": 0.058821000000000005,
+      "duration": 50.160811,
+      "input_tokens": 5077,
+      "output_tokens": 2906,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 4: Complex Output Generation",
+      "cost": 0.066441,
+      "duration": 70.313227,
+      "input_tokens": 1667,
+      "output_tokens": 4096,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 5: Simplified Output",
+      "cost": 0.058821000000000005,
+      "duration": 50.160811,
+      "input_tokens": 5077,
+      "output_tokens": 2906,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test",
+      "cost": 0.014355,
+      "duration": 24.947967,
+      "input_tokens": 815,
+      "output_tokens": 794,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    }
+  ]
+}
