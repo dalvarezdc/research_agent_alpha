@@ -6,6 +6,7 @@ list of available agents.
 """
 
 import argparse
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -181,6 +182,17 @@ if __name__ == "__main__":
 
     implementation = args.implementation
 
+    def _warn_langsmith() -> None:
+        tracing_flag = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
+        api_key = os.getenv("LANGCHAIN_API_KEY")
+        if tracing_flag in ("1", "true", "yes") and api_key:
+            return
+        print(
+            "Warning: LangSmith tracing is not enabled. "
+            "To enable, set LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY. "
+            "Optional: set LANGCHAIN_PROJECT."
+        )
+
     # Define sample agents
     sample_agents = [
         AgentSpec(
@@ -237,6 +249,8 @@ if __name__ == "__main__":
     print(f"\nUsing model: {selected_model}")
     print(f"Implementation: {implementation}")
     print(f"Available agents: {', '.join(a.id for a in sample_agents)}")
+
+    _warn_langsmith()
 
     # Initialize orchestrator (uses selected model through llm_provider param)
     orchestrator = AgentOrchestrator(output_dir="outputs")

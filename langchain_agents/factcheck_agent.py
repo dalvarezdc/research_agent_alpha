@@ -134,6 +134,7 @@ Schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="factcheck_phase_1",
             subject=subject,
             context=context or "General investigation",
             schema=_Phase1Model.model_json_schema(),
@@ -177,6 +178,7 @@ Schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="factcheck_phase_2",
             subject=subject,
             angle=angle,
             official=phase1_content.get("official_narrative", ""),
@@ -221,6 +223,7 @@ Schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="factcheck_phase_3",
             subject=subject,
             phase1=phase1_content,
             phase2=phase2_content,
@@ -254,6 +257,7 @@ Use clear headings and include a short references section.
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="factcheck_phase_4",
             subject=subject,
             output_type=output_type.value,
             synthesis=synthesis,
@@ -280,6 +284,7 @@ Content:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="factcheck_phase_5",
             content=complex_output,
         )
         return PhaseResult(

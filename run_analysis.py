@@ -102,7 +102,7 @@ class AgentOrchestrator:
         agent_class = self._resolve_agent_class("procedure", implementation)
         agent = agent_class(
             primary_llm_provider=llm_provider,
-            fallback_providers=["openai"],
+            fallback_providers=[],
             enable_logging=True,
         )
         # Update timeout if agent's LLM manager exists
@@ -158,7 +158,11 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
-        files = self._save_procedure_analysis(result, procedure)
+        files = self._save_procedure_analysis(
+            result,
+            procedure,
+            audit_events=getattr(agent, "audit_events", None),
+        )
 
         return result, files
 
@@ -181,7 +185,7 @@ class AgentOrchestrator:
         agent_class = self._resolve_agent_class("factcheck", implementation)
         agent = agent_class(
             primary_llm_provider=llm_provider,
-            fallback_providers=["openai"],
+            fallback_providers=[],
             enable_logging=True,
             interactive=False,  # Non-interactive mode for automation
         )
@@ -224,7 +228,11 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
-        files = self._save_fact_check_analysis(session, subject)
+        files = self._save_fact_check_analysis(
+            session,
+            subject,
+            audit_events=getattr(agent, "audit_events", None),
+        )
 
         return session, files
 
@@ -248,7 +256,7 @@ class AgentOrchestrator:
         agent_class = self._resolve_agent_class("medication", implementation)
         agent = agent_class(
             primary_llm_provider=llm_provider,
-            fallback_providers=["openai"],
+            fallback_providers=[],
             enable_logging=True,
         )
         # Update timeout if agent's LLM manager exists
@@ -310,12 +318,19 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
-        files = self._save_medication_analysis(result, medication)
+        files = self._save_medication_analysis(
+            result,
+            medication,
+            audit_events=getattr(agent, "audit_events", None),
+        )
 
         return result, files
 
     def _save_procedure_analysis(
-        self, result: Any, procedure_name: str
+        self,
+        result: Any,
+        procedure_name: str,
+        audit_events: list[dict] | None = None,
     ) -> Dict[str, str]:
         """Save procedure analysis results"""
         base_name = procedure_name.replace(" ", "_").lower()
@@ -416,10 +431,20 @@ class AgentOrchestrator:
             print(f"✓ Summary PDF: {os.path.basename(pdf_file)}")
             files["summary_pdf"] = pdf_file
 
+        if audit_events:
+            audit_file = f"{self.output_dir}/{base_name}_audit_{timestamp}.json"
+            with open(audit_file, "w") as f:
+                json.dump(audit_events, f, indent=2)
+            print(f"✓ Audit log: {os.path.basename(audit_file)}")
+            files["audit"] = audit_file
+
         return files
 
     def _save_fact_check_analysis(
-        self, session: Any, subject: str
+        self,
+        session: Any,
+        subject: str,
+        audit_events: list[dict] | None = None,
     ) -> Dict[str, str]:
         """Save fact check analysis results"""
         base_name = subject.replace(" ", "_").lower()
@@ -486,19 +511,19 @@ class AgentOrchestrator:
                 files["practitioner_pdf"] = practitioner_pdf
 
         # 3. Final output (markdown) with references and disclaimer appended
-        output_file = f"{self.output_dir}/{base_name}_output_{timestamp}.md"
+        output_file = f"{self.output_dir}/{base_name}_patient_report_{timestamp}.md"
         output_with_refs = self._append_references_section(session.final_output, session)
         output_complete = self._append_hardcoded_disclaimer(output_with_refs)
         with open(output_file, "w") as f:
             f.write(output_complete)
-        print(f"✓ Final output: {os.path.basename(output_file)}")
-        files["output"] = output_file
+        print(f"✓ Patient report: {os.path.basename(output_file)}")
+        files["patient_report"] = output_file
 
         # 3.5. Generate PDF version of output
         output_pdf = convert_markdown_to_pdf_safe(output_file)
         if output_pdf:
-            print(f"✓ Output PDF: {os.path.basename(output_pdf)}")
-            files["output_pdf"] = output_pdf
+            print(f"✓ Patient PDF: {os.path.basename(output_pdf)}")
+            files["patient_report_pdf"] = output_pdf
 
         # 4. Summary report (with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_summary_{timestamp}.md"
@@ -516,10 +541,20 @@ class AgentOrchestrator:
             print(f"✓ Summary PDF: {os.path.basename(summary_pdf)}")
             files["summary_pdf"] = summary_pdf
 
+        if audit_events:
+            audit_file = f"{self.output_dir}/{base_name}_audit_{timestamp}.json"
+            with open(audit_file, "w") as f:
+                json.dump(audit_events, f, indent=2)
+            print(f"✓ Audit log: {os.path.basename(audit_file)}")
+            files["audit"] = audit_file
+
         return files
 
     def _save_medication_analysis(
-        self, result: Any, medication_name: str
+        self,
+        result: Any,
+        medication_name: str,
+        audit_events: list[dict] | None = None,
     ) -> Dict[str, str]:
         """Save medication analysis results"""
         base_name = medication_name.replace(" ", "_").lower()
@@ -657,6 +692,13 @@ class AgentOrchestrator:
         if detailed_pdf:
             print(f"✓ Detailed PDF: {os.path.basename(detailed_pdf)}")
             files["detailed_pdf"] = detailed_pdf
+
+        if audit_events:
+            audit_file = f"{self.output_dir}/{base_name}_audit_{timestamp}.json"
+            with open(audit_file, "w") as f:
+                json.dump(audit_events, f, indent=2)
+            print(f"✓ Audit log: {os.path.basename(audit_file)}")
+            files["audit"] = audit_file
 
         return files
 

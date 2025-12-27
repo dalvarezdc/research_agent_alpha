@@ -117,6 +117,7 @@ Return JSON matching this schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="medication_analysis",
             medication=medication_input.medication_name,
             indication=medication_input.indication or "N/A",
             other_meds=", ".join(medication_input.patient_medications) or "None",

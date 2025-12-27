@@ -139,6 +139,7 @@ Return JSON matching this schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="organ_identification",
             procedure=medical_input.procedure,
             details=medical_input.details,
             objectives=", ".join(medical_input.objectives),
@@ -185,6 +186,7 @@ Return a JSON list of objects that match this schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="organ_analysis",
             procedure=medical_input.procedure,
             details=medical_input.details,
             organs=", ".join(organs),
@@ -257,6 +259,7 @@ Return JSON matching this schema:
         response = self._call_llm(
             system_prompt,
             user_prompt,
+            audit_step="procedure_summary",
             procedure=medical_input.procedure,
             details=medical_input.details,
             organs=", ".join([o.organ_name for o in organs]),
