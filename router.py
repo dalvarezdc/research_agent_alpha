@@ -5,11 +5,14 @@ Routes user queries to the most appropriate specialized agent from a dynamic
 list of available agents.
 """
 
+import argparse
 from dataclasses import dataclass
 from typing import Optional
 
 # Import LLM utilities from shared integrations module
 from llm_integrations import LLMProvider, get_available_models, call_model
+
+from check_llms import print_llm_status
 
 
 # Default model for routing
@@ -128,6 +131,31 @@ if __name__ == "__main__":
     import sys
     # Import the existing AgentOrchestrator that saves files
     from run_analysis import AgentOrchestrator
+
+    parser = argparse.ArgumentParser(description="Medical Multi-Agent Router (REPL)")
+    parser.add_argument(
+        "--check-llms",
+        action="store_true",
+        help="Print which LLM providers are configured and exit",
+    )
+    parser.add_argument(
+        "--models",
+        action="store_true",
+        help="List supported model identifiers and exit",
+    )
+    args = parser.parse_args()
+
+    if args.check_llms:
+        print_llm_status(load_env=True)
+        raise SystemExit(0)
+
+    if args.models:
+        available_models = get_available_models()
+        print("\nAvailable model identifiers:")
+        for model_name, provider in sorted(available_models.items()):
+            print(f"  - {model_name} ({provider})")
+        print()
+        raise SystemExit(0)
 
     # NOTE: Mock implementation commented out - now using real LLM integration
     # Uncomment below to test without API calls:

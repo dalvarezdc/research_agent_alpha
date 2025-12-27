@@ -11,6 +11,9 @@ import argparse
 from datetime import datetime
 from typing import Any, Dict, Tuple
 
+# Optional diagnostics
+from check_llms import print_llm_status
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -1298,6 +1301,16 @@ Examples:
     )
 
     parser.add_argument("--list", action="store_true", help="List all available agents")
+    parser.add_argument(
+        "--check-llms",
+        action="store_true",
+        help="Print which LLM providers are configured and exit",
+    )
+    parser.add_argument(
+        "--models",
+        action="store_true",
+        help="List supported model identifiers and exit",
+    )
 
     parser.add_argument(
         "--subject", type=str, help="Subject to analyze (procedure name or health topic)"
@@ -1352,6 +1365,20 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    if args.check_llms:
+        print_llm_status(load_env=True)
+        return
+
+    if args.models:
+        from llm_integrations import get_available_models
+
+        models = get_available_models()
+        print("\nAvailable model identifiers:")
+        for model_name, provider in sorted(models.items()):
+            print(f"  - {model_name} ({provider})")
+        print()
+        return
 
     # Handle list command
     if args.list:

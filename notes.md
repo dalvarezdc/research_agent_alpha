@@ -40,3 +40,68 @@ this process btw?
   ✅ Easy to add cascade: call_model_with_fallback("gpt-4o-mini", fallback="gpt-4o", messages)
 
   Recommendation: Option 2 is perfect for your future multi-model plans.
+  
+
+
+----
+
+
+
+● Good catch! Let me count exactly:
+
+  📊 File Count by Agent Type:
+
+  Procedure Analyzer (run_procedure_analyzer):
+
+  1. Reasoning trace JSON ✓
+  2. Analysis result JSON ✓
+  3. Cost report JSON ✓
+  4. Practitioner report MD (conditional)
+  5. Practitioner report PDF (conditional)
+  6. Summary MD ✓
+  7. Summary PDF (conditional)
+
+  Total: 4-7 files (3 guaranteed + up to 4 optional)
+
+  Medication Analyzer (run_medication_analyzer):
+
+  1. Analysis result JSON ✓
+  2. Cost report JSON ✓
+  3. Practitioner report MD (conditional)
+  4. Practitioner report PDF (conditional)
+  5. Summary MD ✓
+  6. Summary PDF (conditional)
+  7. Detailed report MD ✓
+  8. Detailed PDF (conditional)
+
+  Total: 4-8 files (4 guaranteed + up to 4 optional)
+
+  Fact Checker (run_fact_checker):
+
+  1. Session JSON ✓
+  2. Cost report JSON ✓
+  3. Practitioner report MD (conditional)
+  4. Practitioner report PDF (conditional)
+  5. Final output MD ✓
+  6. Output PDF (conditional)
+  7. Summary MD ✓
+  8. Summary PDF (conditional)
+
+  Total: 4-8 files (4 guaranteed + up to 4 optional)
+
+  ---
+  🔍 Why the Variation?
+
+  Optional files depend on:
+
+  1. Practitioner Report - Only if agent generates result.practitioner_report or session.practitioner_report
+  2. PDF files - Only if convert_markdown_to_pdf_safe() succeeds
+
+  So when I said "6-7 files", I was being imprecise. The actual range is:
+  - Minimum: 4 files (if no practitioner report, all PDFs fail)
+  - Typical: 7-8 files (with practitioner report and successful PDF generation)
+  - Maximum: 8 files (medication & fact checker with all optionals)
+
+  The difference between agents is that Medication Analyzer generates an extra "Detailed report" that others don't have, which is why it can produce 8 files instead of 7.
+
+  Does that make sense now?
