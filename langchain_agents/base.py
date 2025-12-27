@@ -29,6 +29,11 @@ class LangChainAgentConfig:
     enable_logging: bool = True
     enable_reference_validation: bool = False
     enable_audit: bool = True
+    enable_web_research: bool = False
+    web_research_providers: list[str] = field(
+        default_factory=lambda: ["tavily", "serpapi", "duckduckgo"]
+    )
+    web_research_max_results: int = 5
 
 
 class LangChainAgentBase:
@@ -42,6 +47,9 @@ class LangChainAgentBase:
         self.audit_events: list[dict[str, Any]] = []
         self.langsmith_client = None
         self.langsmith_project = os.getenv("LANGCHAIN_PROJECT") or "research-agent-alpha"
+        self.enable_web_research = config.enable_web_research
+        self.web_research = None
+        self.web_context: str | None = None
 
         if self.enable_reference_validation:
             try:
@@ -67,6 +75,7 @@ class LangChainAgentBase:
 
         self.total_token_usage = TokenUsage()
         self._initialize_langsmith()
+        self._initialize_web_research()
 
     def _initialize_langsmith(self) -> None:
         if not self.enable_audit or LangSmithClient is None:
@@ -79,6 +88,32 @@ class LangChainAgentBase:
             self.langsmith_client = LangSmithClient()
         except Exception:
             self.langsmith_client = None
+
+    def _initialize_web_research(self) -> None:
+        if not self.enable_web_research:
+            return
+        try:
+            from web_research import WebResearchClient
+
+            self.web_research = WebResearchClient(
+                providers=self.config.web_research_providers,
+                max_results=self.config.web_research_max_results,
+            )
+        except Exception:
+            self.web_research = None
+
+    def _build_web_context(self, query: str) -> str:
+        if not self.web_research:
+            return ""
+        results = self.web_research.search(query)
+        if not results:
+            return ""
+        lines = []
+        for idx, item in enumerate(results, 1):
+            lines.append(
+                f"[{idx}] {item.title} ({item.source}) - {item.snippet} {item.url}".strip()
+            )
+        return "\n".join(lines)
 
     def _render_prompt(
         self, system_prompt: str, user_prompt: str, **kwargs: Any

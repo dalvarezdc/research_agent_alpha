@@ -90,6 +90,7 @@ class AgentOrchestrator:
         llm_provider: str = "claude",
         timeout: int = 300,
         implementation: str = "original",
+        enable_web_research: bool = False,
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Procedure Analyzer"""
         print("=" * 80)
@@ -104,6 +105,7 @@ class AgentOrchestrator:
             primary_llm_provider=llm_provider,
             fallback_providers=[],
             enable_logging=True,
+            enable_web_research=enable_web_research,
         )
         # Update timeout if agent's LLM manager exists
         if hasattr(agent, 'llm_manager') and agent.llm_manager:
@@ -173,6 +175,7 @@ class AgentOrchestrator:
         llm_provider: str = "claude",
         timeout: int = 300,
         implementation: str = "original",
+        enable_web_research: bool = False,
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Fact Checker"""
         print("=" * 80)
@@ -188,6 +191,7 @@ class AgentOrchestrator:
             fallback_providers=[],
             enable_logging=True,
             interactive=False,  # Non-interactive mode for automation
+            enable_web_research=enable_web_research,
         )
         # Update timeout if agent's LLM manager exists
         if hasattr(agent, 'llm_manager') and agent.llm_manager:
@@ -244,6 +248,7 @@ class AgentOrchestrator:
         llm_provider: str = "claude",
         timeout: int = 300,
         implementation: str = "original",
+        enable_web_research: bool = False,
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medication Analyzer"""
         print("=" * 80)
@@ -258,6 +263,7 @@ class AgentOrchestrator:
             primary_llm_provider=llm_provider,
             fallback_providers=[],
             enable_logging=True,
+            enable_web_research=enable_web_research,
         )
         # Update timeout if agent's LLM manager exists
         if hasattr(agent, "llm_manager") and agent.llm_manager:
@@ -1443,8 +1449,13 @@ Examples:
     parser.add_argument(
         "--implementation",
         choices=["original", "langchain"],
-        default="original",
-        help="Agent implementation to use (default: original)",
+        default="langchain",
+        help="Agent implementation to use (default: langchain)",
+    )
+    parser.add_argument(
+        "--web-search",
+        action="store_true",
+        help="Enable web research (LangChain only, default off)",
     )
 
     args = parser.parse_args()
@@ -1492,6 +1503,7 @@ Examples:
                 llm_provider=args.llm,
                 timeout=args.timeout,
                 implementation=args.implementation,
+                enable_web_research=args.web_search,
             )
 
         elif args.agent == "medication":
@@ -1502,6 +1514,7 @@ Examples:
                 llm_provider=args.llm,
                 timeout=args.timeout,
                 implementation=args.implementation,
+                enable_web_research=args.web_search,
             )
 
         elif args.agent == "factcheck":
@@ -1511,6 +1524,7 @@ Examples:
                 llm_provider=args.llm,
                 timeout=args.timeout,
                 implementation=args.implementation,
+                enable_web_research=args.web_search,
             )
 
         # Display file locations

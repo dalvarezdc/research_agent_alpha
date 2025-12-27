@@ -55,12 +55,14 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         enable_logging: bool = True,
         interactive: bool = True,
         enable_reference_validation: bool = False,
+        enable_web_research: bool = False,
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
             fallback_providers=fallback_providers or ["openai", "ollama"],
             enable_logging=enable_logging,
             enable_reference_validation=enable_reference_validation,
+            enable_web_research=enable_web_research,
         )
         super().__init__(config)
         self.interactive = interactive
@@ -69,6 +71,7 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
     def start_analysis(self, subject: str, clarifying_info: str = "") -> FactCheckSession:
         reset_tracking()
         self.current_session = FactCheckSession(subject=subject)
+        self.web_context = self._build_web_context(subject)
 
         phase1 = self._phase1_conflict_scan(subject, clarifying_info)
         self.current_session.phase_results.append(phase1)
@@ -121,6 +124,8 @@ Analyze the health subject below.
 
 Subject: {subject}
 Context: {context}
+Web research context:
+{web_context}
 
 Return JSON with:
 - official_narrative
@@ -137,6 +142,7 @@ Schema:
             audit_step="factcheck_phase_1",
             subject=subject,
             context=context or "General investigation",
+            web_context=self.web_context or "None",
             schema=_Phase1Model.model_json_schema(),
         )
         model = self._parse_phase_model(response, _Phase1Model, subject)
@@ -163,6 +169,8 @@ Subject: {subject}
 Priority angle: {angle}
 Official narrative: {official}
 Counter-narrative: {counter}
+Web research context:
+{web_context}
 
 Return JSON with:
 - industry_funded_studies
@@ -183,6 +191,7 @@ Schema:
             angle=angle,
             official=phase1_content.get("official_narrative", ""),
             counter=phase1_content.get("counter_narrative", ""),
+            web_context=self.web_context or "None",
             schema=_Phase2Model.model_json_schema(),
         )
         model = self._parse_phase_model(response, _Phase2Model, subject)
@@ -210,6 +219,8 @@ Synthesize findings into a concise summary.
 Subject: {subject}
 Phase 1 summary: {phase1}
 Phase 2 summary: {phase2}
+Web research context:
+{web_context}
 
 Return JSON with:
 - biological_truth
@@ -227,6 +238,7 @@ Schema:
             subject=subject,
             phase1=phase1_content,
             phase2=phase2_content,
+            web_context=self.web_context or "None",
             schema=_Phase3Model.model_json_schema(),
         )
         model = self._parse_phase_model(response, _Phase3Model, subject)
@@ -251,6 +263,8 @@ Write a detailed report for {subject}.
 
 Output type: {output_type}
 Synthesis data: {synthesis}
+Web research context:
+{web_context}
 
 Use clear headings and include a short references section.
 """
@@ -261,6 +275,7 @@ Use clear headings and include a short references section.
             subject=subject,
             output_type=output_type.value,
             synthesis=synthesis,
+            web_context=self.web_context or "None",
         )
         references = self._extract_references_from_text(response)
         return PhaseResult(
@@ -280,12 +295,15 @@ Simplify the following content for a general audience.
 
 Content:
 {content}
+Web research context:
+{web_context}
 """
         response = self._call_llm(
             system_prompt,
             user_prompt,
             audit_step="factcheck_phase_5",
             content=complex_output,
+            web_context=self.web_context or "None",
         )
         return PhaseResult(
             phase=AnalysisPhase.SIMPLIFIED_OUTPUT,

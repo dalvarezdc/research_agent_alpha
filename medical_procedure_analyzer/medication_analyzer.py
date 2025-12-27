@@ -150,7 +150,8 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                  primary_llm_provider: str = "claude",
                  fallback_providers: List[str] = None,
                  enable_logging: bool = True,
-                 enable_reference_validation: bool = False):
+                 enable_reference_validation: bool = False,
+                 enable_web_research: bool = False):
         """
         Initialize medication analyzer.
 
@@ -160,7 +161,13 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             enable_logging: Enable detailed logging
             enable_reference_validation: Validate drug interaction references
         """
-        super().__init__(primary_llm_provider, fallback_providers, enable_logging, enable_reference_validation)
+        super().__init__(
+            primary_llm_provider,
+            fallback_providers,
+            enable_logging,
+            enable_reference_validation,
+            enable_web_research,
+        )
 
         # Setup DSPy for structured output
         try:

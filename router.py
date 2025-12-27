@@ -148,7 +148,12 @@ if __name__ == "__main__":
         "--implementation",
         choices=["original", "langchain"],
         default="langchain",
-        help="Agent implementation to use (default: original)",
+        help="Agent implementation to use (default: langchain)",
+    )
+    parser.add_argument(
+        "--web-search",
+        action="store_true",
+        help="Enable web research (LangChain only, default off)",
     )
     args = parser.parse_args()
 
@@ -181,6 +186,7 @@ if __name__ == "__main__":
     # globals()["call_llm"] = mock_call_llm
 
     implementation = args.implementation
+    web_search_enabled = args.web_search
 
     def _warn_langsmith() -> None:
         tracing_flag = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
@@ -248,6 +254,7 @@ if __name__ == "__main__":
 
     print(f"\nUsing model: {selected_model}")
     print(f"Implementation: {implementation}")
+    print(f"Web research: {'enabled' if web_search_enabled else 'disabled'}")
     print(f"Available agents: {', '.join(a.id for a in sample_agents)}")
 
     _warn_langsmith()
@@ -264,6 +271,7 @@ if __name__ == "__main__":
     print("  - '/models' to list available models")
     print("  - '/model <number>' to change model")
     print("  - '/impl <original|langchain>' to change implementation")
+    print("  - '/web <on|off>' to toggle web research")
     print("  - 'quit' or 'exit' to stop\n")
 
     last_files = None  # Track last generated files
@@ -312,6 +320,16 @@ if __name__ == "__main__":
                     print("Usage: /impl original|langchain\n")
                 continue
 
+            if query.startswith("/web "):
+                parts = query.split()
+                if len(parts) == 2 and parts[1] in ["on", "off"]:
+                    web_search_enabled = parts[1] == "on"
+                    status = "enabled" if web_search_enabled else "disabled"
+                    print(f"→ Web research {status}\n")
+                else:
+                    print("Usage: /web on|off\n")
+                continue
+
             # Route the query
             print(f"→ Routing query...")
             selected_agent_id = route_agent(
@@ -336,6 +354,7 @@ if __name__ == "__main__":
                         llm_provider=llm_provider,
                         timeout=300,
                         implementation=implementation,
+                        enable_web_research=web_search_enabled,
                     )
                 elif selected_agent_id == "procedure_agent":
                     result, files = orchestrator.run_procedure_analyzer(
@@ -344,6 +363,7 @@ if __name__ == "__main__":
                         llm_provider=llm_provider,
                         timeout=300,
                         implementation=implementation,
+                        enable_web_research=web_search_enabled,
                     )
                 elif selected_agent_id in ["diagnostic_agent", "general_agent"]:
                     result, files = orchestrator.run_fact_checker(
@@ -352,6 +372,7 @@ if __name__ == "__main__":
                         llm_provider=llm_provider,
                         timeout=300,
                         implementation=implementation,
+                        enable_web_research=web_search_enabled,
                     )
 
                 last_files = files

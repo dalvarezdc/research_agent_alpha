@@ -96,6 +96,7 @@ Primary goals that show up throughout the code/documentation:
 - `medical_procedure_analyzer/`: procedure + medication analyzers.
 - `medical_fact_checker/`: fact checker agent.
 - `reference_validation/`: citation validation package.
+- `web_research/`: LangChain web search client (Tavily / SerpAPI / DuckDuckGo).
 - `tests/`: integration-ish tests (many require API keys and live calls).
 
 ## Known sharp edges / inconsistencies
@@ -110,11 +111,8 @@ These files may still be valuable, but they are not currently part of the main e
 - `medical_procedure_analyzer/report_generator.py`
   - Not used by `run_analysis.py` (orchestrator writes its own JSON/MD/PDF).
   - The `__main__` example imports `medical_reasoning_agent` (a module that does not exist), so running it directly is currently broken.
-- `medical_procedure_analyzer/web_research.py`
-  - Tavily web research integration is not called by the current procedure/medication/factcheck pipelines.
-  - Depends on `TAVILY_API_KEY` and `tavily-python`; consider wiring it into evidence gathering or removing it to reduce surface area.
 - `medical_procedure_analyzer/colored_logger.py`
-  - Primarily used by `medical_procedure_analyzer/web_research.py`; if web research stays unused, this is effectively unused too.
+  - Primarily used by the old web research module; if web research stays in `web_research/`, this is effectively unused too.
 - `medical_procedure_analyzer/validation_scoring.py`
   - `validate_medical_output()` exists and is referenced in docs, but it’s not used by the orchestrator output path today.
 - `check_llms.py`

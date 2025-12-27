@@ -72,12 +72,14 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
         fallback_providers: Optional[List[str]] = None,
         enable_logging: bool = True,
         enable_reference_validation: bool = False,
+        enable_web_research: bool = False,
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
             fallback_providers=fallback_providers or ["openai", "ollama"],
             enable_logging=enable_logging,
             enable_reference_validation=enable_reference_validation,
+            enable_web_research=enable_web_research,
         )
         super().__init__(config)
         self.reasoning_trace: List[ReasoningStep] = []
@@ -85,6 +87,7 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
     def analyze_medication(self, medication_input: MedicationInput) -> MedicationOutput:
         reset_tracking()
         self.reasoning_trace = []
+        self.web_context = self._build_web_context(medication_input.medication_name)
 
         output_model = self._generate_medication_output(medication_input)
         output = self._to_dataclass(output_model)
@@ -110,6 +113,8 @@ Analyze the medication below and return a comprehensive structured report.
 Medication: {medication}
 Indication: {indication}
 Other medications: {other_meds}
+Web research context:
+{web_context}
 
 Return JSON matching this schema:
 {schema}
@@ -121,6 +126,7 @@ Return JSON matching this schema:
             medication=medication_input.medication_name,
             indication=medication_input.indication or "N/A",
             other_meds=", ".join(medication_input.patient_medications) or "None",
+            web_context=self.web_context or "None",
             schema=_MedicationOutputModel.model_json_schema(),
         )
         parsed = self._parse_json(response)

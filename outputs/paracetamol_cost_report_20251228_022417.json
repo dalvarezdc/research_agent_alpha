@@ -1,0 +1,28 @@
+{
+  "total_cost": 0.052065,
+  "total_duration": 45.569627,
+  "phases": [
+    {
+      "phase": "Medication Analysis (LangChain)",
+      "cost": 0.052065,
+      "duration": 45.569627,
+      "input_tokens": 3390,
+      "output_tokens": 2793,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Medication Analysis (LangChain)",
+      "cost": 0.052065,
+      "duration": 45.569627,
+      "input_tokens": 3390,
+      "output_tokens": 2793,
+      "models_used": [
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ]
+}

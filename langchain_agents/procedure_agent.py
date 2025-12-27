@@ -56,12 +56,14 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
         fallback_providers: Optional[List[str]] = None,
         enable_logging: bool = True,
         enable_reference_validation: bool = False,
+        enable_web_research: bool = False,
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
             fallback_providers=fallback_providers or ["openai", "ollama"],
             enable_logging=enable_logging,
             enable_reference_validation=enable_reference_validation,
+            enable_web_research=enable_web_research,
         )
         super().__init__(config)
         self.reasoning_trace: List[ReasoningStep] = []
@@ -70,6 +72,7 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
         self._validate_input(medical_input)
         reset_tracking()
         self.reasoning_trace = []
+        self.web_context = self._build_web_context(medical_input.procedure)
 
         organs = self._identify_organs(medical_input)
         organ_analyses = self._analyze_organs(medical_input, organs)
@@ -132,6 +135,8 @@ Identify organ systems affected by this procedure.
 Procedure: {procedure}
 Details: {details}
 Objectives: {objectives}
+Web research context:
+{web_context}
 
 Return JSON matching this schema:
 {schema}
@@ -143,6 +148,7 @@ Return JSON matching this schema:
             procedure=medical_input.procedure,
             details=medical_input.details,
             objectives=", ".join(medical_input.objectives),
+            web_context=self.web_context or "None",
             schema=_OrganList.model_json_schema(),
         )
         parsed = self._parse_json(response)
@@ -179,6 +185,8 @@ Analyze organ-specific impact for the procedure below.
 Procedure: {procedure}
 Details: {details}
 Organs: {organs}
+Web research context:
+{web_context}
 
 Return a JSON list of objects that match this schema:
 {schema}
@@ -190,6 +198,7 @@ Return a JSON list of objects that match this schema:
             procedure=medical_input.procedure,
             details=medical_input.details,
             organs=", ".join(organs),
+            web_context=self.web_context or "None",
             schema=_OrganAnalysisModel.model_json_schema(),
         )
         parsed = self._parse_json(response)
@@ -252,6 +261,8 @@ Summarize the overall procedure analysis.
 Procedure: {procedure}
 Details: {details}
 Organs analyzed: {organs}
+Web research context:
+{web_context}
 
 Return JSON matching this schema:
 {schema}
@@ -263,6 +274,7 @@ Return JSON matching this schema:
             procedure=medical_input.procedure,
             details=medical_input.details,
             organs=", ".join([o.organ_name for o in organs]),
+            web_context=self.web_context or "None",
             schema=_ProcedureSummary.model_json_schema(),
         )
         parsed = self._parse_json(response)

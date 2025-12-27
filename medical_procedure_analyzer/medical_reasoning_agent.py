@@ -90,7 +90,8 @@ class MedicalReasoningAgent:
                  primary_llm_provider: str = "claude",
                  fallback_providers: List[str] = None,
                  enable_logging: bool = True,
-                 enable_reference_validation: bool = False):
+                 enable_reference_validation: bool = False,
+                 enable_web_research: bool = False):
         """
         Initialize the medical reasoning agent.
 
@@ -104,6 +105,7 @@ class MedicalReasoningAgent:
         self.fallback_providers = fallback_providers or ["openai", "ollama"]
         self.reasoning_trace: List[ReasoningStep] = []
         self.enable_reference_validation = enable_reference_validation
+        self.enable_web_research = enable_web_research
         self.reference_validator = None
 
         # Initialize reference validator if enabled

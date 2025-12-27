@@ -110,7 +110,8 @@ class MedicalFactChecker:
                  fallback_providers: List[str] = None,
                  enable_logging: bool = True,
                  interactive: bool = True,
-                 enable_reference_validation: bool = False):
+                 enable_reference_validation: bool = False,
+                 enable_web_research: bool = False):
         """
         Initialize the medical fact checker.
 
@@ -123,6 +124,7 @@ class MedicalFactChecker:
         """
         self.interactive = interactive
         self.enable_reference_validation = enable_reference_validation
+        self.enable_web_research = enable_web_research
         self.reference_validator = None
 
         # Setup logging
