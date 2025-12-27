@@ -143,6 +143,12 @@ if __name__ == "__main__":
         action="store_true",
         help="List supported model identifiers and exit",
     )
+    parser.add_argument(
+        "--implementation",
+        choices=["original", "langchain"],
+        default="langchain",
+        help="Agent implementation to use (default: original)",
+    )
     args = parser.parse_args()
 
     if args.check_llms:
@@ -172,6 +178,8 @@ if __name__ == "__main__":
     #     else:
     #         return "general_agent"
     # globals()["call_llm"] = mock_call_llm
+
+    implementation = args.implementation
 
     # Define sample agents
     sample_agents = [
@@ -227,6 +235,7 @@ if __name__ == "__main__":
         selected_model = DEFAULT_ROUTING_MODEL
 
     print(f"\nUsing model: {selected_model}")
+    print(f"Implementation: {implementation}")
     print(f"Available agents: {', '.join(a.id for a in sample_agents)}")
 
     # Initialize orchestrator (uses selected model through llm_provider param)
@@ -240,6 +249,7 @@ if __name__ == "__main__":
     print("  - Type a query to route and execute it")
     print("  - '/models' to list available models")
     print("  - '/model <number>' to change model")
+    print("  - '/impl <original|langchain>' to change implementation")
     print("  - 'quit' or 'exit' to stop\n")
 
     last_files = None  # Track last generated files
@@ -279,6 +289,15 @@ if __name__ == "__main__":
                     print("Usage: /model <number>\n")
                 continue
 
+            if query.startswith("/impl "):
+                parts = query.split()
+                if len(parts) == 2 and parts[1] in ["original", "langchain"]:
+                    implementation = parts[1]
+                    print(f"→ Switched implementation to: {implementation}\n")
+                else:
+                    print("Usage: /impl original|langchain\n")
+                continue
+
             # Route the query
             print(f"→ Routing query...")
             selected_agent_id = route_agent(
@@ -301,21 +320,24 @@ if __name__ == "__main__":
                         indication=None,
                         other_medications=None,
                         llm_provider=llm_provider,
-                        timeout=300
+                        timeout=300,
+                        implementation=implementation,
                     )
                 elif selected_agent_id == "procedure_agent":
                     result, files = orchestrator.run_procedure_analyzer(
                         procedure=query,
                         details="User query via router",
                         llm_provider=llm_provider,
-                        timeout=300
+                        timeout=300,
+                        implementation=implementation,
                     )
                 elif selected_agent_id in ["diagnostic_agent", "general_agent"]:
                     result, files = orchestrator.run_fact_checker(
                         subject=query,
                         context="",
                         llm_provider=llm_provider,
-                        timeout=300
+                        timeout=300,
+                        implementation=implementation,
                     )
 
                 last_files = files

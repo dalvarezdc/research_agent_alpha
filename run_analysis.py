@@ -62,8 +62,34 @@ class AgentOrchestrator:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
+    def _resolve_agent_class(self, agent_type: str, implementation: str):
+        if implementation == "langchain":
+            if agent_type == "procedure":
+                from langchain_agents import LangChainMedicalReasoningAgent
+                return LangChainMedicalReasoningAgent
+            if agent_type == "medication":
+                from langchain_agents import LangChainMedicationAnalyzer
+                return LangChainMedicationAnalyzer
+            if agent_type == "factcheck":
+                from langchain_agents import LangChainMedicalFactChecker
+                return LangChainMedicalFactChecker
+            raise ValueError(f"Unknown agent type: {agent_type}")
+
+        if agent_type == "procedure":
+            return MedicalReasoningAgent
+        if agent_type == "medication":
+            return MedicationAnalyzer
+        if agent_type == "factcheck":
+            return MedicalFactChecker
+        raise ValueError(f"Unknown agent type: {agent_type}")
+
     def run_procedure_analyzer(
-        self, procedure: str, details: str, llm_provider: str = "claude", timeout: int = 300
+        self,
+        procedure: str,
+        details: str,
+        llm_provider: str = "claude",
+        timeout: int = 300,
+        implementation: str = "original",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Procedure Analyzer"""
         print("=" * 80)
@@ -73,7 +99,8 @@ class AgentOrchestrator:
 
         # Initialize agent
         print(f"🤖 Initializing agent with {llm_provider} (timeout: {timeout}s)...")
-        agent = MedicalReasoningAgent(
+        agent_class = self._resolve_agent_class("procedure", implementation)
+        agent = agent_class(
             primary_llm_provider=llm_provider,
             fallback_providers=["openai"],
             enable_logging=True,
@@ -136,7 +163,12 @@ class AgentOrchestrator:
         return result, files
 
     def run_fact_checker(
-        self, subject: str, context: str = "", llm_provider: str = "claude", timeout: int = 300
+        self,
+        subject: str,
+        context: str = "",
+        llm_provider: str = "claude",
+        timeout: int = 300,
+        implementation: str = "original",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Fact Checker"""
         print("=" * 80)
@@ -146,7 +178,8 @@ class AgentOrchestrator:
 
         # Initialize agent
         print(f"🤖 Initializing agent with {llm_provider} (timeout: {timeout}s)...")
-        agent = MedicalFactChecker(
+        agent_class = self._resolve_agent_class("factcheck", implementation)
+        agent = agent_class(
             primary_llm_provider=llm_provider,
             fallback_providers=["openai"],
             enable_logging=True,
@@ -202,6 +235,7 @@ class AgentOrchestrator:
         other_medications: list = None,
         llm_provider: str = "claude",
         timeout: int = 300,
+        implementation: str = "original",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medication Analyzer"""
         print("=" * 80)
@@ -211,7 +245,8 @@ class AgentOrchestrator:
 
         # Initialize agent
         print(f"🤖 Initializing agent with {llm_provider} (timeout: {timeout}s)...")
-        agent = MedicationAnalyzer(
+        agent_class = self._resolve_agent_class("medication", implementation)
+        agent = agent_class(
             primary_llm_provider=llm_provider,
             fallback_providers=["openai"],
             enable_logging=True,
@@ -1363,6 +1398,12 @@ Examples:
         default=300,
         help="API timeout in seconds (default: 300 = 5 minutes)",
     )
+    parser.add_argument(
+        "--implementation",
+        choices=["original", "langchain"],
+        default="original",
+        help="Agent implementation to use (default: original)",
+    )
 
     args = parser.parse_args()
 
@@ -1404,7 +1445,11 @@ Examples:
         if args.agent == "procedure":
             details = args.details or "Standard procedure"
             result, files = orchestrator.run_procedure_analyzer(
-                procedure=args.subject, details=details, llm_provider=args.llm, timeout=args.timeout
+                procedure=args.subject,
+                details=details,
+                llm_provider=args.llm,
+                timeout=args.timeout,
+                implementation=args.implementation,
             )
 
         elif args.agent == "medication":
@@ -1414,11 +1459,16 @@ Examples:
                 other_medications=args.other_meds,
                 llm_provider=args.llm,
                 timeout=args.timeout,
+                implementation=args.implementation,
             )
 
         elif args.agent == "factcheck":
             result, files = orchestrator.run_fact_checker(
-                subject=args.subject, context=args.context, llm_provider=args.llm, timeout=args.timeout
+                subject=args.subject,
+                context=args.context,
+                llm_provider=args.llm,
+                timeout=args.timeout,
+                implementation=args.implementation,
             )
 
         # Display file locations
