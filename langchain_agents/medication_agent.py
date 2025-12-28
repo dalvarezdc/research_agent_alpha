@@ -53,7 +53,7 @@ class _MedicationOutputModel(BaseModel):
     food_interactions: List[_InteractionModel] = Field(default_factory=list)
     environmental_considerations: List[str] = Field(default_factory=list)
     evidence_based_recommendations: List[Dict[str, str]] = Field(default_factory=list)
-    investigational_approaches: List[Dict[str, str]] = Field(default_factory=list)
+    what_not_to_do: List[Dict[str, str]] = Field(default_factory=list)
     debunked_claims: List[Dict[str, str]] = Field(default_factory=list)
     monitoring_requirements: List[str] = Field(default_factory=list)
     warning_signs: List[Dict[str, str]] = Field(default_factory=list)
@@ -118,6 +118,18 @@ Web research context:
 
 Return JSON matching this schema:
 {schema}
+"""
+        user_prompt += """
+
+Recommendations guidance:
+- "evidence_based_recommendations": evidence-based WHAT TO DO actions with rationale, evidence_level,
+  implementation, expected_outcome, and monitoring when possible.
+- "what_not_to_do": evidence-based WHAT NOT TO DO actions with risks and safer alternatives.
+- "debunked_claims": false or misleading public beliefs about the medicine. A debunked claim must be:
+  1) a specific, commonly repeated statement,
+  2) contradicted by labeling/guidelines/trials/large reviews,
+  3) distinct from behavior advice (avoid overlap with WHAT NOT TO DO).
+  Provide claim, reason_debunked, evidence, why_harmful, and debunked_by when possible.
 """
         if self._is_grok():
             user_prompt += """
@@ -194,7 +206,7 @@ Grok-specific requirements:
             ],
             environmental_considerations=model.environmental_considerations,
             evidence_based_recommendations=model.evidence_based_recommendations,
-            investigational_approaches=model.investigational_approaches,
+            what_not_to_do=model.what_not_to_do,
             debunked_claims=model.debunked_claims,
             monitoring_requirements=model.monitoring_requirements,
             warning_signs=model.warning_signs,

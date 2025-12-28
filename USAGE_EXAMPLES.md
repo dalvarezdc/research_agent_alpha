@@ -114,7 +114,7 @@ The medication analyzer generates three comprehensive reports:
 - Contraindications with severity levels and alternatives
 - Warning signs with action required
 
-#### 3. **Evidence-Based Recommendations**
+#### 3. **Recommendations**
 - **What TO DO**: Interventions with strong evidence
   - Detailed rationale (mechanism)
   - Evidence level with sources
@@ -122,13 +122,13 @@ The medication analyzer generates three comprehensive reports:
   - Expected outcomes
   - Monitoring requirements
 
-- **Investigational Approaches**: Promising but limited evidence
-  - Theoretical basis
-  - Current evidence level
-  - Limitations
-  - Safety profile
+- **What NOT TO DO**: Evidence-based avoidance guidance
+  - Why unsafe or ineffective
+  - Evidence level
+  - Risks if ignored
+  - Safer alternatives
 
-- **What NOT TO DO**: Debunked claims
+- **Debunked Claims**: Misconceptions about the medication
   - Why debunked
   - Evidence against
   - Why harmful

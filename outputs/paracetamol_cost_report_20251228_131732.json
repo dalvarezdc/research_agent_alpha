@@ -1,0 +1,28 @@
+{
+  "total_cost": 0.039695999999999995,
+  "total_duration": 33.285613,
+  "phases": [
+    {
+      "phase": "Medication Analysis (LangChain)",
+      "cost": 0.039695999999999995,
+      "duration": 33.285613,
+      "input_tokens": 1477,
+      "output_tokens": 2351,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Medication Analysis (LangChain)",
+      "cost": 0.039695999999999995,
+      "duration": 33.285613,
+      "input_tokens": 1477,
+      "output_tokens": 2351,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    }
+  ]
+}

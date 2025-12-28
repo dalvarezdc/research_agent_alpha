@@ -150,31 +150,30 @@ class EvidenceBasedRecommendation(BaseModel):
     monitoring: str
 
 
-class InvestigationalApproach(BaseModel):
-    """Investigational approach"""
-    intervention: str
-    rationale: str
-    evidence_level: str
-    implementation: str
-    dosing: Optional[str] = None
-    limitations: str
-    safety_profile: str
-
-
 class DebunkedClaim(BaseModel):
     """Debunked treatment claim"""
     claim: str
     reason_debunked: str
-    debunked_by: str
     evidence: str
     why_harmful: str
-    common_misconception: str
+    debunked_by: Optional[str] = None
+    common_misconception: Optional[str] = None
+
+
+class WhatNotToDoRecommendation(BaseModel):
+    """Evidence-based avoidance recommendation"""
+    action: str
+    rationale: str
+    evidence_level: str
+    risk_if_ignored: str
+    safer_alternative: Optional[str] = None
+    exceptions: Optional[str] = None
 
 
 class RecommendationsData(BaseModel):
     """Structured recommendations"""
     evidence_based: List[EvidenceBasedRecommendation] = Field(default_factory=list)
-    investigational: List[InvestigationalApproach] = Field(default_factory=list)
+    what_not_to_do: List[WhatNotToDoRecommendation] = Field(default_factory=list)
     debunked: List[DebunkedClaim] = Field(default_factory=list)
 
 

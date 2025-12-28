@@ -124,7 +124,7 @@ class MedicationOutput:
 
     # Recommendations (using same structure as medical_reasoning_agent)
     evidence_based_recommendations: List[Dict[str, str]] = field(default_factory=list)
-    investigational_approaches: List[Dict[str, str]] = field(default_factory=list)
+    what_not_to_do: List[Dict[str, str]] = field(default_factory=list)
     debunked_claims: List[Dict[str, str]] = field(default_factory=list)
 
     # Monitoring
@@ -644,17 +644,18 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             ReasoningStage.RECOMMENDATION_SYNTHESIS,
             {"medication": medication_input.medication_name},
             "Synthesizing evidence-based recommendations for optimal medication use",
-            {"categories": ["evidence_based", "investigational", "debunked"]}
+            {"categories": ["evidence_based", "what_not_to_do", "debunked"]}
         )
 
         prompt = f"""
-        Synthesize comprehensive recommendations for {medication_input.medication_name}:
+        Synthesize comprehensive recommendations for {medication_input.medication_name}.
+        All recommendations must be evidence-based.
 
-        EVIDENCE-BASED RECOMMENDATIONS:
+        WHAT TO DO:
         Provide detailed guidance on:
         1. How to maximize medication effectiveness
         2. How to minimize adverse effects
-        3. What supportive measures help
+        3. Supportive measures that help
         4. Timing optimization
         5. Lifestyle modifications that enhance outcomes
 
@@ -666,15 +667,28 @@ class MedicationAnalyzer(MedicalReasoningAgent):
         - expected_outcome: What to expect and when
         - monitoring: What to track
 
-        INVESTIGATIONAL APPROACHES:
-        Promising but not yet standard approaches with same detail level.
+        WHAT NOT TO DO:
+        Unsafe practices or misuse to avoid:
+        - action: What to avoid
+        - rationale: Why it is unsafe or ineffective
+        - evidence_level: Quality of supporting evidence
+        - risk_if_ignored: Specific consequences
+        - safer_alternative: Evidence-based alternative
+        - exceptions: Any narrow cases where avoidance does not apply
 
         DEBUNKED CLAIMS:
-        Common misconceptions about this medication:
+        Common misconceptions about this medication. A debunked claim must be:
+        1. A specific, commonly repeated statement,
+        2. Contradicted by labeling/guidelines/trials or large reviews,
+        3. Distinct from behavior advice (avoid overlap with WHAT NOT TO DO).
+
+        For each debunked claim provide:
         - claim: What people incorrectly believe
         - reason_debunked: Why it's wrong
         - evidence: Studies/reviews debunking
         - why_harmful: How this misconception causes harm
+        - debunked_by: Source type (e.g., FDA label, RCTs, meta-analyses)
+        - common_misconception: Why people believe it
 
         Format as JSON with paragraph-level detail in each field.
         """
@@ -697,7 +711,7 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             self.logger.error(f"Recommendation synthesis failed: {e}")
             return {
                 "evidence_based": [],
-                "investigational": [],
+                "what_not_to_do": [],
                 "debunked": []
             }
 
@@ -961,14 +975,14 @@ class MedicationAnalyzer(MedicalReasoningAgent):
         if recommendations:
             return {
                 "evidence_based": [rec.model_dump() for rec in recommendations.evidence_based],
-                "investigational": [rec.model_dump() for rec in recommendations.investigational],
+                "what_not_to_do": [rec.model_dump() for rec in recommendations.what_not_to_do],
                 "debunked": [rec.model_dump() for rec in recommendations.debunked]
             }
 
         self.logger.warning("Could not parse recommendations, using empty data")
         return {
             "evidence_based": [],
-            "investigational": [],
+            "what_not_to_do": [],
             "debunked": []
         }
 
@@ -1020,7 +1034,7 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             food_interactions=[i for i in all_interactions if i.interaction_type == InteractionType.DRUG_FOOD],
             environmental_considerations=interactions.get('drug_environmental', []),
             evidence_based_recommendations=recommendations.get('evidence_based', []),
-            investigational_approaches=recommendations.get('investigational', []),
+            what_not_to_do=recommendations.get('what_not_to_do', []),
             debunked_claims=recommendations.get('debunked', []),
             monitoring_requirements=monitoring.get('routine_monitoring', []),
             warning_signs=safety_profile.get('warning_signs', []),
@@ -1206,18 +1220,45 @@ class MedicationAnalyzer(MedicalReasoningAgent):
 
 ---
 
-## ✅ Evidence-Based Recommendations
+## 💡 Recommendations
 
 """
         if output.evidence_based_recommendations:
+            report += "### ✅ What TO DO:\n\n"
             for i, rec in enumerate(output.evidence_based_recommendations, 1):
                 if isinstance(rec, dict):
-                    report += f"### {i}. {rec.get('intervention', 'N/A')}\n\n"
+                    report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
                     report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
                     report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
                     report += f"**Implementation:** {rec.get('implementation', 'N/A')}\n\n"
                 else:
                     report += f"{i}. {rec}\n"
+
+        if output.what_not_to_do:
+            report += "### ❌ What NOT TO DO:\n\n"
+            for i, rec in enumerate(output.what_not_to_do, 1):
+                if isinstance(rec, dict):
+                    report += f"#### {i}. {rec.get('action', 'N/A')}\n\n"
+                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
+                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
+                    report += f"**Risk If Ignored:** {rec.get('risk_if_ignored', 'N/A')}\n\n"
+                    if rec.get('safer_alternative'):
+                        report += f"**Safer Alternative:** {rec.get('safer_alternative')}\n\n"
+                    if rec.get('exceptions'):
+                        report += f"**Exceptions:** {rec.get('exceptions')}\n\n"
+                else:
+                    report += f"{i}. {rec}\n"
+
+        if output.debunked_claims:
+            report += "### 🧯 Debunked Claims:\n\n"
+            for i, claim in enumerate(output.debunked_claims, 1):
+                if isinstance(claim, dict):
+                    report += f"#### {i}. {claim.get('claim', 'N/A')}\n\n"
+                    report += f"**Why Debunked:** {claim.get('reason_debunked', 'N/A')}\n\n"
+                    report += f"**Evidence Against:** {claim.get('evidence', 'N/A')}\n\n"
+                    report += f"**Why Harmful:** {claim.get('why_harmful', 'N/A')}\n\n"
+                else:
+                    report += f"{i}. {claim}\n"
 
         report += """
 
@@ -1313,7 +1354,9 @@ def main():
     print(f"Mechanism: {result.mechanism_of_action[:100]}...")
     print(f"Drug-Drug Interactions: {len(result.drug_interactions)}")
     print(f"Food Interactions: {len(result.food_interactions)}")
-    print(f"Evidence-Based Recommendations: {len(result.evidence_based_recommendations)}")
+    print(f"What TO DO: {len(result.evidence_based_recommendations)}")
+    print(f"What NOT TO DO: {len(result.what_not_to_do)}")
+    print(f"Debunked Claims: {len(result.debunked_claims)}")
 
 
 if __name__ == "__main__":

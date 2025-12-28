@@ -90,7 +90,7 @@ def _fake_call_llm(self, system_prompt: str, user_prompt: str, **kwargs):
                 "food_interactions": [],
                 "environmental_considerations": [],
                 "evidence_based_recommendations": [{"intervention": "Titrate slowly"}],
-                "investigational_approaches": [],
+                "what_not_to_do": [{"action": "Do not stop abruptly"}],
                 "debunked_claims": [],
                 "monitoring_requirements": ["Check eGFR annually"],
                 "warning_signs": [{"sign": "Fatigue"}],

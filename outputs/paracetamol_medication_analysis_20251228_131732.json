@@ -1,0 +1,259 @@
+{
+  "timestamp": "2025-12-28T13:17:32.551998",
+  "agent_type": "medication_analyzer",
+  "medication_name": "Paracetamol",
+  "drug_class": "Non-opioid analgesic and antipyretic",
+  "mechanism_of_action": "Paracetamol selectively inhibits cyclooxygenase (COX-2 and COX-3) enzymes in the central nervous system, reducing prostaglandin synthesis responsible for pain and fever. It exhibits minimal peripheral anti-inflammatory activity compared to NSAIDs. Additional mechanisms include activation of descending inhibitory serotonergic pathways and cannabinoid receptor modulation, supported by strong preclinical evidence and clinical trials.",
+  "pharmacokinetics": {
+    "absorption": "Paracetamol is rapidly absorbed from the small intestine with bioavailability of 70-90% due to first-pass hepatic metabolism. Peak plasma levels occur 0.5-2 hours post-oral dose; intravenous administration achieves 100% bioavailability instantly. Food, particularly high-fat meals, may delay absorption by 0.5-1 hour without altering extent.",
+    "metabolism": "Hepatic metabolism predominates: 50-60% glucuronidation, 25-35% sulfation, 5-10% CYP2E1-mediated oxidation to NAPQI (detoxified by glutathione). Minor pathways involve CYP1A2 and CYP3A4. Chronic alcohol use induces CYP2E1, increasing NAPQI production.",
+    "elimination": "Primarily renal excretion of metabolites (glucuronide 55%, sulfate 30%, cysteine/mercapturic acid 10%); <5% unchanged drug. Clearance is 300-500 mL/min in adults; reduced in renal impairment (CrCl <30 mL/min). Dialyzable in overdose.",
+    "half_life": "1-4 hours (mean 2-3 hours) in healthy adults; prolonged to 5-8 hours in hepatic impairment, neonates, or malnutrition. Therapeutic range monitoring uses Rumack-Matthew nomogram in overdose."
+  },
+  "clinical_use": {
+    "approved_indications": [
+      "Mild to moderate acute pain",
+      "Fever of any origin",
+      "Postoperative pain"
+    ],
+    "off_label_uses": [
+      "Chronic osteoarthritis pain (moderate evidence)",
+      "Migraine prophylaxis (limited evidence)",
+      "Patent ductus arteriosus closure in neonates (strong evidence)"
+    ],
+    "standard_dosing": "Adults: 500-1000 mg orally/IV/rectally every 4-6 hours PRN; maximum 4000 mg/24 hours. Children >12 years: same as adults; 2-12 years: 10-15 mg/kg/dose every 4-6 hours, max 75 mg/kg/day. Neonates: 10-15 mg/kg every 6-8 hours.",
+    "dose_adjustments": {
+      "Renal impairment (CrCl 10-50 mL/min)": "Every 6 hours; CrCl <10 mL/min: every 8 hours",
+      "Hepatic impairment (Child-Pugh B/C)": "Maximum 2000 mg/day",
+      "Elderly (>65 years)": "Start 500 mg/dose; monitor for dehydration",
+      "Chronic alcoholics": "Maximum 2000 mg/day",
+      "Malnutrition/obesity": "Use ideal body weight for dosing"
+    }
+  },
+  "safety_profile": {
+    "common_adverse_effects": [
+      "Nausea (3-5%)",
+      "Vomiting (2-4%)",
+      "Rash (1-2%)",
+      "Pruritus (1%)",
+      "Dizziness (<1%)"
+    ],
+    "serious_adverse_effects": [
+      "Acute hepatotoxicity (overdose)",
+      "Anaphylaxis/hypersensitivity",
+      "Stevens-Johnson syndrome/toxic epidermal necrolysis",
+      "Metabolic acidosis (high-dose IV)",
+      "Thrombocytopenia (rare)"
+    ],
+    "contraindications": [
+      {
+        "Hypersensitivity to paracetamol": "Risk of anaphylaxis or severe skin reactions; absolute."
+      },
+      {
+        "Severe active hepatic disease": "Child-Pugh C; exacerbates NAPQI toxicity."
+      },
+      {
+        "Severe renal impairment (CrCl <10 mL/min, uncontrolled)": "Accumulation of metabolites; use caution."
+      },
+      {
+        "G6PD deficiency": "Limited evidence for hemolytic risk; avoid high doses."
+      }
+    ],
+    "black_box_warnings": [
+      "Severe liver injury may occur with therapeutic doses exceeding 4000 mg/day or lower in risk factors (alcohol, malnutrition); check total daily dose from all sources.",
+      "Overdosage (>7.5-10 g acute) risks fulminant hepatic failure requiring transplant; antidotal therapy with N-acetylcysteine within 8-24 hours critical.",
+      "Risk increased 3-4 fold with chronic alcohol use (>3 drinks/day)."
+    ]
+  },
+  "interactions": {
+    "drug_interactions": [
+      {
+        "type": "drug-drug",
+        "agent": "Warfarin",
+        "severity": "moderate",
+        "mechanism": "Paracetamol inhibits warfarin metabolism (CYP2C9) and displaces from albumin.",
+        "clinical_effect": "Elevated INR, bleeding risk.",
+        "management": "Monitor INR frequently; limit paracetamol to <2000 mg/day.",
+        "time_separation": null,
+        "evidence_level": "strong"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Chronic alcohol",
+        "severity": "severe",
+        "mechanism": "Alcohol induces CYP2E1, increasing NAPQI formation; depletes glutathione.",
+        "clinical_effect": "Hepatotoxicity at therapeutic doses.",
+        "management": "Limit to 2000 mg/day; counsel abstinence.",
+        "time_separation": null,
+        "evidence_level": "strong"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Carbamazepine",
+        "severity": "moderate",
+        "mechanism": "Enzyme induction (CYP3A4/CYP2E1) reduces paracetamol levels.",
+        "clinical_effect": "Decreased efficacy; risk compensatory overuse.",
+        "management": "Monitor efficacy; may need dose increase.",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Metoclopramide",
+        "severity": "minor",
+        "mechanism": "Accelerates gastric emptying, enhancing absorption.",
+        "clinical_effect": "Faster onset, higher peak levels.",
+        "management": "No adjustment needed; monitor for efficacy.",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      }
+    ],
+    "food_interactions": [
+      {
+        "type": "drug-drug",
+        "agent": "High-fat meals",
+        "severity": "minor",
+        "mechanism": "Delays gastric emptying.",
+        "clinical_effect": "Tmax delayed 0.5-1 hour; no change in AUC.",
+        "management": "Administer 30 min before meals if rapid onset needed."
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Alcohol (acute/chronic)",
+        "severity": "severe",
+        "mechanism": "Synergistic hepatotoxicity via glutathione depletion.",
+        "clinical_effect": "Elevated ALT/AST even at 2000 mg/day.",
+        "management": "Avoid concurrent use; separate by >6 hours if unavoidable."
+      }
+    ],
+    "environmental_considerations": [
+      "Store at <25\u00b0C in tight container; protect from moisture/light.",
+      "Discard if solution discolors (IV prep).",
+      "Avoid freezing oral liquids; shake suspensions well.",
+      "Not for use in extreme heat/humidity without stability data."
+    ]
+  },
+  "recommendations": {
+    "what_to_do": [
+      {
+        "action": "Assess total daily paracetamol intake from all sources (e.g., combination products).",
+        "rationale": "Prevents inadvertent overdose; multi-source use causes 30-50% of hepatotoxicity cases.",
+        "evidence_level": "strong",
+        "implementation": "Use dose-tracking tools/apps; educate patients.",
+        "expected_outcome": "Reduced overdose incidence by 50-70%.",
+        "monitoring": "Patient diary review weekly."
+      },
+      {
+        "action": "Administer N-acetylcysteine (NAC) for overdose if >150 mg/kg or symptoms within 24 hours.",
+        "rationale": "Replenishes glutathione; survival >95% if <8 hours post-ingestion.",
+        "evidence_level": "strong",
+        "implementation": "IV/oral NAC per Rumack nomogram.",
+        "expected_outcome": "Prevents hepatic failure.",
+        "monitoring": "Paracetamol level at 4 hours; LFTs q12h."
+      },
+      {
+        "action": "Limit chronic use to <3 g/day in elderly/hepatic risk patients.",
+        "rationale": "Prolonged half-life increases accumulation; RCTs show safety up to 3 g/day.",
+        "evidence_level": "moderate",
+        "implementation": "Titrate based on response.",
+        "expected_outcome": "Efficacy with 80% lower toxicity risk.",
+        "monitoring": "LFTs baseline and monthly."
+      }
+    ],
+    "what_not_to_do": [
+      {
+        "action": "Do not exceed 4000 mg/day total from all formulations.",
+        "risks": "Dose-dependent hepatotoxicity; 6 g/day doubles ALT elevation risk.",
+        "safer_alternatives": "Alternate with ibuprofen if no contraindications; non-pharmacologic (ice/heat)."
+      },
+      {
+        "action": "Avoid concurrent 3+ alcoholic drinks daily.",
+        "risks": "4-fold hepatotoxicity increase; glutathione depletion.",
+        "safer_alternatives": "Abstinence or opioid alternatives under supervision."
+      },
+      {
+        "action": "Do not use extended-release with immediate-release concurrently.",
+        "risks": "Unpredictable overlapping peaks; overdose mimic.",
+        "safer_alternatives": "Single formulation only."
+      }
+    ],
+    "debunked_claims": [
+      {
+        "claim": "Paracetamol is safe with moderate alcohol (1-2 drinks/day).",
+        "reason_debunked": "Induces CYP2E1 even with moderate intake per pharmacokinetic studies.",
+        "evidence": "NEJM case series; FDA labeling.",
+        "why_harmful": "Leads to therapeutic misadventure hepatotoxicity.",
+        "debunked_by": "FDA/AASLD guidelines"
+      },
+      {
+        "claim": "Paracetamol cures the common cold or flu.",
+        "reason_debunked": "Symptomatic relief only; no antiviral activity per RCTs.",
+        "evidence": "Cochrane reviews (no mortality benefit).",
+        "why_harmful": "Delays seeking care for complications.",
+        "debunked_by": "WHO/CDC"
+      },
+      {
+        "claim": "Daily paracetamol prevents headaches indefinitely.",
+        "reason_debunked": "Risks medication-overuse headache after 10-15 days/month.",
+        "evidence": "ICHD-3 criteria; prospective trials.",
+        "why_harmful": "Worsens chronicity.",
+        "debunked_by": "AHS guidelines"
+      }
+    ]
+  },
+  "monitoring": {
+    "requirements": [
+      "Liver function tests (ALT/AST) baseline and every 2-4 weeks for chronic use (>14 days).",
+      "Serum paracetamol concentration 4 hours post-ingestion in suspected overdose.",
+      "INR/PT in patients on warfarin.",
+      "Renal function (SCr) in chronic high-dose use."
+    ],
+    "warning_signs": [
+      {
+        "Nausea/vomiting (phase 1 overdose)": "Precursors to hepatotoxicity; evaluate ingestion.",
+        "Implication": "Initiate NAC if >150 mg/kg."
+      },
+      {
+        "Right upper quadrant pain/jaundice (phase 2-3)": "Hepatic necrosis; ALT >1000 IU/L.",
+        "Implication": "Hospitalize; transplant evaluation."
+      },
+      {
+        "Confusion/hypoglycemia (phase 4)": "Fulminant failure; King's College criteria.",
+        "Implication": "Critical care transfer."
+      }
+    ]
+  },
+  "metadata": {
+    "evidence_quality": "high",
+    "analysis_confidence": 0.95,
+    "reasoning_steps_count": 1
+  },
+  "cost_analysis": {
+    "total_cost": 0.039695999999999995,
+    "total_duration": 33.285613,
+    "phases": [
+      {
+        "phase": "Medication Analysis (LangChain)",
+        "cost": 0.039695999999999995,
+        "duration": 33.285613,
+        "input_tokens": 1477,
+        "output_tokens": 2351,
+        "models_used": [
+          "grok-4-1-fast-reasoning-latest"
+        ]
+      }
+    ],
+    "most_expensive": [
+      {
+        "phase": "Medication Analysis (LangChain)",
+        "cost": 0.039695999999999995,
+        "duration": 33.285613,
+        "input_tokens": 1477,
+        "output_tokens": 2351,
+        "models_used": [
+          "grok-4-1-fast-reasoning-latest"
+        ]
+      }
+    ]
+  }
+}

@@ -313,9 +313,9 @@ class AgentOrchestrator:
 
         print(f"   🍎 Food Interactions: {len(result.food_interactions)}")
         print(f"   ⚕️  Contraindications: {len(result.contraindications)}")
-        print(f"   ✅ Evidence-Based Recommendations: {len(result.evidence_based_recommendations)}")
-        print(f"   🔬 Investigational Approaches: {len(result.investigational_approaches)}")
-        print(f"   ❌ Debunked Claims: {len(result.debunked_claims)}")
+        print(f"   ✅ What TO DO: {len(result.evidence_based_recommendations)}")
+        print(f"   ❌ What NOT TO DO: {len(result.what_not_to_do)}")
+        print(f"   🧯 Debunked Claims: {len(result.debunked_claims)}")
 
         if result.black_box_warnings:
             print(f"   ⚠️  BLACK BOX WARNINGS: {len(result.black_box_warnings)}")
@@ -621,8 +621,8 @@ class AgentOrchestrator:
                 "environmental_considerations": result.environmental_considerations,
             },
             "recommendations": {
-                "evidence_based": result.evidence_based_recommendations,
-                "investigational": result.investigational_approaches,
+                "what_to_do": result.evidence_based_recommendations,
+                "what_not_to_do": result.what_not_to_do,
                 "debunked_claims": result.debunked_claims,
             },
             "monitoring": {
@@ -1069,7 +1069,9 @@ See the detailed output file for the complete analysis.
         summary += """
 ---
 
-## ✅ Evidence-Based Recommendations
+## 💡 Recommendations
+
+### ✅ What TO DO:
 
 """
 
@@ -1078,6 +1080,20 @@ See the detailed output file for the complete analysis.
                 if isinstance(rec, dict):
                     summary += f"{i}. **{rec.get('intervention', 'N/A')}**\n"
                     summary += f"   - {rec.get('rationale', 'N/A')[:150]}...\n\n"
+
+        if result.what_not_to_do:
+            summary += "### ❌ What NOT TO DO:\n\n"
+            for i, rec in enumerate(result.what_not_to_do[:3], 1):
+                if isinstance(rec, dict):
+                    summary += f"{i}. **{rec.get('action', 'N/A')}**\n"
+                    summary += f"   - {rec.get('rationale', 'N/A')[:150]}...\n\n"
+
+        if result.debunked_claims:
+            summary += "### 🧯 Debunked Claims:\n\n"
+            for i, claim in enumerate(result.debunked_claims[:3], 1):
+                if isinstance(claim, dict):
+                    summary += f"{i}. **{claim.get('claim', 'N/A')}**\n"
+                    summary += f"   - {claim.get('reason_debunked', 'N/A')[:150]}...\n\n"
 
         summary += """
 ---
@@ -1251,7 +1267,7 @@ See the detailed output file for the complete analysis.
 
 ## 💡 Recommendations
 
-### ✅ What TO DO: Evidence-Based Recommendations
+### ✅ What TO DO:
 
 """
 
@@ -1265,16 +1281,21 @@ See the detailed output file for the complete analysis.
                     if rec.get('expected_outcome'):
                         report += f"**Expected Outcome:** {rec.get('expected_outcome')}\n\n"
 
-        if result.investigational_approaches:
-            report += "### 🔬 Investigational Approaches (Limited Evidence)\n\n"
-            for i, rec in enumerate(result.investigational_approaches, 1):
+        if result.what_not_to_do:
+            report += "### ❌ What NOT TO DO:\n\n"
+            for i, rec in enumerate(result.what_not_to_do, 1):
                 if isinstance(rec, dict):
-                    report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
+                    report += f"#### {i}. {rec.get('action', 'N/A')}\n\n"
                     report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
-                    report += f"**Limitations:** {rec.get('limitations', 'N/A')}\n\n"
+                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
+                    report += f"**Risk If Ignored:** {rec.get('risk_if_ignored', 'N/A')}\n\n"
+                    if rec.get('safer_alternative'):
+                        report += f"**Safer Alternative:** {rec.get('safer_alternative')}\n\n"
+                    if rec.get('exceptions'):
+                        report += f"**Exceptions:** {rec.get('exceptions')}\n\n"
 
         if result.debunked_claims:
-            report += "### ❌ What NOT TO DO: Debunked Claims\n\n"
+            report += "### 🧯 Debunked Claims:\n\n"
             for i, claim in enumerate(result.debunked_claims, 1):
                 if isinstance(claim, dict):
                     report += f"#### ❌ {i}. {claim.get('claim', 'N/A')}\n\n"
