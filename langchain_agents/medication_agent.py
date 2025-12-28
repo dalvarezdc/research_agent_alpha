@@ -130,6 +130,9 @@ Recommendations guidance:
   2) contradicted by labeling/guidelines/trials/large reviews,
   3) distinct from behavior advice (avoid overlap with WHAT NOT TO DO).
   Provide claim, reason_debunked, evidence, why_harmful, and debunked_by when possible.
+Requirements:
+- Do not leave "intervention" or "action" blank. Use a short imperative sentence.
+- Avoid "N/A". If unknown, write "not established" with a brief rationale.
 """
         if self._is_grok():
             user_prompt += """

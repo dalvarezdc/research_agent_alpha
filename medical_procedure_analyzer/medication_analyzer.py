@@ -682,6 +682,10 @@ class MedicationAnalyzer(MedicalReasoningAgent):
         2. Contradicted by labeling/guidelines/trials or large reviews,
         3. Distinct from behavior advice (avoid overlap with WHAT NOT TO DO).
 
+        Requirements:
+        - Do not leave "intervention" or "action" blank. Use a short imperative sentence.
+        - Avoid "N/A". If unknown, write "not established" with a brief rationale.
+
         For each debunked claim provide:
         - claim: What people incorrectly believe
         - reason_debunked: Why it's wrong
@@ -1223,14 +1227,41 @@ class MedicationAnalyzer(MedicalReasoningAgent):
 ## 💡 Recommendations
 
 """
+        def clean_text(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            text = str(value).strip()
+            if not text or text.lower() in {"n/a", "na"}:
+                return None
+            return text
+
         if output.evidence_based_recommendations:
             report += "### ✅ What TO DO:\n\n"
             for i, rec in enumerate(output.evidence_based_recommendations, 1):
                 if isinstance(rec, dict):
-                    report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
-                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
-                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
-                    report += f"**Implementation:** {rec.get('implementation', 'N/A')}\n\n"
+                    title = clean_text(rec.get("intervention")) or f"Recommendation {i}"
+                    action = clean_text(rec.get("intervention")) or clean_text(
+                        rec.get("implementation")
+                    )
+                    rationale = clean_text(rec.get("rationale"))
+                    evidence_level = clean_text(rec.get("evidence_level"))
+                    implementation = clean_text(rec.get("implementation"))
+                    expected_outcome = clean_text(rec.get("expected_outcome"))
+                    monitoring = clean_text(rec.get("monitoring"))
+
+                    report += f"#### {i}. {title}\n\n"
+                    if action and action != title:
+                        report += f"**Action:** {action}\n\n"
+                    if rationale:
+                        report += f"**Why:** {rationale}\n\n"
+                    if evidence_level:
+                        report += f"**Evidence Level:** {evidence_level}\n\n"
+                    if implementation and implementation != action:
+                        report += f"**How:** {implementation}\n\n"
+                    if expected_outcome:
+                        report += f"**Expected Outcome:** {expected_outcome}\n\n"
+                    if monitoring:
+                        report += f"**Monitoring:** {monitoring}\n\n"
                 else:
                     report += f"{i}. {rec}\n"
 
@@ -1238,14 +1269,24 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             report += "### ❌ What NOT TO DO:\n\n"
             for i, rec in enumerate(output.what_not_to_do, 1):
                 if isinstance(rec, dict):
-                    report += f"#### {i}. {rec.get('action', 'N/A')}\n\n"
-                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
-                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
-                    report += f"**Risk If Ignored:** {rec.get('risk_if_ignored', 'N/A')}\n\n"
-                    if rec.get('safer_alternative'):
-                        report += f"**Safer Alternative:** {rec.get('safer_alternative')}\n\n"
-                    if rec.get('exceptions'):
-                        report += f"**Exceptions:** {rec.get('exceptions')}\n\n"
+                    action = clean_text(rec.get("action"))
+                    rationale = clean_text(rec.get("rationale"))
+                    evidence_level = clean_text(rec.get("evidence_level"))
+                    risk = clean_text(rec.get("risk_if_ignored"))
+                    safer = clean_text(rec.get("safer_alternative"))
+                    exceptions = clean_text(rec.get("exceptions"))
+
+                    report += f"#### {i}. {action or f'Avoidance {i}'}\n\n"
+                    if rationale:
+                        report += f"**Why Avoid:** {rationale}\n\n"
+                    if evidence_level:
+                        report += f"**Evidence Level:** {evidence_level}\n\n"
+                    if risk:
+                        report += f"**Risk If Ignored:** {risk}\n\n"
+                    if safer:
+                        report += f"**Safer Alternative:** {safer}\n\n"
+                    if exceptions:
+                        report += f"**Exceptions:** {exceptions}\n\n"
                 else:
                     report += f"{i}. {rec}\n"
 
@@ -1253,10 +1294,21 @@ class MedicationAnalyzer(MedicalReasoningAgent):
             report += "### 🧯 Debunked Claims:\n\n"
             for i, claim in enumerate(output.debunked_claims, 1):
                 if isinstance(claim, dict):
-                    report += f"#### {i}. {claim.get('claim', 'N/A')}\n\n"
-                    report += f"**Why Debunked:** {claim.get('reason_debunked', 'N/A')}\n\n"
-                    report += f"**Evidence Against:** {claim.get('evidence', 'N/A')}\n\n"
-                    report += f"**Why Harmful:** {claim.get('why_harmful', 'N/A')}\n\n"
+                    statement = clean_text(claim.get("claim")) or f"Claim {i}"
+                    reason = clean_text(claim.get("reason_debunked"))
+                    evidence = clean_text(claim.get("evidence"))
+                    why_harmful = clean_text(claim.get("why_harmful"))
+                    debunked_by = clean_text(claim.get("debunked_by"))
+
+                    report += f"#### {i}. {statement}\n\n"
+                    if reason:
+                        report += f"**Why Debunked:** {reason}\n\n"
+                    if evidence:
+                        report += f"**Evidence Against:** {evidence}\n\n"
+                    if debunked_by:
+                        report += f"**Debunked By:** {debunked_by}\n\n"
+                    if why_harmful:
+                        report += f"**Why Harmful:** {why_harmful}\n\n"
                 else:
                     report += f"{i}. {claim}\n"
 

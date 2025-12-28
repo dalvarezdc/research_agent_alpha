@@ -1,143 +1,229 @@
-# Medical Reasoning Agent 🧠⚕️
+# Medical Analysis Agents
 
-A **simplified** AI agent that follows systematic medical analysis patterns, providing organ-focused reasoning for medical procedures with evidence-based recommendations.
-
-## 🚀 Recent Improvements (v2.0)
-
-**Comprehensive Analysis:** Full 6-stage reasoning pipeline for deep medical insights!
-- ✅ **6 dedicated LLM reasoning stages** - Each stage builds on previous analysis
-- ✅ **774 lines of systematic analysis** - Thorough, evidence-based reasoning
-- ✅ **Complete reasoning trace** - Full transparency into AI decision-making
-- ✅ **Better analysis quality** - Deeper insights than single-call approaches
-
-## Overview
-
-This agent replicates systematic medical analysis patterns:
-1. **Broad Analysis** → **Specific Focus** → **Critical Evaluation**
-2. **Known Recommendations** vs **Potential Treatments** vs **Debunked Claims**
-3. **Complete Reasoning Trace** with confidence scoring
+A multi-agent medical analysis system that produces structured, evidence-based reports for:
+- Medical procedures (organ-focused reasoning)
+- Medications (interactions, safety, recommendations)
+- Medical fact checks (multi-phase investigation)
 
 ## Key Features
 
-- 🔍 **Systematic Medical Reasoning**: Follows structured analysis pipeline
-- 🧭 **Organ-Focused Analysis**: Targets specific organ systems affected by procedures
-- 🤖 **Multi-LLM Support**: Works with Claude, OpenAI, and local models (Ollama)
-- 📊 **Evidence Classification**: Distinguishes between proven, potential, and debunked treatments
-- 🔍 **Reasoning Transparency**: Full trace of AI thinking process
-- ✅ **Quality Validation**: Comprehensive output validation and scoring
-- 🧪 **Local Testing**: Complete testing framework for development
-- ⚡ **Simplified Codebase**: Clean, maintainable architecture
+- Multi-agent CLI and Python API
+- LangChain implementation by default with optional legacy path
+- Multi-LLM support (Claude, OpenAI, Grok, Ollama)
+- Evidence-based recommendations and debunked claims
+- Reasoning traces and optional audit logs
+- Markdown + JSON outputs, with optional PDF generation
 
 ## Installation
 
-**Requirements:** Python 3.12+ and UV package manager
+Requirements: Python 3.12+ and the UV package manager.
 
 ```bash
-# 1. Create virtual environment
-uv venv --python 3.12.3
+# Create virtual environment
+uv venv --python 3.12
 source .venv/bin/activate
 
-# 2. Install package  
-uv pip install -e .
+# Install dependencies
+uv sync
 
-# 3. Optional: Add API key for better results
-export ANTHROPIC_API_KEY=your_key_here
+# Optional: dev dependencies (tests)
+uv sync --extra dev
 ```
 
-**That's it!** The agent works offline without any API keys using built-in logic.
+### API Keys
+
+```bash
+export ANTHROPIC_API_KEY="your-anthropic-key"
+export OPENAI_API_KEY="your-openai-key"
+```
+
+Or create a `.env` file in the project root.
 
 ## Quick Start
 
-### 1. Run Your First Analysis
+```bash
+# List agents
+uv run python run_analysis.py --list
 
-The easiest way to get started:
+# Check configured LLM providers
+uv run python run_analysis.py --check-llms
+
+# List supported model identifiers
+uv run python run_analysis.py --models
+```
+
+### Procedure Analyzer
 
 ```bash
-# Analyze MRI with contrast using the full 6-stage reasoning pipeline
-python -m medical_procedure_analyzer.medical_reasoning_agent
+uv run python run_analysis.py procedure \
+  --subject "MRI Scanner" \
+  --details "With gadolinium contrast"
 ```
 
-**Output Example:**
-```
-🔍 KIDNEYS: moderate risk
-  Known: Adequate hydration, Monitor kidney function, Avoid NSAIDs
-  Potential: N-Acetylcysteine supplementation, Magnesium support  
-  Debunked: Kidney detox cleanses, Herbal kidney flushes
+### Medication Analyzer
 
-🔍 BRAIN: moderate risk  
-  Known: No specific interventions for healthy patients
-  Potential: Minimize repeated exposures
-  Debunked: Brain detox supplements, Chelation therapy
+```bash
+uv run python run_analysis.py medication \
+  --subject "Warfarin" \
+  --indication "Atrial Fibrillation" \
+  --other-meds "Aspirin" "Amoxicillin" "Simvastatin"
 ```
 
-### 2. Use in Python Code
+### Medical Fact Checker
+
+```bash
+uv run python run_analysis.py factcheck \
+  --subject "Vitamin D supplementation" \
+  --context "optimal dosing"
+```
+
+### Choose LLM / Implementation
+
+```bash
+# Pick a provider
+uv run python run_analysis.py medication --subject "Metformin" --llm grok-4-1-fast
+
+# Switch implementation
+uv run python run_analysis.py medication --subject "Metformin" --implementation original
+
+# Enable web research (LangChain only)
+uv run python run_analysis.py medication --subject "Metformin" --web-search
+```
+
+### Interactive Router
+
+```bash
+uv run python router.py
+```
+
+## Output Files
+
+All outputs are written to `outputs/` by default (override with `--output-dir`).
+
+### Procedure Analyzer
+
+- `{procedure}_reasoning_trace_{timestamp}.json`
+- `{procedure}_analysis_result_{timestamp}.json`
+- `{procedure}_practitioner_report_{timestamp}.md`
+- `{procedure}_summary_report_{timestamp}.md`
+- `{procedure}_cost_report_{timestamp}.json`
+- Optional PDFs and `{procedure}_audit_{timestamp}.json`
+
+### Medication Analyzer
+
+- `{medication}_medication_analysis_{timestamp}.json`
+- `{medication}_practitioner_report_{timestamp}.md`
+- `{medication}_medication_summary_{timestamp}.md`
+- `{medication}_medication_detailed_{timestamp}.md`
+- `{medication}_cost_report_{timestamp}.json`
+- Optional PDFs and `{medication}_audit_{timestamp}.json`
+
+### Medical Fact Checker
+
+- `{subject}_session_{timestamp}.json`
+- `{subject}_practitioner_report_{timestamp}.md`
+- `{subject}_patient_report_{timestamp}.md`
+- `{subject}_summary_{timestamp}.md`
+- `{subject}_cost_report_{timestamp}.json`
+- Optional PDFs and `{subject}_audit_{timestamp}.json`
+
+## CLI Options
+
+Common flags:
+- `--subject` subject/procedure/medication/topic
+- `--llm` provider (`claude-sonnet`, `claude-opus`, `openai`, `ollama`, `grok-4-1-fast`, `grok-4-1-code`, `grok-4-1-reasoning`)
+- `--implementation` `langchain` or `original`
+- `--output-dir` output directory (default `outputs/`)
+- `--timeout` API timeout seconds (default 300)
+- `--web-search` enable web research (LangChain only)
+
+Procedure-specific:
+- `--details` extra procedure details
+
+Medication-specific:
+- `--indication` primary indication
+- `--other-meds` additional medications
+
+Fact-check-specific:
+- `--context` scope for investigation
+
+## Python API Usage
+
+### Procedure Analyzer
 
 ```python
 from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput
 
-# Create agent with full 6-stage reasoning pipeline
-agent = MedicalReasoningAgent(
-    primary_llm_provider="claude",
-    enable_logging=True
+agent = MedicalReasoningAgent(primary_llm_provider="claude-sonnet", enable_logging=True)
+result = agent.analyze_medical_procedure(
+    MedicalInput(
+        procedure="MRI Scanner",
+        details="With gadolinium contrast",
+        objectives=("risks", "post-procedure care"),
+    )
 )
-
-# Your medical question
-input_data = MedicalInput(
-    procedure="MRI Scanner",
-    details="With contrast",
-    objectives=("understand risks", "post-procedure care")
-)
-
-# Get systematic analysis with full reasoning trace
-result = agent.analyze_medical_procedure(input_data)
-
-# Results follow our conversation pattern:
-# 1. Identifies affected organs (kidneys, brain, liver)
-# 2. Evidence-based recommendations vs debunked claims  
-# 3. Complete reasoning trace with confidence scores
+print(result.procedure_summary)
 ```
 
-### 3. Available Test Scenarios
-
-```bash
-# Use in Python code for full control over the 6-stage reasoning pipeline
-python -c "from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput; \
-agent = MedicalReasoningAgent(primary_llm_provider='claude'); \
-result = agent.analyze_medical_procedure(MedicalInput('MRI Scanner', 'with contrast', ('risks', 'care'))); \
-print(f'Analyzed {len(result.organs_analyzed)} organs with {len(result.reasoning_trace)} reasoning steps')"
-```
-
-### 4. Validation & Quality Check
+### Medication Analyzer
 
 ```python
-from medical_procedure_analyzer import validate_medical_output
+from medical_procedure_analyzer.medication_analyzer import MedicationAnalyzer, MedicationInput
 
-# Validate any analysis result
-report = validate_medical_output(result)
-print(f"Safety Score: {report.safety_score:.2f}")  # 0.70
-print(f"Overall Score: {report.overall_score:.2f}") # 0.79
+analyzer = MedicationAnalyzer(primary_llm_provider="claude-sonnet", enable_logging=True)
+result = analyzer.analyze_medication(
+    MedicationInput(
+        medication_name="Warfarin",
+        indication="Atrial Fibrillation",
+        patient_medications=["Aspirin", "Amoxicillin"],
+    )
+)
+print(result.drug_class)
 ```
 
-## What Makes This Special?
+### Medical Fact Checker
 
-This agent replicates the **exact analytical pattern** from our conversation:
+```python
+from medical_fact_checker import MedicalFactChecker
 
-1. **🎯 Systematic Approach**: Input Analysis → Organ ID → Evidence → Risk → Recommendations → Critical Eval
-2. **📊 Evidence Classification**: Clearly separates "Known" vs "Potential" vs "Debunked" treatments  
-3. **🧠 Reasoning Transparency**: See exactly how the AI thinks through each step
-4. **⚡ Performance**: 25,000+ analyses/second with smart caching
-5. **🔍 Quality Validation**: Built-in scoring system catches medical errors
+checker = MedicalFactChecker(primary_llm_provider="claude-sonnet")
+session = checker.start_analysis("Vitamin D supplementation")
+print(session.final_output)
+```
 
-## For Developers
+## Advanced Usage
 
 ```bash
-# Run tests
-python -m pytest tests/ -v
+# Increase timeout for complex analysis
+uv run python run_analysis.py medication --subject "Digoxin" --timeout 600
 
-# Check package installation
-python -c "from medical_procedure_analyzer import *; print('All systems working!')"
+# Custom output directory
+uv run python run_analysis.py factcheck --subject "Coffee" --output-dir reports/coffee
+
+# Batch runs
+for procedure in "MRI Scanner" "CT Scan" "X-Ray"; do
+  uv run python run_analysis.py procedure --subject "$procedure" --details "Standard protocol"
+done
 ```
+
+## Troubleshooting
+
+- `No such file or directory: pytest` -> `uv sync --extra dev`
+- API key errors -> verify `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`
+- Provider failures -> try `--check-llms` and switch `--llm`
+
+## Contributing
+
+When adding new agents:
+1. Follow the existing agent structure
+2. Implement consistent output formats
+3. Add tests
+4. Update this README
+
+## License
+
+Part of the medical reasoning agent research project.
 
 ---
 
-**⚠️ Educational Use Only**: This tool demonstrates AI reasoning patterns for research. Always consult healthcare professionals for medical decisions.
+**Educational Use Only:** This repository is for research and education. It does not provide medical advice. Always consult qualified healthcare professionals.

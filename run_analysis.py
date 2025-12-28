@@ -9,7 +9,7 @@ import sys
 import json
 import argparse
 from datetime import datetime
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 # Optional diagnostics
 from check_llms import print_llm_status
@@ -710,15 +710,9 @@ class AgentOrchestrator:
 
     def _generate_procedure_summary(self, result: Any, cost_summary: Dict = None) -> str:
         """Generate markdown summary for procedure analysis"""
-        cost_info = ""
-        if cost_summary and cost_summary.get('total_cost', 0) > 0:
-            cost_info = f"""
-**Analysis Cost:** ${cost_summary['total_cost']:.4f}
-**Duration:** {cost_summary['total_duration']:.1f}s"""
-
         summary = f"""# 🔬 Medical Procedure Analysis Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Analysis System:** MedicalReasoningAgent (5-Phase Pipeline){cost_info}
+**Analysis System:** MedicalReasoningAgent (5-Phase Pipeline)
 
 ---
 
@@ -789,22 +783,6 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 
 """
 
-        # Add cost breakdown if available
-        if cost_summary and cost_summary.get('total_cost', 0) > 0:
-            summary += """
-
----
-
-## 💰 Cost Analysis
-
-"""
-            summary += f"**Total Cost:** ${cost_summary['total_cost']:.4f}\n"
-            summary += f"**Total Duration:** {cost_summary['total_duration']:.1f}s\n\n"
-            summary += "### Phase Breakdown:\n\n"
-            for phase in cost_summary.get('phases', []):
-                pct = (phase['cost'] / cost_summary['total_cost'] * 100) if cost_summary['total_cost'] > 0 else 0
-                summary += f"- **{phase['phase']}**: ${phase['cost']:.4f} ({pct:.1f}%) - {phase['duration']:.1f}s\n"
-
         summary += f"""
 
 ---
@@ -816,6 +794,17 @@ _Note: This analysis synthesizes information from medical literature, clinical g
 """
 
         return summary
+
+    @staticmethod
+    def _clean_text(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.lower() in {"n/a", "na"}:
+            return None
+        return text
 
     def _append_hardcoded_disclaimer(self, output: str) -> str:
         """
@@ -927,15 +916,9 @@ This analysis aims to inform and educate, not to direct medical care. When in do
 
     def _generate_fact_check_summary(self, session: Any, cost_summary: Dict = None) -> str:
         """Generate markdown summary for fact check analysis"""
-        cost_info = ""
-        if cost_summary and cost_summary.get('total_cost', 0) > 0:
-            cost_info = f"""
-**Analysis Cost:** ${cost_summary['total_cost']:.4f}
-**Duration:** {cost_summary['total_duration']:.1f}s"""
-
         summary = f"""# 🔎 Medical Fact Check Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Analysis System:** MedicalFactChecker (Independent Bio-Investigator){cost_info}
+**Analysis System:** MedicalFactChecker (Independent Bio-Investigator)
 
 ---
 
@@ -987,16 +970,9 @@ See the detailed output file for the complete analysis.
 
     def _generate_medication_summary(self, result: Any, cost_summary: Dict = None) -> str:
         """Generate markdown summary for medication analysis"""
-        cost_info = ""
-        if cost_summary and cost_summary.get('total_cost', 0) > 0:
-            cost_info = f"""
-**Analysis Cost:** ${cost_summary['total_cost']:.4f}
-**Duration:** {cost_summary['total_duration']:.1f}s
-"""
-
         summary = f"""# 💊 Medication Analysis Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Analysis System:** MedicationAnalyzer (Comprehensive Drug Analysis){cost_info}
+**Analysis System:** MedicationAnalyzer (Comprehensive Drug Analysis)
 
 ---
 
@@ -1078,22 +1054,39 @@ See the detailed output file for the complete analysis.
         if result.evidence_based_recommendations:
             for i, rec in enumerate(result.evidence_based_recommendations[:5], 1):
                 if isinstance(rec, dict):
-                    summary += f"{i}. **{rec.get('intervention', 'N/A')}**\n"
-                    summary += f"   - {rec.get('rationale', 'N/A')[:150]}...\n\n"
+                    action = self._clean_text(rec.get("intervention")) or self._clean_text(
+                        rec.get("implementation")
+                    )
+                    rationale = self._clean_text(rec.get("rationale"))
+                    if action:
+                        summary += f"{i}. **{action}**\n"
+                        if rationale:
+                            summary += f"   - {rationale[:150]}...\n"
+                        summary += "\n"
 
         if result.what_not_to_do:
             summary += "### ❌ What NOT TO DO:\n\n"
             for i, rec in enumerate(result.what_not_to_do[:3], 1):
                 if isinstance(rec, dict):
-                    summary += f"{i}. **{rec.get('action', 'N/A')}**\n"
-                    summary += f"   - {rec.get('rationale', 'N/A')[:150]}...\n\n"
+                    action = self._clean_text(rec.get("action"))
+                    rationale = self._clean_text(rec.get("rationale"))
+                    if action:
+                        summary += f"{i}. **{action}**\n"
+                        if rationale:
+                            summary += f"   - {rationale[:150]}...\n"
+                        summary += "\n"
 
         if result.debunked_claims:
             summary += "### 🧯 Debunked Claims:\n\n"
             for i, claim in enumerate(result.debunked_claims[:3], 1):
                 if isinstance(claim, dict):
-                    summary += f"{i}. **{claim.get('claim', 'N/A')}**\n"
-                    summary += f"   - {claim.get('reason_debunked', 'N/A')[:150]}...\n\n"
+                    statement = self._clean_text(claim.get("claim"))
+                    reason = self._clean_text(claim.get("reason_debunked"))
+                    if statement:
+                        summary += f"{i}. **{statement}**\n"
+                        if reason:
+                            summary += f"   - {reason[:150]}...\n"
+                        summary += "\n"
 
         summary += """
 ---
@@ -1107,15 +1100,11 @@ See the detailed output file for the complete analysis.
 
     def _generate_medication_detailed_report(self, result: Any, cost_summary: Dict = None) -> str:
         """Generate comprehensive detailed report for medication"""
-        cost_header = ""
-        if cost_summary and cost_summary.get('total_cost', 0) > 0:
-            cost_header = f"\n**Analysis Cost:** ${cost_summary['total_cost']:.4f}\n**Duration:** {cost_summary['total_duration']:.1f}s"
-
         report = f"""# 💊 Comprehensive Medication Analysis: {result.medication_name}
 
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis Confidence:** {result.analysis_confidence:.2f}
-**Evidence Quality:** {result.evidence_quality}{cost_header}
+**Evidence Quality:** {result.evidence_quality}
 
 ---
 
@@ -1274,34 +1263,72 @@ See the detailed output file for the complete analysis.
         if result.evidence_based_recommendations:
             for i, rec in enumerate(result.evidence_based_recommendations, 1):
                 if isinstance(rec, dict):
-                    report += f"#### {i}. {rec.get('intervention', 'N/A')}\n\n"
-                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
-                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
-                    report += f"**Implementation:** {rec.get('implementation', 'N/A')}\n\n"
-                    if rec.get('expected_outcome'):
-                        report += f"**Expected Outcome:** {rec.get('expected_outcome')}\n\n"
+                    title = self._clean_text(rec.get("intervention")) or f"Recommendation {i}"
+                    action = self._clean_text(rec.get("intervention")) or self._clean_text(
+                        rec.get("implementation")
+                    )
+                    rationale = self._clean_text(rec.get("rationale"))
+                    evidence_level = self._clean_text(rec.get("evidence_level"))
+                    implementation = self._clean_text(rec.get("implementation"))
+                    expected_outcome = self._clean_text(rec.get("expected_outcome"))
+                    monitoring = self._clean_text(rec.get("monitoring"))
+
+                    report += f"#### {i}. {title}\n\n"
+                    if action and action != title:
+                        report += f"**Action:** {action}\n\n"
+                    if rationale:
+                        report += f"**Why:** {rationale}\n\n"
+                    if evidence_level:
+                        report += f"**Evidence Level:** {evidence_level}\n\n"
+                    if implementation and implementation != action:
+                        report += f"**How:** {implementation}\n\n"
+                    if expected_outcome:
+                        report += f"**Expected Outcome:** {expected_outcome}\n\n"
+                    if monitoring:
+                        report += f"**Monitoring:** {monitoring}\n\n"
 
         if result.what_not_to_do:
             report += "### ❌ What NOT TO DO:\n\n"
             for i, rec in enumerate(result.what_not_to_do, 1):
                 if isinstance(rec, dict):
-                    report += f"#### {i}. {rec.get('action', 'N/A')}\n\n"
-                    report += f"**Rationale:** {rec.get('rationale', 'N/A')}\n\n"
-                    report += f"**Evidence Level:** {rec.get('evidence_level', 'N/A')}\n\n"
-                    report += f"**Risk If Ignored:** {rec.get('risk_if_ignored', 'N/A')}\n\n"
-                    if rec.get('safer_alternative'):
-                        report += f"**Safer Alternative:** {rec.get('safer_alternative')}\n\n"
-                    if rec.get('exceptions'):
-                        report += f"**Exceptions:** {rec.get('exceptions')}\n\n"
+                    action = self._clean_text(rec.get("action"))
+                    rationale = self._clean_text(rec.get("rationale"))
+                    evidence_level = self._clean_text(rec.get("evidence_level"))
+                    risk = self._clean_text(rec.get("risk_if_ignored"))
+                    safer = self._clean_text(rec.get("safer_alternative"))
+                    exceptions = self._clean_text(rec.get("exceptions"))
+
+                    report += f"#### {i}. {action or f'Avoidance {i}'}\n\n"
+                    if rationale:
+                        report += f"**Why Avoid:** {rationale}\n\n"
+                    if evidence_level:
+                        report += f"**Evidence Level:** {evidence_level}\n\n"
+                    if risk:
+                        report += f"**Risk If Ignored:** {risk}\n\n"
+                    if safer:
+                        report += f"**Safer Alternative:** {safer}\n\n"
+                    if exceptions:
+                        report += f"**Exceptions:** {exceptions}\n\n"
 
         if result.debunked_claims:
             report += "### 🧯 Debunked Claims:\n\n"
             for i, claim in enumerate(result.debunked_claims, 1):
                 if isinstance(claim, dict):
-                    report += f"#### ❌ {i}. {claim.get('claim', 'N/A')}\n\n"
-                    report += f"**Why Debunked:** {claim.get('reason_debunked', 'N/A')}\n\n"
-                    report += f"**Evidence Against:** {claim.get('evidence', 'N/A')}\n\n"
-                    report += f"**Why Harmful:** {claim.get('why_harmful', 'N/A')}\n\n"
+                    statement = self._clean_text(claim.get("claim")) or f"Claim {i}"
+                    reason = self._clean_text(claim.get("reason_debunked"))
+                    evidence = self._clean_text(claim.get("evidence"))
+                    why_harmful = self._clean_text(claim.get("why_harmful"))
+                    debunked_by = self._clean_text(claim.get("debunked_by"))
+
+                    report += f"#### ❌ {i}. {statement}\n\n"
+                    if reason:
+                        report += f"**Why Debunked:** {reason}\n\n"
+                    if evidence:
+                        report += f"**Evidence Against:** {evidence}\n\n"
+                    if debunked_by:
+                        report += f"**Debunked By:** {debunked_by}\n\n"
+                    if why_harmful:
+                        report += f"**Why Harmful:** {why_harmful}\n\n"
 
         report += """
 ---
@@ -1325,23 +1352,6 @@ See the detailed output file for the complete analysis.
 **Analysis Completed:** {datetime.now().isoformat()}
 **Reasoning Steps:** {len(result.reasoning_trace)}
 """
-
-        # Add cost breakdown if available
-        if cost_summary and cost_summary.get('total_cost', 0) > 0:
-            report += f"""
----
-
-## 💰 Cost Analysis
-
-**Total Cost:** ${cost_summary['total_cost']:.4f}
-**Total Duration:** {cost_summary['total_duration']:.1f}s
-
-### Phase Breakdown
-
-"""
-            for phase in cost_summary.get('phases', []):
-                pct = (phase['cost'] / cost_summary['total_cost'] * 100) if cost_summary['total_cost'] > 0 else 0
-                report += f"- **{phase['phase']}**: ${phase['cost']:.4f} ({pct:.1f}%) - {phase['duration']:.1f}s\n"
 
         report += """
 ---
