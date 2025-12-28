@@ -119,6 +119,15 @@ Web research context:
 Return JSON matching this schema:
 {schema}
 """
+        if self._is_grok():
+            user_prompt += """
+
+Grok-specific requirements:
+- Do not omit any section in the schema.
+- Provide ≥3 items for list fields when applicable (interactions, adverse effects, recommendations).
+- Ensure contraindications and warning signs are populated with realistic clinical content.
+- Use evidence qualifiers (e.g., strong/moderate/limited) instead of leaving empty.
+"""
         response = self._call_llm(
             system_prompt,
             user_prompt,

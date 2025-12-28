@@ -41,6 +41,7 @@ class LangChainAgentBase:
 
     def __init__(self, config: LangChainAgentConfig):
         self.config = config
+        self.provider_name = (config.primary_llm_provider or "").lower()
         self.enable_reference_validation = config.enable_reference_validation
         self.enable_audit = config.enable_audit
         self.reference_validator = None
@@ -118,6 +119,9 @@ class LangChainAgentBase:
     def _render_prompt(
         self, system_prompt: str, user_prompt: str, **kwargs: Any
     ) -> Tuple[str, str]:
+        system_prompt, user_prompt = self._apply_provider_overrides(
+            system_prompt, user_prompt
+        )
         prompt = ChatPromptTemplate.from_messages(
             [("system", system_prompt), ("user", user_prompt)]
         )
@@ -170,6 +174,27 @@ class LangChainAgentBase:
             )
             self._record_langsmith(audit_step, system_text, user_text, response)
         return response
+
+    def _apply_provider_overrides(
+        self, system_prompt: str, user_prompt: str
+    ) -> Tuple[str, str]:
+        if "grok" not in self.provider_name:
+            return system_prompt, user_prompt
+
+        grok_system = (
+            "Grok output quality requirements: be exhaustive, avoid placeholders, "
+            "and provide complete, clinically useful detail. "
+            "If evidence is limited, label it as limited evidence but still provide guidance."
+        )
+        grok_user = (
+            "Do NOT use 'N/A'. If unknown, use 'not established' and provide rationale. "
+            "For narrative fields, write at least 2-3 sentences. "
+            "Include numeric values (doses, timeframes, ranges) whenever possible."
+        )
+        return f"{system_prompt}\n\n{grok_system}", f"{user_prompt}\n\n{grok_user}"
+
+    def _is_grok(self) -> bool:
+        return "grok" in self.provider_name
 
     def _record_langsmith(
         self, audit_step: str | None, system_text: str, user_text: str, response: str

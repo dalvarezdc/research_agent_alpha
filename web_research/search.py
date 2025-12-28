@@ -58,9 +58,12 @@ class WebResearchClient:
         if not os.getenv("TAVILY_API_KEY"):
             return []
 
-        tool = TavilySearchResults(max_results=self.max_results)
-        raw = tool.invoke(query)
-        return self._normalize_results(raw, provider="tavily")
+        try:
+            tool = TavilySearchResults(max_results=self.max_results)
+            raw = tool.invoke(query)
+            return self._normalize_results(raw, provider="tavily")
+        except Exception:
+            return []
 
     def _search_serpapi(self, query: str) -> List[WebSearchResult]:
         if SerpAPIWrapper is None:
@@ -68,21 +71,27 @@ class WebResearchClient:
         if not os.getenv("SERPAPI_API_KEY"):
             return []
 
-        wrapper = SerpAPIWrapper()
-        raw: Any
-        if hasattr(wrapper, "results"):
-            raw = wrapper.results(query)
-        else:
-            raw = wrapper.run(query)
-        return self._normalize_results(raw, provider="serpapi")
+        try:
+            wrapper = SerpAPIWrapper()
+            raw: Any
+            if hasattr(wrapper, "results"):
+                raw = wrapper.results(query)
+            else:
+                raw = wrapper.run(query)
+            return self._normalize_results(raw, provider="serpapi")
+        except Exception:
+            return []
 
     def _search_duckduckgo(self, query: str) -> List[WebSearchResult]:
         if DuckDuckGoSearchResults is None:
             return []
 
-        tool = DuckDuckGoSearchResults(max_results=self.max_results)
-        raw = tool.invoke(query)
-        return self._normalize_results(raw, provider="duckduckgo")
+        try:
+            tool = DuckDuckGoSearchResults(max_results=self.max_results)
+            raw = tool.invoke(query)
+            return self._normalize_results(raw, provider="duckduckgo")
+        except Exception:
+            return []
 
     def _normalize_results(self, raw: Any, provider: str) -> List[WebSearchResult]:
         results: List[WebSearchResult] = []
