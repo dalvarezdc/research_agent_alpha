@@ -617,6 +617,12 @@ class MedicalFactChecker:
             - Evidence grade (GRADE A/B/C/D) with rationale
             - Cost-effectiveness data where available (QALY, ICER)
 
+            ## 🧭 Actionable Clinical Checklist
+            - Immediate actions (labs, imaging, vitals) with rationale and thresholds
+            - Short-term actions (4-12 weeks): diet, activity, supplements, meds
+            - Monitoring plan with exact biomarker targets and cadence
+            - Escalation triggers (when to intensify, refer, or change therapy)
+
             ## ⚠️ Risk Factors, Safety & Contraindications
             - Non-modifiable risk factors (genetic, age, sex) with ORs
             - Modifiable risk factors ranked by PAF
@@ -643,6 +649,11 @@ class MedicalFactChecker:
             - Multidisciplinary team involvement
             - Patient education and shared decision-making tools
             - Follow-up schedule and transition to long-term management
+
+            ## 🎯 Clinical Targets & Monitoring
+            - List key biomarkers and clinical targets with ranges and units
+            - Include monitoring cadence (e.g., every 3 months)
+            - Provide brief clinical rationale for each target
 
             ## 📚 Primary Research Citations
             APA 7 format with DOI/PMID URLs
@@ -717,26 +728,37 @@ class MedicalFactChecker:
         # 🔬 Simplified Guide: [Subject]
 
         ## 📋 Key Findings
-        - Translate statistics into PLAIN NUMBERS without technical notation
-        - DO NOT use: RR, OR, HR, CI, PAF, BMI numbers, p-values, or any medical abbreviations
-        - Instead say: "increases risk by 50%" not "RR=1.52 (95% CI: 1.41-1.64)"
+        - Translate statistics into plain numbers without statistical notation
+        - Avoid RR, OR, HR, CI, PAF, p-values, and confidence intervals
         - Use everyday analogies for mechanisms (car engines, cleaning, locks and keys)
         - Convert percentages to practical impact ("5 out of 100 people" vs "5%")
         - Use relatable comparisons ("similar risk to [everyday activity]")
+        - Keep essential biomarkers and targets with simple explanations
+
+        ## 🎯 Targets to Track
+        - List key targets with units and ranges (e.g., HbA1c under 5.7%)
+        - After each target, add a short plain-English meaning in parentheses
+        - Include how often to check (e.g., every 3 months)
+
+        ## 🧪 Tests to Ask For
+        - List specific tests and why they matter
+        - Keep names as written, then explain in simple terms
 
         ## ✅ Practical Recommendations
         - Convert protocols into simple action steps anyone can follow
         - Use conversational, encouraging language ("Try this", "Start with")
         - Give specific examples, not medical terms
         - Instead of "16:8 intermittent fasting": "Skip breakfast and eat between noon and 8pm"
-        - Instead of "BMI 18.5-25": "Maintain a healthy weight for your height"
         - Explain WHY each recommendation works in simple terms
         - Use strength indicators like "Strongly recommended" vs "May help"
+
+        ## 💊 Supplements & Medications to Discuss
+        - List items that may help, with simple reasons and safety notes
+        - Keep medication names and doses if present
 
         ## ❌ What to Avoid
         - Explain harms in concrete, relatable terms
         - Use real-world examples and situations
-        - No medical jargon - use everyday words
         - Make risks understandable through comparisons
 
         ## 📚 References
@@ -744,20 +766,19 @@ class MedicalFactChecker:
         - Keep proper APA 7 format (this section can stay technical)
 
         CRITICAL RULES FOR SIMPLIFICATION:
-        - NEVER write: RR, OR, HR, CI, PAF, 95% CI, p<0.05, statistical notation
-        - NEVER write: BMI numbers, HbA1c, IGF-1, mTOR, AMPK (unless absolutely necessary, then explain)
-        - Instead of "RR=1.5": say "50% higher risk" or "risk increases by half"
-        - Instead of "95% CI: 1.2-1.8": say "studies consistently show..."
-        - Instead of "PAF 4%": say "causes about 1 in 25 cases"
-        - Instead of "BMI >30": say "being significantly overweight"
+        - Never write statistical notation: RR, OR, HR, CI, PAF, 95% CI, p<0.05
+        - Keep essential clinical terms and biomarkers (HbA1c, HOMA-IR, TG/HDL, LDL, HDL, GLP-1, CGM)
+        - Every technical term must be followed by a short plain-English definition in parentheses
+        - Keep numeric targets and units exactly as written
+        - Avoid lab acronyms only if not essential; if used, define immediately
         - Use analogies: "your cells clean house", "like rust on a car", "fuel efficiency"
-        - Write at 8th grade reading level - short sentences, common words
+        - Write at 6th grade reading level - short sentences, common words
         - First person, supportive tone: "Let's work together", "I've found", "we can"
 
         Requirements:
-        - 8th grade reading level (use hemingwayapp.com as mental model)
+        - 6th grade reading level
         - First person, warm, encouraging: "your private researcher helping you understand"
-        - Simple analogies for ALL complex concepts
+        - Simple analogies for complex concepts
         - Convert numbers to practical impact (not statistical precision)
         - Make it feel like a knowledgeable friend explaining research over coffee
         - Maintain accuracy but prioritize clarity over precision
@@ -766,10 +787,10 @@ class MedicalFactChecker:
 
         system_prompt = """You are a medical translator making complex research understandable for regular people.
         Your reader: intelligent non-medical person who wants clear, actionable health information.
-        Your mission: Remove ALL medical jargon, statistical notation, and technical terms.
-        Replace with: everyday language, relatable analogies, practical takeaways.
+        Your mission: Minimize jargon but keep essential medical terms and numeric targets, and explain them simply.
+        Replace statistical notation with plain language and practical impact.
         Style: Like explaining research to a friend - warm, clear, supportive, zero condescension.
-        Golden rule: If a 14-year-old couldn't understand it, simplify more."""
+        Golden rule: If a 12-year-old couldn't understand it, simplify more."""
 
         try:
             response, token_usage = self.llm_manager.get_available_provider().generate_response(
