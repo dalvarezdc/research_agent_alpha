@@ -457,6 +457,7 @@ class MedicalFactChecker:
 
             CRITICAL: Include comprehensive references section with 5-10 specific citations.
             Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Every reference MUST include a DOI, PMID, or direct URL. If you cannot provide at least one identifier, do not include the reference.
             Use actual, verifiable studies - not generic database mentions.
 
             Write densely, first person, collaborative investigative tone.
@@ -491,6 +492,7 @@ class MedicalFactChecker:
 
             CRITICAL: Include comprehensive references section with 5-10 specific citations.
             Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Every reference MUST include a DOI, PMID, or direct URL. If you cannot provide at least one identifier, do not include the reference.
             Use actual, verifiable studies - not generic database mentions.
 
             Write densely, first person, optimization-focused tone.
@@ -525,6 +527,7 @@ class MedicalFactChecker:
 
             CRITICAL: Include comprehensive references section with 5-10 specific citations.
             Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Every reference MUST include a DOI, PMID, or direct URL. If you cannot provide at least one identifier, do not include the reference.
             Use actual, verifiable studies - not generic database mentions.
 
             Write densely, first person, paradigm-shifting tone.
@@ -556,6 +559,7 @@ class MedicalFactChecker:
 
             CRITICAL: Include comprehensive references section with 5-10 specific citations.
             Format each reference: [1] Authors (Year). Title. Journal/Source. DOI/PMID/URL
+            Every reference MUST include a DOI, PMID, or direct URL. If you cannot provide at least one identifier, do not include the reference.
             Use actual, verifiable studies - not generic database mentions.
 
             Write simply, first person, friendly teaching tone. Use analogies.
@@ -664,6 +668,7 @@ class MedicalFactChecker:
             CRITICAL REQUIREMENTS:
             - Include 15-20 PRIMARY research citations from high-impact journals
             - Format: [1] Authors (Year). Title. Journal, Volume(Issue), pages. DOI PMID URL
+            - Every citation MUST include a DOI, PMID, or direct URL. If you cannot provide at least one identifier, do not include the citation.
             - For each citation, note: study design, sample size, key findings, effect sizes
             - Prioritize: Phase III RCTs, Cochrane reviews, prospective cohorts n>10,000
             - Include mechanistic studies from Cell, Nature, Science for pathways
@@ -684,7 +689,8 @@ class MedicalFactChecker:
         for healthcare professionals. Write in third-person, objective, professional tone.
         Use precise medical terminology and cite primary research extensively.
         Structure: Similar to a systematic review or clinical practice guideline.
-        Citations: APA 7 format with DOI/PMID URLs to actual papers (PubMed/Nature/Lancet preferred).
+        Citations: APA 7 format with DOI/PMID/URL to actual papers (PubMed/Nature/Lancet preferred).
+        Every citation must include a DOI, PMID, or direct URL; omit references without an identifier.
         IMPORTANT: Use emojis in section headers and subtitles for navigation, but maintain
         professional clinical language throughout the body text."""
 
@@ -764,6 +770,7 @@ class MedicalFactChecker:
         ## 📚 References
         - Preserve ALL references from original
         - Keep proper APA 7 format (this section can stay technical)
+        - Preserve DOI/PMID/URL identifiers in every reference
 
         CRITICAL RULES FOR SIMPLIFICATION:
         - Never write statistical notation: RR, OR, HR, CI, PAF, 95% CI, p<0.05

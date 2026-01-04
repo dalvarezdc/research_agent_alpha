@@ -9,7 +9,7 @@ import sys
 import json
 import argparse
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 # Optional diagnostics
 from check_llms import print_llm_status
@@ -35,6 +35,9 @@ from medical_fact_checker import MedicalFactChecker
 
 # Import medication analyzer
 from medical_procedure_analyzer.medication_analyzer import MedicationAnalyzer, MedicationInput
+from reference_validation.core.citation_url_correspondence_validator import (
+    CitationURLCorrespondenceValidator,
+)
 
 
 class AgentOrchestrator:
@@ -61,6 +64,136 @@ class AgentOrchestrator:
     def __init__(self, output_dir: str = "outputs"):
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
+        self._reference_validation_cache: Dict[int, Dict[str, Any]] = {}
+        self._citation_url_validator: Optional[CitationURLCorrespondenceValidator] = None
+
+    def _get_citation_url_validator(self) -> CitationURLCorrespondenceValidator:
+        if self._citation_url_validator is None:
+            self._citation_url_validator = CitationURLCorrespondenceValidator()
+        return self._citation_url_validator
+
+    @staticmethod
+    def _build_reference_url(ref: Dict[str, Any]) -> Optional[str]:
+        url = str(ref.get("url", "")).strip()
+        if url:
+            return url.rstrip(").,;")
+
+        doi = str(ref.get("doi", "")).strip()
+        if doi:
+            if doi.lower().startswith("http"):
+                return doi.rstrip(").,;")
+            return f"https://doi.org/{doi}"
+
+        pmid = str(ref.get("pmid", "")).strip()
+        if pmid:
+            return f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+
+        return None
+
+    @staticmethod
+    def _format_reference_citation(ref: Dict[str, Any], url: Optional[str]) -> Optional[str]:
+        citation = str(ref.get("raw_citation", "")).strip()
+        if not citation:
+            return None
+
+        if ref.get("doi") and "doi.org" not in citation.lower():
+            citation += f" https://doi.org/{ref['doi']}"
+        if ref.get("pmid") and "pmid" not in citation.lower():
+            citation += f" PMID: {ref['pmid']}"
+        if url and url not in citation:
+            citation += f" {url}"
+
+        return citation
+
+    def _resolve_reference_url(
+        self,
+        citation: str,
+        url: Optional[str],
+        validator: CitationURLCorrespondenceValidator,
+    ) -> Tuple[Optional[str], Optional[str], Optional[float], Optional[str]]:
+        citation_meta = validator.parse_apa_citation(citation)
+        if not citation_meta.title:
+            return None, "Unable to extract citation title for URL validation", None, None
+
+        candidate_url = url or citation_meta.url
+        match_confidence = None
+        corrected_url = None
+
+        if candidate_url:
+            correspondence = validator.check_url_correspondence(candidate_url, citation_meta)
+            match_confidence = correspondence.confidence
+            if correspondence.matches:
+                return candidate_url, None, match_confidence, None
+            reason = "; ".join(correspondence.mismatch_reasons) or "URL does not match citation"
+        else:
+            reason = "No URL provided in reference"
+
+        corrected_url = validator.find_correct_url(citation_meta)
+        if corrected_url and corrected_url != candidate_url:
+            corrected = validator.check_url_correspondence(corrected_url, citation_meta)
+            match_confidence = corrected.confidence
+            if corrected.matches:
+                return corrected_url, None, match_confidence, corrected_url
+            corrected_reason = "; ".join(corrected.mismatch_reasons) or "Suggested URL does not match citation"
+            reason = f"{reason}; {corrected_reason}"
+
+        return None, reason, match_confidence, corrected_url
+
+    def _collect_validated_references(
+        self, session: Any
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        cache_key = id(session)
+        cached = self._reference_validation_cache.get(cache_key)
+        if cached:
+            return cached["kept"], cached["removed"]
+
+        all_references = []
+        seen_refs = set()
+
+        for phase_result in session.phase_results:
+            if hasattr(phase_result, "references") and phase_result.references:
+                for ref in phase_result.references:
+                    if isinstance(ref, dict):
+                        unique_key = (
+                            ref.get("doi")
+                            or ref.get("pmid")
+                            or ref.get("raw_citation", "")[:100].lower()
+                        )
+
+                        if unique_key and unique_key not in seen_refs:
+                            seen_refs.add(unique_key)
+                            all_references.append(ref)
+
+        kept = []
+        removed = []
+        validator = self._get_citation_url_validator()
+
+        for ref in all_references:
+            citation = str(ref.get("raw_citation", "")).strip()
+            if not citation:
+                continue
+
+            candidate_url = self._build_reference_url(ref)
+            resolved_url, reason, match_confidence, corrected_url = self._resolve_reference_url(
+                citation, candidate_url, validator
+            )
+            if resolved_url:
+                formatted = self._format_reference_citation(ref, resolved_url)
+                if formatted:
+                    kept.append(formatted)
+            else:
+                removed.append(
+                    {
+                        "citation": citation,
+                        "url": candidate_url,
+                        "reason": reason,
+                        "match_confidence": match_confidence,
+                        "corrected_url": corrected_url,
+                    }
+                )
+
+        self._reference_validation_cache[cache_key] = {"kept": kept, "removed": removed}
+        return kept, removed
 
     def _resolve_agent_class(self, agent_type: str, implementation: str):
         if implementation == "langchain":
@@ -845,47 +978,20 @@ This analysis aims to inform and educate, not to direct medical care. When in do
             # But still append phase-collected references if available
             pass
 
-        # Aggregate references from all phases
-        all_references = []
-        seen_refs = set()  # Deduplicate by DOI, PMID, or title
-
-        for phase_result in session.phase_results:
-            if hasattr(phase_result, 'references') and phase_result.references:
-                for ref in phase_result.references:
-                    if isinstance(ref, dict):
-                        # Create unique key for deduplication
-                        unique_key = (
-                            ref.get('doi') or
-                            ref.get('pmid') or
-                            ref.get('raw_citation', '')[:100].lower()
-                        )
-
-                        if unique_key and unique_key not in seen_refs:
-                            seen_refs.add(unique_key)
-                            all_references.append(ref)
+        kept_references, _ = self._collect_validated_references(session)
 
         # If no phase references and no embedded references, add note
-        if not all_references and ("## 📚 References" not in output and "## References" not in output):
+        if not kept_references and ("## 📚 References" not in output and "## References" not in output):
             refs_section = "\n\n---\n\n## 📚 References\n\n"
             refs_section += "_Note: This analysis synthesizes information from medical literature, clinical guidelines, and evidence-based medicine databases. Specific citations are included for individual studies and recommendations throughout the analysis._\n"
             return output + refs_section
 
         # If we have collected references from phases, append them
-        if all_references:
-            refs_section = "\n\n---\n\n## 📚 Additional Phase References\n\n"
+        if kept_references:
+            refs_section = "\n\n---\n\n## 📚 Research References\n\n"
             refs_section += "_References collected during analysis phases:_\n\n"
 
-            for i, ref in enumerate(all_references[:30], 1):  # Limit to 30 references
-                citation = ref.get('raw_citation', '')
-
-                # Enhance with extracted metadata
-                if ref.get('doi'):
-                    citation += f" https://doi.org/{ref['doi']}"
-                if ref.get('pmid'):
-                    citation += f" PMID: {ref['pmid']}"
-                if ref.get('url') and 'doi.org' not in citation:
-                    citation += f" {ref['url']}"
-
+            for i, citation in enumerate(kept_references[:30], 1):  # Limit to 30 references
                 refs_section += f"[{i}] {citation}\n\n"
 
             return output + refs_section
@@ -952,6 +1058,21 @@ This analysis aims to inform and educate, not to direct medical care. When in do
             if phase_result.token_usage:
                 summary += f"\n**Token Usage:** {phase_result.token_usage.total_tokens} tokens\n"
 
+            summary += "\n---\n\n"
+
+        removed_references = self._collect_validated_references(session)[1]
+        if removed_references:
+            summary += "## 🧹 Removed References\n\n"
+            summary += "_Removed because URLs did not match the cited study:_\n\n"
+            for i, ref in enumerate(removed_references, 1):
+                summary += f"{i}. {ref.get('citation')}\n"
+                if ref.get("url"):
+                    summary += f"   - URL: {ref.get('url')}\n"
+                if ref.get("reason"):
+                    summary += f"   - Reason: {ref.get('reason')}\n"
+                if ref.get("corrected_url"):
+                    summary += f"   - Suggested URL: {ref.get('corrected_url')}\n"
+                summary += "\n"
             summary += "\n---\n\n"
 
         summary += """## 📄 Final Output

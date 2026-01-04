@@ -1,0 +1,88 @@
+{
+  "total_cost": 0.113301,
+  "total_duration": 83.160797,
+  "phases": [
+    {
+      "phase": "Phase 1: Conflict Scan (LangChain)",
+      "cost": 0.012948000000000001,
+      "duration": 13.927856,
+      "input_tokens": 451,
+      "output_tokens": 773,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test (LangChain)",
+      "cost": 0.020556,
+      "duration": 21.605474,
+      "input_tokens": 902,
+      "output_tokens": 1190,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 3: Synthesis (LangChain)",
+      "cost": 0.018404999999999998,
+      "duration": 11.365395,
+      "input_tokens": 1970,
+      "output_tokens": 833,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 4: Complex Output (LangChain)",
+      "cost": 0.028959,
+      "duration": 17.306923,
+      "input_tokens": 1038,
+      "output_tokens": 1723,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 5: Simplified Output (LangChain)",
+      "cost": 0.032433000000000003,
+      "duration": 18.955149,
+      "input_tokens": 2021,
+      "output_tokens": 1758,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 5: Simplified Output (LangChain)",
+      "cost": 0.032433000000000003,
+      "duration": 18.955149,
+      "input_tokens": 2021,
+      "output_tokens": 1758,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 4: Complex Output (LangChain)",
+      "cost": 0.028959,
+      "duration": 17.306923,
+      "input_tokens": 1038,
+      "output_tokens": 1723,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    },
+    {
+      "phase": "Phase 2: Evidence Stress Test (LangChain)",
+      "cost": 0.020556,
+      "duration": 21.605474,
+      "input_tokens": 902,
+      "output_tokens": 1190,
+      "models_used": [
+        "grok-4-1-fast-reasoning-latest"
+      ]
+    }
+  ]
+}
