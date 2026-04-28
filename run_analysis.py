@@ -373,31 +373,97 @@ class AgentOrchestrator:
 
         return session, files
 
-    def run_medication_analyzer(
+    def run_diagnostic_analyzer(
         self,
-        medication: str,
-        indication: str = None,
-        other_medications: list = None,
+        query: str,
         llm_provider: str = "claude",
         timeout: int = 300,
-        implementation: str = "original",
-        enable_web_research: bool = False,
+        interactive: bool = True,
     ) -> Tuple[Any, Dict[str, str]]:
-        """Run the Medication Analyzer"""
+        """Run the Medical Diagnostic Analyzer"""
         print("=" * 80)
-        print("💊 Medication Analyzer - Comprehensive Drug Analysis")
+        print("🩺 Medical Diagnostic Analyzer - Bayesian Hybrid Pipeline")
         print("=" * 80)
         print()
 
         # Initialize agent
-        print(f"🤖 Initializing agent with {llm_provider} (timeout: {timeout}s)...")
-        agent_class = self._resolve_agent_class("medication", implementation)
-        agent = agent_class(
+        print(f"🤖 Initializing agent with {llm_provider}...")
+        from medical_diagnostic_analyzer.diagnostic_agent import MedicalDiagnosticAgent
+        
+        agent = MedicalDiagnosticAgent(
             primary_llm_provider=llm_provider,
-            fallback_providers=[],
             enable_logging=True,
-            enable_web_research=enable_web_research,
+            interactive=interactive
         )
+
+        print(f"📋 Investigating symptoms from query...")
+        print("⏳ Running 5-level diagnostic protocol...")
+        print()
+
+        # Run analysis
+        result = agent.run_diagnostic_pipeline(query)
+
+        print()
+        print("=" * 80)
+        print("✅ Analysis Complete!")
+        print("=" * 80)
+        report = result['report']
+        print(f"📊 Most Probable: {report['most_probable']}")
+        print(f"🚨 Most Serious: {report['most_serious']}")
+        print(f"🧪 Top 5: {', '.join(report['top_5_candidates'])}")
+        print()
+        print(f"🧠 Reasoning: {report['reasoning_summary']}")
+        print()
+        print(f"➡️ Suggested Agent: {report['suggested_agent']}")
+        print()
+
+        # Save outputs
+        print("💾 Saving outputs...")
+        files = self._save_diagnostic_analysis(result, query)
+
+        return result, files
+
+    def _save_diagnostic_analysis(self, result: Dict[str, Any], query: str) -> Dict[str, str]:
+        """Save diagnostic analysis outputs to files"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_query = "".join([c if c.isalnum() else "_" for c in query[:30]]).strip("_")
+        
+        files = {}
+        
+        # Save JSON session
+        json_path = os.path.join(self.output_dir, f"{safe_query}_diagnostic_{timestamp}.json")
+        with open(json_path, 'w') as f:
+            json.dump(result, f, indent=2)
+        files["json_session"] = json_path
+        
+        # Save Markdown report
+        md_path = os.path.join(self.output_dir, f"{safe_query}_diagnostic_report_{timestamp}.md")
+        report = result['report']
+        with open(md_path, 'w') as f:
+            f.write(f"# 🩺 Medical Diagnostic Report\n\n")
+            f.write(f"**Query:** {query}\n\n")
+            f.write(f"## 📊 Summary\n")
+            f.write(f"- **Most Probable:** {report['most_probable']}\n")
+            f.write(f"- **Most Serious:** {report['most_serious']}\n\n")
+            f.write(f"## 📋 Potential Conditions (Ranked by Probability)\n")
+            for res in result['probabilities'][:5]:
+                f.write(f"- **{res['name']}**: {res['probability']:.1%} (Severity: {res['severity']}/5)\n")
+            f.write(f"\n## 🧠 Clinical Reasoning\n{report['reasoning_summary']}\n\n")
+            f.write(f"## ✅ Recommended Next Steps\n")
+            for step in report['recommended_next_steps']:
+                f.write(f"- {step}\n")
+            f.write(f"\n## ➡️ Follow-up\n")
+            f.write(f"**Suggested Agent:** {report['suggested_agent']}\n")
+            f.write(f"**Rationale:** {report['routing_rationale']}\n")
+            
+        files["markdown_report"] = md_path
+        
+        # Generate PDF
+        pdf_path = md_path.replace(".md", ".pdf")
+        if convert_markdown_to_pdf_safe(md_path, pdf_path):
+            files["pdf_report"] = pdf_path
+            
+        return files
         # Update timeout if agent's LLM manager exists
         if hasattr(agent, "llm_manager") and agent.llm_manager:
             for config in agent.llm_manager.configs:
@@ -1581,8 +1647,12 @@ Examples:
         "--llm",
         type=str,
         default="claude-sonnet",
-        choices=["claude-sonnet", "claude-opus", "openai", "ollama", "grok-4-1-fast", "grok-4-1-code", "grok-4-1-reasoning"],
-        help="LLM provider to use (default: claude-sonnet). Options: claude-sonnet (Sonnet 4.5), claude-opus (Opus 4.5), openai (GPT-4), ollama (local), grok-4-1-fast (fast non-reasoning), grok-4-1-code (code optimized), grok-4-1-reasoning (reasoning optimized)",
+        choices=[
+            "claude-sonnet", "claude-opus", "openai", "ollama", 
+            "grok-4-2-fast", "grok-4-2-reasoning",
+            "grok-4-1-fast", "grok-4-1-code", "grok-4-1-reasoning"
+        ],
+        help="LLM provider to use (default: claude-sonnet). Options: claude-sonnet (Sonnet 4.5), claude-opus (Opus 4.5), openai (GPT-4), ollama (local), grok-4-2-fast (fastest), grok-4-2-reasoning (advanced reasoning), grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning",
     )
 
     parser.add_argument(

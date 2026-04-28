@@ -1,0 +1,82 @@
+{
+  "extraction": {
+    "symptoms": [
+      "fever",
+      "headache",
+      "neck_stiffness",
+      "sore_throat"
+    ],
+    "negative_symptoms": [],
+    "duration": "two days",
+    "severity": "high fever, pounding headache, incredibly stiff neck",
+    "is_vague": false,
+    "clarification_question": null
+  },
+  "probabilities": [
+    {
+      "id": "influenza",
+      "name": "Influenza (Flu)",
+      "severity": 2,
+      "probability": 0.5926856011423467
+    },
+    {
+      "id": "strep_throat",
+      "name": "Strep Throat",
+      "severity": 2,
+      "probability": 0.3503430442308092
+    },
+    {
+      "id": "common_cold",
+      "name": "Common Cold",
+      "severity": 1,
+      "probability": 0.02634158227299319
+    },
+    {
+      "id": "covid_19",
+      "name": "COVID-19",
+      "severity": 3,
+      "probability": 0.014048843878929702
+    },
+    {
+      "id": "migraine",
+      "name": "Migraine",
+      "severity": 3,
+      "probability": 0.012512251579671764
+    },
+    {
+      "id": "meningitis",
+      "name": "Bacterial Meningitis",
+      "severity": 5,
+      "probability": 0.003190624152816299
+    },
+    {
+      "id": "pneumonia",
+      "name": "Pneumonia",
+      "severity": 4,
+      "probability": 0.0008780527424331064
+    }
+  ],
+  "report": {
+    "top_5_candidates": [
+      "Influenza (Flu)",
+      "Strep Throat",
+      "Common Cold",
+      "COVID-19",
+      "Migraine"
+    ],
+    "most_probable": "Influenza (Flu)",
+    "most_serious": "COVID-19",
+    "reasoning_summary": "The diagnostic algorithm identified Influenza as the most probable condition (59.27% probability) based on the constellation of fever, headache, sore throat, and two-day symptom duration. Strep Throat presents as the second most likely differential (35.03%) given the sore throat prominence. While neck stiffness raises concern for more serious etiologies, the overall clinical picture and probability weighting favor viral upper respiratory infection. COVID-19, though lower in probability (1.40%), represents the highest severity risk (3/5) and cannot be excluded without confirmatory testing. The acute onset and systemic symptoms are less consistent with migraine or common cold presentations.",
+    "recommended_next_steps": [
+      "Obtain rapid influenza diagnostic test (RIDT) or PCR for influenza A/B",
+      "Perform SARS-CoV-2 RT-PCR or rapid antigen test to rule out COVID-19",
+      "Conduct rapid streptococcal antigen detection test (RADT) or throat culture",
+      "Assess for meningeal signs through complete neurological examination given neck stiffness",
+      "Monitor vital signs including temperature, heart rate, respiratory rate, and oxygen saturation",
+      "If meningeal signs are present or patient deteriorates, consider lumbar puncture and immediate emergency department referral",
+      "Schedule follow-up within 24-48 hours or sooner if symptoms worsen"
+    ],
+    "suggested_agent": "medication_agent",
+    "routing_rationale": "The differential diagnosis consists primarily of infectious etiologies (Influenza, Strep Throat, COVID-19, Common Cold) that are managed through pharmacological intervention. Treatment protocols involve antiviral agents (oseltamivir for influenza, antivirals for COVID-19 if indicated), antibiotics (penicillin or macrolides for confirmed streptococcal pharyngitis), and symptomatic management with antipyretics and analgesics. No procedural interventions are indicated at this stage unless diagnostic testing or clinical deterioration necessitates invasive assessment. The medication_agent is appropriate for developing evidence-based pharmaceutical treatment plans for the identified conditions."
+  }
+}
