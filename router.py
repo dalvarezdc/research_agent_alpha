@@ -10,6 +10,13 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, skip
+
 # Import LLM utilities from shared integrations module
 from llm_integrations import LLMProvider, get_available_models, call_model
 
@@ -17,7 +24,7 @@ from check_llms import print_llm_status
 
 
 # Default model for routing
-DEFAULT_ROUTING_MODEL = "grok-4-1-fast-non-reasoning-latest"
+DEFAULT_ROUTING_MODEL = "grok-4-2-fast-non-reasoning-latest"
 
 
 @dataclass
@@ -264,7 +271,7 @@ if __name__ == "__main__":
 
     # Map model to provider name for orchestrator
     available_models_dict = get_available_models()
-    llm_provider = available_models_dict.get(selected_model, "grok-4-1-fast")
+    llm_provider = available_models_dict.get(selected_model, "grok-4-2-fast")
 
     print("\nCommands:")
     print("  - Type a query to route and execute it")
@@ -303,7 +310,7 @@ if __name__ == "__main__":
                     if 0 <= model_idx < len(available_models):
                         selected_model = available_models[model_idx]
                         # Update llm_provider for new model
-                        llm_provider = available_models_dict.get(selected_model, "grok-4-1-fast")
+                        llm_provider = available_models_dict.get(selected_model, "grok-4-2-fast")
                         print(f"→ Switched to model: {selected_model} (provider: {llm_provider})\n")
                     else:
                         print(f"Invalid model number. Use 1-{len(available_models)}\n")
@@ -365,7 +372,14 @@ if __name__ == "__main__":
                         implementation=implementation,
                         enable_web_research=web_search_enabled,
                     )
-                elif selected_agent_id in ["diagnostic_agent", "general_agent"]:
+                elif selected_agent_id == "diagnostic_agent":
+                    result, files = orchestrator.run_diagnostic_analyzer(
+                        query=query,
+                        llm_provider=llm_provider,
+                        timeout=300,
+                        interactive=True,
+                    )
+                elif selected_agent_id == "general_agent":
                     result, files = orchestrator.run_fact_checker(
                         subject=query,
                         context="",

@@ -41,6 +41,20 @@ def get_llm_provider_definitions() -> list[dict[str, Any]]:
             "cost": "$3 input / $15 output per 1M tokens",
         },
         {
+            "name": "Grok 4.2 Fast",
+            "cli": "grok-4-2-fast",
+            "env_var": "GROK_API_KEY",
+            "model": "grok-4-2-fast-non-reasoning-latest",
+            "cost": "$0.10 input / $0.30 output per 1M tokens",
+        },
+        {
+            "name": "Grok 4.2 Reasoning",
+            "cli": "grok-4-2-reasoning",
+            "env_var": "GROK_API_KEY",
+            "model": "grok-4-2-fast-reasoning-latest",
+            "cost": "$0.10 input / $0.30 output per 1M tokens",
+        },
+        {
             "name": "Grok 4.1 Fast",
             "cli": "grok-4-1-fast",
             "env_var": "GROK_API_KEY",

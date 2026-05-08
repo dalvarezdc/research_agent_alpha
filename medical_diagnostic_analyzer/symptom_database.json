@@ -1,0 +1,130 @@
+{
+  "diseases": [
+    {
+      "id": "influenza",
+      "name": "Influenza (Flu)",
+      "prevalence": 0.05,
+      "severity": 2,
+      "symptoms": {
+        "fever": 0.9,
+        "cough": 0.8,
+        "fatigue": 0.85,
+        "muscle_aches": 0.7,
+        "headache": 0.6,
+        "sore_throat": 0.5
+      }
+    },
+    {
+      "id": "common_cold",
+      "name": "Common Cold",
+      "prevalence": 0.15,
+      "severity": 1,
+      "symptoms": {
+        "fever": 0.1,
+        "cough": 0.7,
+        "fatigue": 0.3,
+        "sneezing": 0.8,
+        "runny_nose": 0.9,
+        "sore_throat": 0.8
+      }
+    },
+    {
+      "id": "meningitis",
+      "name": "Bacterial Meningitis",
+      "prevalence": 0.0001,
+      "severity": 5,
+      "symptoms": {
+        "fever": 0.95,
+        "headache": 0.9,
+        "neck_stiffness": 0.85,
+        "photophobia": 0.7,
+        "confusion": 0.6,
+        "rash": 0.4
+      }
+    },
+    {
+      "id": "migraine",
+      "name": "Migraine",
+      "prevalence": 0.12,
+      "severity": 3,
+      "symptoms": {
+        "headache": 0.95,
+        "nausea": 0.8,
+        "photophobia": 0.85,
+        "aura": 0.3,
+        "fatigue": 0.4
+      }
+    },
+    {
+      "id": "covid_19",
+      "name": "COVID-19",
+      "prevalence": 0.02,
+      "severity": 3,
+      "symptoms": {
+        "fever": 0.8,
+        "cough": 0.75,
+        "fatigue": 0.7,
+        "loss_of_taste_smell": 0.4,
+        "shortness_of_breath": 0.3,
+        "sore_throat": 0.4
+      }
+    },
+    {
+      "id": "pneumonia",
+      "name": "Pneumonia",
+      "prevalence": 0.01,
+      "severity": 4,
+      "symptoms": {
+        "fever": 0.8,
+        "cough": 0.9,
+        "shortness_of_breath": 0.7,
+        "chest_pain": 0.6,
+        "fatigue": 0.7
+      }
+    },
+    {
+      "id": "strep_throat",
+      "name": "Strep Throat",
+      "prevalence": 0.03,
+      "severity": 2,
+      "symptoms": {
+        "fever": 0.7,
+        "sore_throat": 0.95,
+        "swollen_lymph_nodes": 0.8,
+        "headache": 0.4
+      }
+    }
+  ],
+  "exams": [
+    {
+      "id": "lumbar_puncture",
+      "name": "Lumbar Puncture (Spinal Tap)",
+      "target_diseases": ["meningitis"],
+      "reliability": 0.99
+    },
+    {
+      "id": "chest_xray",
+      "name": "Chest X-Ray",
+      "target_diseases": ["pneumonia"],
+      "reliability": 0.9
+    },
+    {
+      "id": "strep_test",
+      "name": "Rapid Antigen Detection Test (Strep)",
+      "target_diseases": ["strep_throat"],
+      "reliability": 0.95
+    },
+    {
+      "id": "flu_swab",
+      "name": "Rapid Influenza Diagnostic Test",
+      "target_diseases": ["influenza"],
+      "reliability": 0.8
+    },
+    {
+      "id": "covid_pcr",
+      "name": "COVID-19 PCR Test",
+      "target_diseases": ["covid_19"],
+      "reliability": 0.98
+    }
+  ]
+}

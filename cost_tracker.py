@@ -22,6 +22,10 @@ PRICING = {
     "openai": {"input": 3.00, "output": 15.00},
     "gpt-4-turbo-preview": {"input": 3.00, "output": 15.00},
     # xAI Grok models (provider names as used in CLI)
+    "grok-4-2-fast": {"input": 0.10, "output": 0.30},
+    "grok-4-2-reasoning": {"input": 0.10, "output": 0.30},
+    "grok-4-2-fast-non-reasoning-latest": {"input": 0.10, "output": 0.30},
+    "grok-4-2-fast-reasoning-latest": {"input": 0.10, "output": 0.30},
     "grok-4-1-fast": {"input": 0.20, "output": 0.50},
     "grok-4-1-code": {"input": 0.20, "output": 1.50},
     "grok-4-1-reasoning": {"input": 0.20, "output": 0.50},
