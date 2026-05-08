@@ -475,73 +475,6 @@ class AgentOrchestrator:
             files["pdf_report"] = pdf_path
             
         return files
-        # Update timeout if agent's LLM manager exists
-        if hasattr(agent, "llm_manager") and agent.llm_manager:
-            for config in agent.llm_manager.configs:
-                config.timeout = timeout
-
-        # Create input
-        med_input = MedicationInput(
-            medication_name=medication,
-            indication=indication,
-            patient_medications=other_medications or [],
-        )
-
-        print(f"💊 Analyzing: {med_input.medication_name}")
-        if med_input.indication:
-            print(f"   Indication: {med_input.indication}")
-        if med_input.patient_medications:
-            print(f"   Other Medications: {', '.join(med_input.patient_medications)}")
-        print()
-        print("⏳ Running comprehensive medication analysis...")
-        print("   Phase 1: Pharmacology Analysis")
-        print("   Phase 2: Interaction Analysis (Drug-Drug, Drug-Food, Environmental)")
-        print("   Phase 3: Safety Profile Assessment")
-        print("   Phase 4: Clinical Recommendations")
-        print("   Phase 5: Monitoring Requirements")
-        print()
-
-        # Run analysis
-        result = agent.analyze_medication(med_input)
-
-        print()
-        print("=" * 80)
-        print("✅ Analysis Complete!")
-        print("=" * 80)
-        print(f"💊 Medication: {result.medication_name}")
-        print(f"🧬 Drug Class: {result.drug_class}")
-        print(f"📊 Analysis Confidence: {result.analysis_confidence:.2f}")
-        print()
-
-        # Display brief results
-        print("🔍 Analysis Summary:")
-        print(f"   🔗 Drug-Drug Interactions: {len(result.drug_interactions)}")
-        if result.drug_interactions:
-            severe = [i for i in result.drug_interactions if i.severity.value == "severe"]
-            if severe:
-                print(f"      ⚠️  SEVERE: {len(severe)} interactions requiring immediate attention")
-
-        print(f"   🍎 Food Interactions: {len(result.food_interactions)}")
-        print(f"   ⚕️  Contraindications: {len(result.contraindications)}")
-        print(f"   ✅ What TO DO: {len(result.evidence_based_recommendations)}")
-        print(f"   ❌ What NOT TO DO: {len(result.what_not_to_do)}")
-        print(f"   🧯 Debunked Claims: {len(result.debunked_claims)}")
-
-        if result.black_box_warnings:
-            print(f"   ⚠️  BLACK BOX WARNINGS: {len(result.black_box_warnings)}")
-
-        print()
-
-        # Save outputs
-        print("💾 Saving outputs...")
-        files = self._save_medication_analysis(
-            result,
-            medication,
-            audit_events=getattr(agent, "audit_events", None),
-            cost_summary=self._get_agent_cost_summary(agent),
-        )
-
-        return result, files
 
     def _save_procedure_analysis(
         self,
@@ -1615,8 +1548,8 @@ Examples:
     parser.add_argument(
         "agent",
         nargs="?",
-        choices=["procedure", "medication", "factcheck"],
-        help="Which agent to run (procedure, medication, or factcheck)",
+        choices=["procedure", "medication", "factcheck", "diagnostic"],
+        help="Which agent to run (procedure, medication, factcheck, or diagnostic)",
     )
 
     parser.add_argument("--list", action="store_true", help="List all available agents")
@@ -1666,11 +1599,16 @@ Examples:
         type=str,
         default="claude-sonnet",
         choices=[
-            "claude-sonnet", "claude-opus", "openai", "ollama", 
-            "grok-4-2-fast", "grok-4-2-reasoning",
-            "grok-4-1-fast", "grok-4-1-code", "grok-4-1-reasoning"
+            "claude-sonnet", "claude-opus", "openai", "ollama",
+            "grok-4.3",
+            "grok-4-1-fast", "grok-4-1-code", "grok-4-1-reasoning",
         ],
-        help="LLM provider to use (default: claude-sonnet). Options: claude-sonnet (Sonnet 4.5), claude-opus (Opus 4.5), openai (GPT-4), ollama (local), grok-4-2-fast (fastest), grok-4-2-reasoning (advanced reasoning), grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning",
+        help=(
+            "LLM provider to use (default: claude-sonnet). "
+            "Options: claude-sonnet (Sonnet 4.6), claude-opus (Opus 4.7), "
+            "openai (GPT-4o), ollama (local), grok-4.3 (recommended Grok), "
+            "grok-4-1-fast / grok-4-1-code / grok-4-1-reasoning (legacy, retiring May 15 2026)"
+        ),
     )
 
     parser.add_argument(
@@ -1722,7 +1660,7 @@ Examples:
     # Validate arguments
     if not args.agent:
         parser.print_help()
-        print("\n❌ Error: Please specify an agent (procedure, medication, or factcheck)")
+        print("\n❌ Error: Please specify an agent (procedure, medication, factcheck, or diagnostic)")
         print("   Use --list to see available agents")
         sys.exit(1)
 
@@ -1765,6 +1703,14 @@ Examples:
                 timeout=args.timeout,
                 implementation=args.implementation,
                 enable_web_research=args.web_search,
+            )
+
+        elif args.agent == "diagnostic":
+            result, files = orchestrator.run_diagnostic_analyzer(
+                query=args.subject,
+                llm_provider=args.llm,
+                timeout=args.timeout,
+                interactive=True,
             )
 
         # Display file locations

@@ -7,16 +7,14 @@
 
 ## 🔴 High Impact — functional gaps visible to users
 
-### 1. `diagnostic_agent` is a phantom
-**Location:** `router.py:368`  
-**Effort:** 2–3 weeks
+### ~~1. `diagnostic_agent` is a phantom~~ ✅ Fixed
+`router.py` now dispatches `diagnostic_agent` to `orchestrator.run_diagnostic_analyzer()`,
+which uses `MedicalDiagnosticAgent` (Bayesian + LLM pipeline in `medical_diagnostic_analyzer/`).
+The CLI also accepts `uv run python run_analysis.py diagnostic --subject "..."`.
 
-Both `diagnostic_agent` and `general_agent` silently execute `run_fact_checker()`. There is no `DiagnosticAgent` or `LangChainDiagnosticAgent` class anywhere. A user asking "why do I have joint pain?" gets the anti-mainstream narrative fact-checker pipeline, not a symptom-to-diagnosis reasoner.
-
-**Proposed approach:**
-- Dedicated structured differential-diagnosis pipeline
-- Symptom → likely condition list → per-condition evidence summary → when to see a doctor urgency triage
-- Output: structured JSON + patient-friendly Markdown report
+**Remaining gap:** `MedicalDiagnosticAgent` does not use `CostTracker`, does not collect
+`PhaseResult.references`, and is not wired to the LangChain stack. These are incremental
+improvements, not blockers.
 
 ---
 

@@ -51,10 +51,8 @@ pending.md                   # Known gaps and planned work
 |-----------|---------------------|--------------|
 | `medication_agent` | `LangChainMedicationAnalyzer` | Drug pharmacology, interactions, safety, monitoring |
 | `procedure_agent` | `LangChainMedicalReasoningAgent` | Organ-by-organ procedure analysis, peri-op care |
-| `diagnostic_agent` | `LangChainMedicalFactChecker` ⚠️ | **No dedicated class yet** — falls back to fact-checker |
+| `diagnostic_agent` | `MedicalDiagnosticAgent` | Bayesian + LLM symptom-to-condition pipeline |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
-
-> ⚠️ `diagnostic_agent` is a phantom. See `pending.md` item 1.
 
 ---
 
@@ -183,6 +181,7 @@ uv run python router.py --implementation original
 uv run python run_analysis.py factcheck --subject "Vitamin D" --llm claude-sonnet
 uv run python run_analysis.py procedure --subject "Laparoscopic cholecystectomy"
 uv run python run_analysis.py medication --subject "Metformin" --indication "Type 2 diabetes"
+uv run python run_analysis.py diagnostic --subject "fatigue, weight gain, cold intolerance"
 
 # Tests
 uv run python -m pytest tests/ -q
