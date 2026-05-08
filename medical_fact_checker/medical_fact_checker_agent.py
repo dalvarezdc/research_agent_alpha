@@ -11,19 +11,11 @@ from enum import Enum
 import logging
 import json
 from datetime import datetime
-import sys
-import os
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import dspy
 from llm_integrations import LLMManager, create_llm_manager, TokenUsage
 
-# Add parent directory to path for cost_tracker import
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from cost_tracker import track_cost, print_cost_summary, reset_tracking
+from cost_tracker import track_cost, print_cost_summary, reset_tracking, CostTracker
 
 
 class AnalysisPhase(Enum):
@@ -157,6 +149,12 @@ class MedicalFactChecker:
             self.logger.error(f"Failed to initialize LLM manager: {e}")
             raise
 
+        # Per-session cost tracker (isolates cost data between analysis runs)
+        self.cost_tracker = CostTracker()
+
+        # Token usage tracker (initialized here so phase methods can be called directly in tests)
+        self.total_token_usage = TokenUsage()
+
         # Session tracking
         self.current_session: Optional[FactCheckSession] = None
 
@@ -174,8 +172,9 @@ class MedicalFactChecker:
         self.logger.info(f"Starting analysis for subject: {subject}")
         self.current_session = FactCheckSession(subject=subject)
 
-        # Reset cost tracking for new analysis
+        # Reset cost tracking for new analysis (both module-level and per-instance)
         reset_tracking()
+        self.cost_tracker.reset()
 
         # Initialize token usage tracker for this analysis
         self.total_token_usage = TokenUsage()
@@ -219,7 +218,13 @@ class MedicalFactChecker:
             phase3_result.user_choice = "P"  # Default to simplified output
 
         # Phase 4: Generate output based on choice
-        output_type = OutputType(phase3_result.user_choice)
+        try:
+            output_type = OutputType(phase3_result.user_choice)
+        except ValueError:
+            self.logger.warning(
+                f"Unknown output type '{phase3_result.user_choice}', defaulting to PROCEED"
+            )
+            output_type = OutputType.PROCEED
         phase4_result = self._phase4_generate_output(
             subject,
             phase3_result.content,
@@ -242,8 +247,12 @@ class MedicalFactChecker:
         if self.enable_reference_validation and self.reference_validator:
             self.current_session.validation_report = self.reference_validator.validate_analysis(self.current_session)
 
+        # Sync module-level phase data into this agent's per-instance tracker
+        from cost_tracker import get_cost_summary as _module_summary
+        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
+
         # Print cost summary
-        print_cost_summary()
+        self.cost_tracker.print_summary()
 
         return self.current_session
 

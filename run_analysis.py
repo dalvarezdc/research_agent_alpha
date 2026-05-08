@@ -67,6 +67,15 @@ class AgentOrchestrator:
         self._reference_validation_cache: Dict[int, Dict[str, Any]] = {}
         self._citation_url_validator: Optional[CitationURLCorrespondenceValidator] = None
 
+    @staticmethod
+    def _get_agent_cost_summary(agent: Any) -> Dict[str, Any]:
+        """Return cost summary from the agent's per-instance tracker if available,
+        falling back to the module-level tracker."""
+        agent_tracker = getattr(agent, "cost_tracker", None)
+        if agent_tracker is not None:
+            return agent_tracker.get_summary()
+        return get_cost_summary()
+
     def _get_citation_url_validator(self) -> CitationURLCorrespondenceValidator:
         if self._citation_url_validator is None:
             self._citation_url_validator = CitationURLCorrespondenceValidator()
@@ -297,6 +306,7 @@ class AgentOrchestrator:
             result,
             procedure,
             audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
         )
 
         return result, files
@@ -369,6 +379,7 @@ class AgentOrchestrator:
             session,
             subject,
             audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
         )
 
         return session, files
@@ -461,6 +472,7 @@ class AgentOrchestrator:
             result,
             medication,
             audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
         )
 
         return result, files
@@ -470,14 +482,16 @@ class AgentOrchestrator:
         result: Any,
         procedure_name: str,
         audit_events: list[dict] | None = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save procedure analysis results"""
         base_name = procedure_name.replace(" ", "_").lower()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
-        # Get cost summary
-        cost_summary = get_cost_summary()
+        # Use provided cost summary or fall back to module-level tracker
+        if cost_summary is None:
+            cost_summary = get_cost_summary()
 
         # 1. Reasoning trace
         trace_file = f"{self.output_dir}/{base_name}_reasoning_trace_{timestamp}.json"
@@ -584,14 +598,16 @@ class AgentOrchestrator:
         session: Any,
         subject: str,
         audit_events: list[dict] | None = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save fact check analysis results"""
         base_name = subject.replace(" ", "_").lower()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
-        # Get cost summary
-        cost_summary = get_cost_summary()
+        # Use provided cost summary or fall back to module-level tracker
+        if cost_summary is None:
+            cost_summary = get_cost_summary()
 
         # 1. Session data (phases and choices)
         session_file = f"{self.output_dir}/{base_name}_session_{timestamp}.json"
@@ -694,6 +710,7 @@ class AgentOrchestrator:
         result: Any,
         medication_name: str,
         audit_events: list[dict] | None = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save medication analysis results"""
         base_name = medication_name.replace(" ", "_").lower()
@@ -769,8 +786,9 @@ class AgentOrchestrator:
             },
         }
 
-        # Add cost information
-        cost_summary = get_cost_summary()
+        # Add cost information (use provided summary or fall back to module-level tracker)
+        if cost_summary is None:
+            cost_summary = get_cost_summary()
         analysis_data["cost_analysis"] = cost_summary
 
         with open(result_file, "w") as f:
@@ -1075,7 +1093,7 @@ This analysis aims to inform and educate, not to direct medical care. When in do
                 summary += "\n"
             summary += "\n---\n\n"
 
-        summary += """## 📄 Final Output
+        summary += f"""## 📄 Final Output
 
 See the detailed output file for the complete analysis.
 

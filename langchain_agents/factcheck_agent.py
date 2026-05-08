@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from cost_tracker import print_cost_summary, reset_tracking, track_cost
+from cost_tracker import print_cost_summary, reset_tracking, track_cost, CostTracker
 from medical_fact_checker.medical_fact_checker_agent import (
     AnalysisPhase,
     FactCheckSession,
@@ -67,9 +67,11 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         super().__init__(config)
         self.interactive = interactive
         self.current_session: Optional[FactCheckSession] = None
+        self.cost_tracker = CostTracker()
 
     def start_analysis(self, subject: str, clarifying_info: str = "") -> FactCheckSession:
         reset_tracking()
+        self.cost_tracker.reset()
         self.current_session = FactCheckSession(subject=subject)
         self.web_context = self._build_web_context(subject)
 
@@ -97,7 +99,14 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         else:
             phase3.user_choice = "P"
 
-        output_type = OutputType(phase3.user_choice)
+        try:
+            output_type = OutputType(phase3.user_choice)
+        except ValueError:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Unknown output type '{phase3.user_choice}', defaulting to PROCEED"
+            )
+            output_type = OutputType.PROCEED
         phase4 = self._phase4_generate_output(subject, phase3.content, output_type)
         self.current_session.phase_results.append(phase4)
         self.current_session.practitioner_report = phase4.content.get("output", "")
@@ -111,7 +120,9 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
                 self.current_session
             )
 
-        print_cost_summary()
+        from cost_tracker import get_cost_summary as _module_summary
+        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
+        self.cost_tracker.print_summary()
         return self.current_session
 
     @track_cost("Phase 1: Conflict Scan (LangChain)")

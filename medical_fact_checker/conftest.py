@@ -4,12 +4,7 @@ Pytest configuration and shared fixtures for medical fact checker tests
 """
 
 import pytest
-import sys
-import os
 from pathlib import Path
-
-# Add parent directory to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def pytest_configure(config):

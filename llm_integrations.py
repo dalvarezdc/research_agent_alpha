@@ -201,7 +201,7 @@ class ClaudeLLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Build professional system prompt
@@ -308,7 +308,7 @@ class OpenAILLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Build professional system prompt
@@ -409,7 +409,7 @@ class OllamaLLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Build professional system prompt
@@ -499,7 +499,7 @@ class XaiLLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Create chat session
@@ -622,7 +622,7 @@ class LLMManager:
                 self.logger.error(f"Failed to initialize {config.provider.value}: {str(e)}")
     
     def get_available_provider(self) -> Optional[LLMInterface]:
-        """Get first available LLM provider"""
+        """Get first available LLM provider (calls is_available() health check)."""
         for provider_type, provider in self.providers.items():
             if provider.is_available():
                 self.current_provider = provider_type
@@ -630,6 +630,21 @@ class LLMManager:
                 return provider
         
         self.logger.error("No LLM providers available")
+        return None
+
+    def get_provider_direct(self) -> Optional[LLMInterface]:
+        """
+        Return the first initialized provider WITHOUT calling is_available().
+
+        Use this in hot paths (like call_model / routing) where the extra
+        round-trip API health check is unacceptable. The provider is assumed
+        to be usable if it was successfully initialized.
+
+        Returns:
+            First initialized LLMInterface, or None if no providers exist.
+        """
+        for provider in self.providers.values():
+            return provider
         return None
     
     def medical_analysis_with_fallback(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
@@ -886,10 +901,10 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     except Exception as e:
         raise RuntimeError(f"Failed to create LLM manager for {provider_name}: {e}")
 
-    # Get the LLM provider interface
-    llm_provider = llm_manager.get_available_provider()
+    # Get the LLM provider interface directly (no is_available() health check ping)
+    llm_provider = llm_manager.get_provider_direct()
     if not llm_provider:
-        raise RuntimeError(f"LLM provider {provider_name} not available")
+        raise RuntimeError(f"LLM provider {provider_name} not available or not initialized")
 
     # Call the LLM
     try:

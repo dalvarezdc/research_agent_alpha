@@ -13,12 +13,9 @@ from datetime import datetime
 
 # Add caching for efficiency
 from functools import lru_cache
-import sys
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from cost_tracker import track_cost, print_cost_summary, reset_tracking
+from cost_tracker import track_cost, print_cost_summary, reset_tracking, CostTracker
 from llm_integrations import TokenUsage
 
 
@@ -127,6 +124,9 @@ class MedicalReasoningAgent:
             self.logger = logging.getLogger(__name__)
             self.logger.disabled = True
             
+        # Per-session cost tracker (isolates cost data between analysis runs)
+        self.cost_tracker = CostTracker()
+
         # Initialize LLM manager with Claude as default
         from llm_integrations import create_llm_manager
         try:
@@ -173,8 +173,9 @@ class MedicalReasoningAgent:
             self.logger.error(f"Input validation failed: {e}")
             raise ValueError(f"Invalid medical input: {e}")
 
-        # Reset cost tracking for new analysis
+        # Reset cost tracking for new analysis (both module-level and per-instance)
         reset_tracking()
+        self.cost_tracker.reset()
 
         self.reasoning_trace = []  # Reset trace
         
@@ -206,8 +207,12 @@ class MedicalReasoningAgent:
                 medical_input, affected_organs, recommendations
             )
 
+            # Sync module-level phase data into this agent's per-instance tracker
+            from cost_tracker import get_cost_summary as _module_summary
+            self.cost_tracker._phase_costs = _module_summary()["phases"][:]
+
             # Print cost summary
-            print_cost_summary()
+            self.cost_tracker.print_summary()
 
             return final_output
             

@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
-from cost_tracker import print_cost_summary, reset_tracking, track_cost
+from cost_tracker import print_cost_summary, reset_tracking, track_cost, CostTracker
 from medical_procedure_analyzer.input_validation import InputValidator, ValidationError
 from medical_procedure_analyzer.medical_reasoning_agent import (
     MedicalInput,
@@ -67,10 +67,12 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
         )
         super().__init__(config)
         self.reasoning_trace: List[ReasoningStep] = []
+        self.cost_tracker = CostTracker()
 
     def analyze_medical_procedure(self, medical_input: MedicalInput) -> MedicalOutput:
         self._validate_input(medical_input)
         reset_tracking()
+        self.cost_tracker.reset()
         self.reasoning_trace = []
         self.web_context = self._build_web_context(medical_input.procedure)
 
@@ -92,7 +94,9 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
 
-        print_cost_summary()
+        from cost_tracker import get_cost_summary as _module_summary
+        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
+        self.cost_tracker.print_summary()
         return output
 
     def _validate_input(self, medical_input: MedicalInput) -> None:
