@@ -8,8 +8,13 @@ import logging
 from pathlib import Path
 from typing import Optional
 import markdown
-from weasyprint import HTML, CSS
-from weasyprint.text.fonts import FontConfiguration
+try:
+    from weasyprint import HTML, CSS
+    from weasyprint.text.fonts import FontConfiguration
+    WEASYPRINT_AVAILABLE = True
+except (ImportError, OSError) as e:
+    logging.getLogger(__name__).warning(f"WeasyPrint not available: {e}. PDF generation will be disabled.")
+    WEASYPRINT_AVAILABLE = False
 
 
 # Custom CSS for medical reports with emoji support
@@ -274,6 +279,9 @@ def markdown_to_pdf(
         pdf_file = str(md_path.with_suffix('.pdf'))
 
     pdf_path = Path(pdf_file)
+
+    if not WEASYPRINT_AVAILABLE:
+        raise RuntimeError("WeasyPrint is not installed or dependencies (like pango/glib) are missing.")
 
     try:
         # Read markdown content
