@@ -13,28 +13,41 @@ from typing import Dict, List, Optional
 
 # Model pricing (price per 1M tokens)
 PRICING = {
-    # Claude models (provider names)
+    # ── Claude models — current ───────────────────────────────────────────────
+    # Provider aliases
     "claude-sonnet": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "claude-opus": {"input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_write": 18.75},
-    # Claude models (full model names)
+    "claude-opus":   {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
+    # claude-sonnet-4-6
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    # claude-opus-4-7
+    "claude-opus-4-7": {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
+    # claude-haiku-4-5
+    "claude-haiku-4-5":              {"input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write": 1.25},
+    "claude-haiku-4-5-20251001":     {"input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write": 1.25},
+    # ── Claude models — legacy (still active, not deprecated) ─────────────────
     "claude-sonnet-4": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
     "claude-sonnet-4-5-20250929": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "claude-opus-4-5-20251101": {"input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_write": 18.75},
+    "claude-opus-4-5-20251101":   {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
     "claude-haiku": {"input": 0.80, "output": 4.00, "cache_read": 0.08, "cache_write": 1.00},
-    # OpenAI models
-    "openai": {"input": 3.00, "output": 15.00},
-    "gpt-4-turbo-preview": {"input": 3.00, "output": 15.00},
-    # xAI Grok models (provider names as used in CLI)
-    "grok-4-1-fast": {"input": 0.20, "output": 0.50},
-    "grok-4-1-code": {"input": 0.20, "output": 1.50},
-    "grok-4-1-reasoning": {"input": 0.20, "output": 0.50},
-    # xAI Grok models (full model names)
-    "grok-4-1-fast-reasoning-latest": {"input": 0.20, "output": 0.50},
-    "grok-4-1-fast-non-reasoning-latest": {"input": 0.20, "output": 0.50},
-    "grok-4-fast-reasoning": {"input": 0.20, "output": 0.50},
-    "grok-4-fast-non-reasoning": {"input": 0.20, "output": 0.50},
-    "grok-code-fast": {"input": 0.20, "output": 1.50},
-    "grok-4": {"input": 3.00, "output": 15.00},
+    # ── OpenAI models ─────────────────────────────────────────────────────────
+    "openai":           {"input": 2.50, "output": 10.00},
+    "gpt-4o":           {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini":      {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo":      {"input": 10.00, "output": 30.00},
+    "gpt-4-turbo-preview": {"input": 10.00, "output": 30.00},
+    # ── xAI Grok models — current ─────────────────────────────────────────────
+    # grok-4.3: $1.25/1M input, $2.50/1M output
+    "grok-4.3": {"input": 1.25, "output": 2.50},
+    # ── xAI Grok models — legacy (retiring May 15 2026) ──────────────────────
+    "grok-4-1-fast":     {"input": 0.20, "output": 0.50},
+    "grok-4-1-code":     {"input": 0.20, "output": 1.50},
+    "grok-4-1-reasoning":{"input": 0.20, "output": 0.50},
+    "grok-4-1-fast-reasoning-latest":    {"input": 0.20, "output": 0.50},
+    "grok-4-1-fast-non-reasoning-latest":{"input": 0.20, "output": 0.50},
+    "grok-4-fast-reasoning":             {"input": 0.20, "output": 0.50},
+    "grok-4-fast-non-reasoning":         {"input": 0.20, "output": 0.50},
+    "grok-code-fast":                    {"input": 0.20, "output": 1.50},
+    "grok-4-0709":                       {"input": 3.00, "output": 15.00},
     # Default
     "default": {"input": 3.00, "output": 15.00},
 }

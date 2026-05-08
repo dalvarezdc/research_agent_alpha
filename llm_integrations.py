@@ -121,6 +121,9 @@ class LLMProvider(Enum):
     CLAUDE_OPUS = "claude-opus"
     OPENAI = "openai"
     OLLAMA = "ollama"
+    # Grok 4.3 — current flagship (replaces all grok-4-1-* models, retiring May 15 2026)
+    GROK_43 = "grok-4.3"
+    # Legacy grok-4-1 entries kept for backwards compatibility until retirement
     GROK_41_FAST = "grok-4-1-fast"
     GROK_41_CODE = "grok-4-1-code"
     GROK_41_REASONING = "grok-4-1-reasoning"
@@ -613,7 +616,12 @@ class LLMManager:
                     self.providers[config.provider] = OpenAILLM(config)
                 elif config.provider == LLMProvider.OLLAMA:
                     self.providers[config.provider] = OllamaLLM(config)
-                elif config.provider in [LLMProvider.GROK_41_FAST, LLMProvider.GROK_41_CODE, LLMProvider.GROK_41_REASONING]:
+                elif config.provider in [
+                    LLMProvider.GROK_43,
+                    LLMProvider.GROK_41_FAST,
+                    LLMProvider.GROK_41_CODE,
+                    LLMProvider.GROK_41_REASONING,
+                ]:
                     self.providers[config.provider] = XaiLLM(config)
 
                 self.logger.info(f"Initialized {config.provider.value} provider")
@@ -726,31 +734,38 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
     if primary_provider == "claude-sonnet":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_SONNET,
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             temperature=0.1
         ))
     elif primary_provider == "claude-opus":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_OPUS,
-            model="claude-opus-4-5-20251101",
+            model="claude-opus-4-7",
             temperature=0.1
         ))
+    elif primary_provider == "grok-4.3":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
+            temperature=0.1
+        ))
+    # Legacy grok-4-1 provider keys — kept for backwards compat, map to grok-4.3
     elif primary_provider == "grok-4-1-fast":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK_41_FAST,
-            model="grok-4-1-fast-non-reasoning-latest",
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
             temperature=0.1
         ))
     elif primary_provider == "grok-4-1-code":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK_41_CODE,
-            model="grok-code-fast",
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
             temperature=0.1
         ))
     elif primary_provider == "grok-4-1-reasoning":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK_41_REASONING,
-            model="grok-4-1-fast-reasoning-latest",
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
             temperature=0.1
         ))
 
@@ -759,7 +774,7 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
         if provider == "openai":
             configs.append(LLMConfig(
                 provider=LLMProvider.OPENAI,
-                model="gpt-4-turbo-preview",
+                model="gpt-4o",
                 temperature=0.1
             ))
         elif provider == "ollama":
@@ -772,31 +787,38 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
         elif provider == "claude-sonnet":
             configs.append(LLMConfig(
                 provider=LLMProvider.CLAUDE_SONNET,
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 temperature=0.1
             ))
         elif provider == "claude-opus":
             configs.append(LLMConfig(
                 provider=LLMProvider.CLAUDE_OPUS,
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-7",
                 temperature=0.1
             ))
+        elif provider == "grok-4.3":
+            configs.append(LLMConfig(
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
+                temperature=0.1
+            ))
+        # Legacy grok-4-1 fallback keys — map to grok-4.3
         elif provider == "grok-4-1-fast":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_41_FAST,
-                model="grok-4-1-fast-non-reasoning-latest",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
         elif provider == "grok-4-1-code":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_41_CODE,
-                model="grok-code-fast",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
         elif provider == "grok-4-1-reasoning":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_41_REASONING,
-                model="grok-4-1-fast-reasoning-latest",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
 
@@ -811,18 +833,24 @@ def get_available_models() -> dict[str, str]:
         Dictionary mapping model names to provider identifiers
     """
     return {
-        # Claude models
+        # Claude models — current
+        "claude-sonnet-4-6": "claude-sonnet",
+        "claude-opus-4-7": "claude-opus",
+        "claude-haiku-4-5": "claude-sonnet",   # cheapest Claude, maps to sonnet provider
+        # Claude models — legacy (still usable, not yet deprecated)
         "claude-sonnet-4-5-20250929": "claude-sonnet",
         "claude-opus-4-5-20251101": "claude-opus",
-        # Grok models
+        # Grok models — current
+        "grok-4.3": "grok-4.3",
+        # Grok models — legacy (retiring May 15 2026, map to grok-4.3 provider)
         "grok-4-1-fast-non-reasoning-latest": "grok-4-1-fast",
-        "grok-code-fast": "grok-4-1-code",
         "grok-4-1-fast-reasoning-latest": "grok-4-1-reasoning",
+        "grok-code-fast": "grok-4-1-code",
         # OpenAI models
-        "gpt-4-turbo-preview": "openai",
         "gpt-4o": "openai",
         "gpt-4o-mini": "openai",
         "gpt-4-turbo": "openai",
+        "gpt-4-turbo-preview": "openai",
         "gpt-3.5-turbo": "openai",
         # Local models
         "llama2:13b": "ollama",

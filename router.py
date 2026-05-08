@@ -16,8 +16,8 @@ from llm_integrations import LLMProvider, get_available_models, call_model
 from check_llms import print_llm_status
 
 
-# Default model for routing
-DEFAULT_ROUTING_MODEL = "grok-4-1-fast-non-reasoning-latest"
+# Default model for routing — grok-4.3 is the current xAI flagship
+DEFAULT_ROUTING_MODEL = "grok-4.3"
 
 
 @dataclass
@@ -151,9 +151,9 @@ if __name__ == "__main__":
         help="Agent implementation to use (default: langchain)",
     )
     parser.add_argument(
-        "--web-search",
+        "--no-web-search",
         action="store_true",
-        help="Enable web research (LangChain only, default off)",
+        help="Disable web research (enabled by default for LangChain implementation)",
     )
     args = parser.parse_args()
 
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     # globals()["call_llm"] = mock_call_llm
 
     implementation = args.implementation
-    web_search_enabled = args.web_search
+    web_search_enabled = not args.no_web_search
 
     def _warn_langsmith() -> None:
         tracing_flag = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
@@ -264,14 +264,14 @@ if __name__ == "__main__":
 
     # Map model to provider name for orchestrator
     available_models_dict = get_available_models()
-    llm_provider = available_models_dict.get(selected_model, "grok-4-1-fast")
+    llm_provider = available_models_dict.get(selected_model, "grok-4.3")
 
     print("\nCommands:")
     print("  - Type a query to route and execute it")
     print("  - '/models' to list available models")
     print("  - '/model <number>' to change model")
     print("  - '/impl <original|langchain>' to change implementation")
-    print("  - '/web <on|off>' to toggle web research")
+    print("  - '/web <on|off>' to toggle web research (on by default)")
     print("  - 'quit' or 'exit' to stop\n")
 
     last_files = None  # Track last generated files
@@ -303,7 +303,7 @@ if __name__ == "__main__":
                     if 0 <= model_idx < len(available_models):
                         selected_model = available_models[model_idx]
                         # Update llm_provider for new model
-                        llm_provider = available_models_dict.get(selected_model, "grok-4-1-fast")
+                        llm_provider = available_models_dict.get(selected_model, "grok-4.3")
                         print(f"→ Switched to model: {selected_model} (provider: {llm_provider})\n")
                     else:
                         print(f"Invalid model number. Use 1-{len(available_models)}\n")
