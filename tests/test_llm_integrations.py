@@ -57,3 +57,34 @@ def test_get_provider_direct_returns_none_when_empty():
     result = manager.get_provider_direct()
 
     assert result is None
+
+
+def test_call_model_creates_otel_span():
+    """call_model() creates an OTEL span with model name and response attributes."""
+    from llm_integrations import call_model, TokenUsage
+
+    mock_llm = MagicMock()
+    mock_llm.generate_response.return_value = (
+        "routing: medication_agent",
+        TokenUsage(input_tokens=50, output_tokens=5, total_tokens=55),
+    )
+    mock_manager = MagicMock()
+    mock_manager.get_provider_direct.return_value = mock_llm
+
+    mock_span = MagicMock()
+    mock_span.__enter__ = MagicMock(return_value=mock_span)
+    mock_span.__exit__ = MagicMock(return_value=False)
+
+    mock_tracer = MagicMock()
+    mock_tracer.start_as_current_span.return_value = mock_span
+
+    with patch("llm_integrations.create_llm_manager", return_value=mock_manager), \
+         patch("llm_integrations._get_tracer", return_value=mock_tracer):
+        result = call_model(
+            "gpt-4o",
+            [{"role": "system", "content": "route"}, {"role": "user", "content": "drug query"}],
+        )
+
+    mock_tracer.start_as_current_span.assert_called_once_with("llm.call")
+    mock_span.set_attribute.assert_any_call("llm.model_name", "gpt-4o")
+    assert result == "routing: medication_agent"

@@ -14,6 +14,7 @@ from typing import Optional
 from llm_integrations import LLMProvider, get_available_models, call_model
 
 from check_llms import print_llm_status
+from observability import setup_phoenix, get_tracer
 
 
 # Default model for routing — grok-4.3 is the current xAI flagship
@@ -158,6 +159,9 @@ def main():
     )
     args = parser.parse_args()
 
+    # Start Phoenix observability (always-on, tolerates failure silently)
+    _phoenix_url = setup_phoenix()
+
     if args.check_llms:
         print_llm_status(load_env=True)
         raise SystemExit(0)
@@ -257,6 +261,8 @@ def main():
     print(f"Implementation: {implementation}")
     print(f"Web research: {'enabled' if web_search_enabled else 'disabled'}")
     print(f"Available agents: {', '.join(a.id for a in sample_agents)}")
+    if _phoenix_url:
+        print(f"Tracing (Phoenix): {_phoenix_url}")
 
     _warn_langsmith()
 
@@ -331,74 +337,85 @@ def main():
                     print("Usage: /web on|off\n")
                 continue
 
-            # Route the query
-            print(f"→ Routing query...")
-            selected_agent_id = route_agent(
-                query,
-                sample_agents,
-                default_agent_id="general_agent",
-                model=selected_model
-            )
-            selected_agent = next(a for a in sample_agents if a.id == selected_agent_id)
+            # Route and execute inside a tracing span
+            tracer = get_tracer()
+            with tracer.start_as_current_span("router.session") as session_span:
+                session_span.set_attribute("query", query)
+                session_span.set_attribute("model", selected_model)
+                session_span.set_attribute("implementation", implementation)
+                session_span.set_attribute("web_search_enabled", web_search_enabled)
 
-            print(f"→ Routed to: {selected_agent_id} ({selected_agent.name})")
-            print(f"→ Executing {selected_agent.name}...")
-            print()
+                # Route the query
+                print(f"→ Routing query...")
+                selected_agent_id = route_agent(
+                    query,
+                    sample_agents,
+                    default_agent_id="general_agent",
+                    model=selected_model
+                )
+                selected_agent = next(a for a in sample_agents if a.id == selected_agent_id)
+                session_span.set_attribute("routed_to", selected_agent_id)
 
-            # Execute the appropriate analysis method based on agent
-            try:
-                if selected_agent_id == "medication_agent":
-                    result, files = orchestrator.run_medication_analyzer(
-                        medication=query,
-                        indication=None,
-                        other_medications=None,
-                        llm_provider=llm_provider,
-                        timeout=300,
-                        implementation=implementation,
-                        enable_web_research=web_search_enabled,
-                    )
-                elif selected_agent_id == "procedure_agent":
-                    result, files = orchestrator.run_procedure_analyzer(
-                        procedure=query,
-                        details="User query via router",
-                        llm_provider=llm_provider,
-                        timeout=300,
-                        implementation=implementation,
-                        enable_web_research=web_search_enabled,
-                    )
-                elif selected_agent_id == "diagnostic_agent":
-                    result, files = orchestrator.run_diagnostic_analyzer(
-                        query=query,
-                        llm_provider=llm_provider,
-                        timeout=300,
-                        interactive=False,  # non-interactive in router mode
-                    )
-                elif selected_agent_id == "general_agent":
-                    result, files = orchestrator.run_fact_checker(
-                        subject=query,
-                        context="",
-                        llm_provider=llm_provider,
-                        timeout=300,
-                        implementation=implementation,
-                        enable_web_research=web_search_enabled,
-                    )
-
-                last_files = files
-
-                # Show generated files
-                print("\n" + "=" * 60)
-                print("📁 Generated Files:")
-                print("=" * 60)
-                for file_type, file_path in files.items():
-                    print(f"✓ {file_type}: {file_path}")
-                print("=" * 60)
+                print(f"→ Routed to: {selected_agent_id} ({selected_agent.name})")
+                print(f"→ Executing {selected_agent.name}...")
                 print()
 
-            except Exception as e:
-                print(f"✗ Error during analysis: {e}")
-                import traceback
-                traceback.print_exc()
-                print()
+                # Execute the appropriate analysis method based on agent
+                try:
+                    if selected_agent_id == "medication_agent":
+                        result, files = orchestrator.run_medication_analyzer(
+                            medication=query,
+                            indication=None,
+                            other_medications=None,
+                            llm_provider=llm_provider,
+                            timeout=300,
+                            implementation=implementation,
+                            enable_web_research=web_search_enabled,
+                        )
+                    elif selected_agent_id == "procedure_agent":
+                        result, files = orchestrator.run_procedure_analyzer(
+                            procedure=query,
+                            details="User query via router",
+                            llm_provider=llm_provider,
+                            timeout=300,
+                            implementation=implementation,
+                            enable_web_research=web_search_enabled,
+                        )
+                    elif selected_agent_id == "diagnostic_agent":
+                        result, files = orchestrator.run_diagnostic_analyzer(
+                            query=query,
+                            llm_provider=llm_provider,
+                            timeout=300,
+                            interactive=False,  # non-interactive in router mode
+                        )
+                    elif selected_agent_id == "general_agent":
+                        result, files = orchestrator.run_fact_checker(
+                            subject=query,
+                            context="",
+                            llm_provider=llm_provider,
+                            timeout=300,
+                            implementation=implementation,
+                            enable_web_research=web_search_enabled,
+                        )
+
+                    last_files = files
+                    session_span.set_attribute("output.files_count", len(files))
+
+                    # Show generated files
+                    print("\n" + "=" * 60)
+                    print("📁 Generated Files:")
+                    print("=" * 60)
+                    for file_type, file_path in files.items():
+                        print(f"✓ {file_type}: {file_path}")
+                    print("=" * 60)
+                    print()
+
+                except Exception as e:
+                    session_span.record_exception(e)
+                    print(f"✗ Error during analysis: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print()
 
         except KeyboardInterrupt:
             print("\nGoodbye!")

@@ -17,6 +17,16 @@ import dspy
 from pydantic import BaseModel
 
 
+def _get_tracer():
+    """Lazy import to avoid circular dependency with observability module."""
+    try:
+        from observability import get_tracer
+        return get_tracer()
+    except ImportError:
+        from opentelemetry import trace
+        return trace.get_tracer("research-agent-alpha")
+
+
 @dataclass
 class TokenUsage:
     """Track token usage across pipeline"""
@@ -934,12 +944,23 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     if not llm_provider:
         raise RuntimeError(f"LLM provider {provider_name} not available or not initialized")
 
-    # Call the LLM
-    try:
-        response_text, token_usage = llm_provider.generate_response(
-            prompt=user_prompt,
-            system_prompt=system_prompt
-        )
-        return response_text
-    except Exception as e:
-        raise RuntimeError(f"LLM call failed for model {model_name}: {e}")
+    # Call the LLM inside an OTEL span for traceability
+    tracer = _get_tracer()
+    with tracer.start_as_current_span("llm.call") as span:
+        span.set_attribute("llm.model_name", model_name)
+        span.set_attribute("llm.provider", provider_name)
+        span.set_attribute("llm.input_messages", str(messages)[:2000])
+        try:
+            response_text, token_usage = llm_provider.generate_response(
+                prompt=user_prompt,
+                system_prompt=system_prompt
+            )
+            span.set_attribute("llm.output.value", response_text[:2000])
+            if token_usage:
+                span.set_attribute("llm.token_count.prompt", token_usage.input_tokens)
+                span.set_attribute("llm.token_count.completion", token_usage.output_tokens)
+                span.set_attribute("llm.token_count.total", token_usage.total_tokens)
+            return response_text
+        except Exception as e:
+            span.record_exception(e)
+            raise RuntimeError(f"LLM call failed for model {model_name}: {e}")

@@ -42,6 +42,10 @@ dependencies = [
     "markdown>=3.5.0",
     "weasyprint>=60.0",
     "pygments>=2.17.0",
+    "arize-phoenix>=15.0.0",
+    "openinference-instrumentation-langchain>=0.1.63",
+    "openinference-instrumentation>=0.1.49",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
 ]
 
 [project.optional-dependencies]
