@@ -135,15 +135,20 @@ Total knee replacement (TKR) in a 68-year-old male with osteoarthritis and contr
 
 ---
 
-## Agent 3 — `diagnostic_agent` → `MedicalFactChecker`
+## Agent 3 — `diagnostic_agent` → `MedicalDiagnosticAgent` (Bayesian + LLM)
 
 **Routes here when:** The query describes symptoms, a suspected diagnosis, or a
 medical condition to investigate.
 
-**What it produces:** The full multi-perspective fact-check pipeline (Mainstream /
-Naturist / Biohacker views), synthesis of the biological truth, industry bias
-analysis, grey zone hypotheses, and a patient-friendly simplified guide. You will
-be asked to choose your perspective lens [M/N/B/A] if running interactively.
+**What it produces:** A 5-level Bayesian + LLM diagnostic pipeline:
+1. Symptom extraction (LLM NLP → structured list)
+2. Naive Bayes probability scoring across all conditions in the symptom database
+3. Differentiating questions and recommended exams
+4. Iterative Bayesian update based on exam results (interactive mode)
+5. Final report: ranked conditions, most-probable, most-serious, next steps, and a
+   suggested follow-up agent (`medication_agent` or `procedure_agent`)
+
+Output files: `{query}_diagnostic_{timestamp}.json`, `{query}_diagnostic_report_{timestamp}.md+pdf`
 
 ---
 
@@ -279,7 +284,7 @@ looks for:
 |---|---|
 | `medication_agent` | A drug name, dose, or "side effects of", "interactions with" |
 | `procedure_agent` | A surgical term, "surgery", "procedure", "treatment for X" |
-| `diagnostic_agent` | Symptom list, "patient presents with", "what condition causes" |
+| `diagnostic_agent` | Symptom list, "patient presents with", "what condition causes", "I have X and Y" |
 | `general_agent` | "Is there evidence for", "what does research say about", "benefits of" |
 
 **Web research** is on by default. For faster runs or offline use:

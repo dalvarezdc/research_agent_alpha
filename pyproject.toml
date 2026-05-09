@@ -72,7 +72,7 @@ Repository = "https://github.com/research-agent-alpha/medical-reasoning-agent.gi
 Issues = "https://github.com/research-agent-alpha/medical-reasoning-agent/issues"
 
 [project.scripts]
-medical-agent = "medical_reasoning_agent:main"
+medical-router = "router:main"
 
 [dependency-groups]
 dev = [

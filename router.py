@@ -128,7 +128,8 @@ Remember: Output only the agent id, nothing else."""
     return agents[0].id
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the medical-router console script."""
     import sys
     # Import the existing AgentOrchestrator that saves files
     from run_analysis import AgentOrchestrator
@@ -365,7 +366,14 @@ if __name__ == "__main__":
                         implementation=implementation,
                         enable_web_research=web_search_enabled,
                     )
-                elif selected_agent_id in ["diagnostic_agent", "general_agent"]:
+                elif selected_agent_id == "diagnostic_agent":
+                    result, files = orchestrator.run_diagnostic_analyzer(
+                        query=query,
+                        llm_provider=llm_provider,
+                        timeout=300,
+                        interactive=False,  # non-interactive in router mode
+                    )
+                elif selected_agent_id == "general_agent":
                     result, files = orchestrator.run_fact_checker(
                         subject=query,
                         context="",
@@ -397,3 +405,7 @@ if __name__ == "__main__":
             sys.exit(0)
         except Exception as e:
             print(f"Error: {e}\n")
+
+
+if __name__ == "__main__":
+    main()
