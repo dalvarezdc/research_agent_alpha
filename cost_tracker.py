@@ -155,6 +155,14 @@ class CostTracker:
         """Return summary of all tracked costs."""
         total_cost = sum(p["cost"] for p in self._phase_costs)
         total_duration = sum(p["duration"] for p in self._phase_costs)
+        # Phoenix observability: cost annotations on the active span
+        add_span_attributes(
+            {
+                "cost.total": total_cost,
+                "cost.duration": total_duration,
+                "cost.phases_count": len(self._phase_costs),
+            }
+        )
         return {
             "total_cost": total_cost,
             "total_duration": total_duration,
@@ -163,15 +171,6 @@ class CostTracker:
                 self._phase_costs, key=lambda x: x["cost"], reverse=True
             )[:3],
         }
-
-        # Phoenix observability: cost annotations
-        add_span_attributes(
-            {
-                "cost.total": total_cost,
-                "cost.duration": total_duration,
-                "cost.phases_count": len(self._phase_costs),
-            }
-        )
 
     def print_summary(self) -> None:
         """Print cost summary to console."""
