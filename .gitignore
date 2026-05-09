@@ -208,3 +208,6 @@ __marimo__/
 
 # Project-specific: Medical Analysis Agent Outputs
 outputs/older_results/
+
+# Git worktrees
+.worktrees/
