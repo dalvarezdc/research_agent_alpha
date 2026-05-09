@@ -14,7 +14,7 @@ from medical_fact_checker.medical_fact_checker_agent import (
     AnalysisPhase,
     OutputType,
     PhaseResult,
-    FactCheckSession
+    FactCheckSession,
 )
 from llm_integrations import TokenUsage
 
@@ -110,11 +110,12 @@ def mock_llm_manager():
 @pytest.fixture
 def agent_with_mock_llm(mock_llm_manager):
     """Create agent with mocked LLM"""
-    with patch('medical_fact_checker.medical_fact_checker_agent.create_llm_manager', return_value=mock_llm_manager):
+    with patch(
+        "medical_fact_checker.medical_fact_checker_agent.create_llm_manager",
+        return_value=mock_llm_manager,
+    ):
         agent = MedicalFactChecker(
-            primary_llm_provider="claude",
-            enable_logging=False,
-            interactive=False
+            primary_llm_provider="claude", enable_logging=False, interactive=False
         )
         return agent
 
@@ -137,11 +138,12 @@ class TestInitialization:
 
     def test_agent_initialization_success(self, mock_llm_manager):
         """Test successful agent initialization"""
-        with patch('medical_fact_checker.medical_fact_checker_agent.create_llm_manager', return_value=mock_llm_manager):
+        with patch(
+            "medical_fact_checker.medical_fact_checker_agent.create_llm_manager",
+            return_value=mock_llm_manager,
+        ):
             agent = MedicalFactChecker(
-                primary_llm_provider="claude",
-                enable_logging=False,
-                interactive=False
+                primary_llm_provider="claude", enable_logging=False, interactive=False
             )
 
             assert agent is not None
@@ -150,11 +152,12 @@ class TestInitialization:
 
     def test_agent_initialization_with_logging(self, mock_llm_manager):
         """Test agent initialization with logging enabled"""
-        with patch('medical_fact_checker.medical_fact_checker_agent.create_llm_manager', return_value=mock_llm_manager):
+        with patch(
+            "medical_fact_checker.medical_fact_checker_agent.create_llm_manager",
+            return_value=mock_llm_manager,
+        ):
             agent = MedicalFactChecker(
-                primary_llm_provider="claude",
-                enable_logging=True,
-                interactive=True
+                primary_llm_provider="claude", enable_logging=True, interactive=True
             )
 
             assert agent.interactive is True
@@ -162,7 +165,10 @@ class TestInitialization:
 
     def test_agent_initialization_failure(self):
         """Test agent initialization failure"""
-        with patch('medical_fact_checker.medical_fact_checker_agent.create_llm_manager', side_effect=Exception("LLM init failed")):
+        with patch(
+            "medical_fact_checker.medical_fact_checker_agent.create_llm_manager",
+            side_effect=Exception("LLM init failed"),
+        ):
             with pytest.raises(Exception) as exc_info:
                 MedicalFactChecker(primary_llm_provider="invalid")
 
@@ -173,16 +179,20 @@ class TestInitialization:
 class TestPhase1ConflictScan:
     """Test Phase 1: Conflict & Hypothesis Scan"""
 
-    def test_phase1_execution(self, agent_with_mock_llm, sample_subject, sample_context):
+    def test_phase1_execution(
+        self, agent_with_mock_llm, sample_subject, sample_context
+    ):
         """Test Phase 1 executes successfully"""
-        result = agent_with_mock_llm._phase1_conflict_scan(sample_subject, sample_context)
+        result = agent_with_mock_llm._phase1_conflict_scan(
+            sample_subject, sample_context
+        )
 
         assert isinstance(result, PhaseResult)
         assert result.phase == AnalysisPhase.CONFLICT_SCAN
         assert result.content is not None
-        assert 'official_narrative' in result.content
-        assert 'counter_narrative' in result.content
-        assert 'key_conflicts' in result.content
+        assert "official_narrative" in result.content
+        assert "counter_narrative" in result.content
+        assert "key_conflicts" in result.content
 
     def test_phase1_content_parsing(self, agent_with_mock_llm):
         """Test Phase 1 content parsing"""
@@ -199,10 +209,10 @@ class TestPhase1ConflictScan:
 
         content = agent_with_mock_llm._parse_conflict_scan_response(response)
 
-        assert 'official_narrative' in content
-        assert 'counter_narrative' in content
-        assert 'key_conflicts' in content
-        assert len(content['official_narrative']) > 0
+        assert "official_narrative" in content
+        assert "counter_narrative" in content
+        assert "key_conflicts" in content
+        assert len(content["official_narrative"]) > 0
 
     def test_phase1_token_usage_tracking(self, agent_with_mock_llm, sample_subject):
         """Test Phase 1 tracks token usage"""
@@ -219,9 +229,9 @@ class TestPhase2EvidenceStressTest:
     def test_phase2_execution(self, agent_with_mock_llm, sample_subject):
         """Test Phase 2 executes successfully"""
         phase1_content = {
-            'official_narrative': 'Official view',
-            'counter_narrative': 'Alternative view',
-            'key_conflicts': 'Conflicts'
+            "official_narrative": "Official view",
+            "counter_narrative": "Alternative view",
+            "key_conflicts": "Conflicts",
         }
 
         result = agent_with_mock_llm._phase2_evidence_stress_test(
@@ -244,16 +254,16 @@ class TestPhase2EvidenceStressTest:
 
         content = agent_with_mock_llm._parse_evidence_response(response)
 
-        assert 'industry_funded_studies' in content
-        assert 'independent_research' in content
-        assert 'methodology_quality' in content
-        assert 'anecdotal_signals' in content
+        assert "industry_funded_studies" in content
+        assert "independent_research" in content
+        assert "methodology_quality" in content
+        assert "anecdotal_signals" in content
 
     def test_phase2_with_different_angles(self, agent_with_mock_llm, sample_subject):
         """Test Phase 2 with different analysis angles"""
-        phase1_content = {'official_narrative': 'Test', 'counter_narrative': 'Test'}
+        phase1_content = {"official_narrative": "Test", "counter_narrative": "Test"}
 
-        for angle in ['Official', 'Independent', 'Both']:
+        for angle in ["Official", "Independent", "Both"]:
             result = agent_with_mock_llm._phase2_evidence_stress_test(
                 sample_subject, phase1_content, angle
             )
@@ -266,8 +276,14 @@ class TestPhase3Synthesis:
 
     def test_phase3_execution(self, agent_with_mock_llm, sample_subject):
         """Test Phase 3 executes successfully"""
-        phase1_content = {'official_narrative': 'Official', 'counter_narrative': 'Counter'}
-        phase2_content = {'independent_research': 'Research', 'anecdotal_signals': 'Signals'}
+        phase1_content = {
+            "official_narrative": "Official",
+            "counter_narrative": "Counter",
+        }
+        phase2_content = {
+            "independent_research": "Research",
+            "anecdotal_signals": "Signals",
+        }
 
         result = agent_with_mock_llm._phase3_synthesis_menu(
             sample_subject, phase1_content, phase2_content
@@ -287,9 +303,9 @@ class TestPhase3Synthesis:
 
         content = agent_with_mock_llm._parse_synthesis_response(response)
 
-        assert 'biological_truth' in content
-        assert 'industry_bias' in content
-        assert 'grey_zone' in content
+        assert "biological_truth" in content
+        assert "industry_bias" in content
+        assert "grey_zone" in content
 
 
 # Test Phase 4: Output Generation
@@ -299,9 +315,9 @@ class TestPhase4OutputGeneration:
     def test_phase4_evolutionary_output(self, agent_with_mock_llm, sample_subject):
         """Test Phase 4 with Evolutionary output type"""
         synthesis = {
-            'biological_truth': 'Test truth',
-            'industry_bias': 'Test bias',
-            'grey_zone': 'Test grey zone'
+            "biological_truth": "Test truth",
+            "industry_bias": "Test bias",
+            "grey_zone": "Test grey zone",
         }
 
         output = agent_with_mock_llm._phase4_generate_output(
@@ -309,30 +325,32 @@ class TestPhase4OutputGeneration:
         )
 
         assert output is not None
-        assert len(output) > 0
-        assert "Evolutionary Protocol" in output or "Ancestral Logic" in output
+        assert output.content is not None and len(str(output.content)) > 0
+        assert "Evolutionary Protocol" in str(
+            output.content
+        ) or "Ancestral Logic" in str(output.content)
 
     def test_phase4_biohacker_output(self, agent_with_mock_llm, sample_subject):
         """Test Phase 4 with Bio-Hacker output type"""
-        synthesis = {'biological_truth': 'Test'}
+        synthesis = {"biological_truth": "Test"}
 
         output = agent_with_mock_llm._phase4_generate_output(
             sample_subject, synthesis, OutputType.BIOHACKER
         )
 
         assert output is not None
-        assert len(output) > 0
+        assert output.content is not None and len(str(output.content)) > 0
 
     def test_phase4_all_output_types(self, agent_with_mock_llm, sample_subject):
         """Test Phase 4 with all output types"""
-        synthesis = {'biological_truth': 'Test', 'industry_bias': 'Test'}
+        synthesis = {"biological_truth": "Test", "industry_bias": "Test"}
 
         output_types = [
             OutputType.EVOLUTIONARY,
             OutputType.BIOHACKER,
             OutputType.PARADIGM_SHIFT,
             OutputType.VILLAGE_WISDOM,
-            OutputType.PROCEED
+            OutputType.PROCEED,
         ]
 
         for output_type in output_types:
@@ -340,7 +358,7 @@ class TestPhase4OutputGeneration:
                 sample_subject, synthesis, output_type
             )
             assert output is not None
-            assert len(output) > 0
+            assert output.content is not None and len(str(output.content)) > 0
 
 
 # Test Phase 5: Simplified Output
@@ -359,7 +377,7 @@ class TestPhase5SimplifiedOutput:
         simplified = agent_with_mock_llm._phase5_simplify_output(complex_output)
 
         assert simplified is not None
-        assert len(simplified) > 0
+        assert simplified.content is not None and len(str(simplified.content)) > 0
 
     def test_phase5_preserves_content(self, agent_with_mock_llm):
         """Test Phase 5 preserves important content"""
@@ -368,7 +386,7 @@ class TestPhase5SimplifiedOutput:
         simplified = agent_with_mock_llm._phase5_simplify_output(complex_output)
 
         # Should not be empty
-        assert len(simplified) > 0
+        assert simplified.content is not None and len(str(simplified.content)) > 0
 
 
 # Test Response Parsing
@@ -379,9 +397,9 @@ class TestResponseParsing:
         """Test parsing empty conflict scan response"""
         content = agent_with_mock_llm._parse_conflict_scan_response("")
 
-        assert 'official_narrative' in content
-        assert 'counter_narrative' in content
-        assert 'key_conflicts' in content
+        assert "official_narrative" in content
+        assert "counter_narrative" in content
+        assert "key_conflicts" in content
 
     def test_parse_conflict_scan_partial_response(self, agent_with_mock_llm):
         """Test parsing partial conflict scan response"""
@@ -389,7 +407,7 @@ class TestResponseParsing:
 
         content = agent_with_mock_llm._parse_conflict_scan_response(response)
 
-        assert len(content['official_narrative']) > 0
+        assert len(content["official_narrative"]) > 0
 
     def test_parse_evidence_response_malformed(self, agent_with_mock_llm):
         """Test parsing malformed evidence response"""
@@ -398,14 +416,14 @@ class TestResponseParsing:
         content = agent_with_mock_llm._parse_evidence_response(response)
 
         # Should still return structure
-        assert 'independent_research' in content
+        assert "independent_research" in content
 
     def test_parse_synthesis_response_variations(self, agent_with_mock_llm):
         """Test parsing synthesis response with variations"""
         responses = [
             "Biological truth: Finding 1\nIndustry bias: Finding 2",
             "Reality: Finding 1\nProfit motive: Finding 2",
-            "Truth: Finding 1\nBias: Finding 2"
+            "Truth: Finding 1\nBias: Finding 2",
         ]
 
         for response in responses:
@@ -417,7 +435,9 @@ class TestResponseParsing:
 class TestFullWorkflow:
     """Test complete analysis workflow"""
 
-    def test_full_analysis_workflow(self, agent_with_mock_llm, sample_subject, sample_context):
+    def test_full_analysis_workflow(
+        self, agent_with_mock_llm, sample_subject, sample_context
+    ):
         """Test complete analysis from start to finish"""
         session = agent_with_mock_llm.start_analysis(sample_subject, sample_context)
 
@@ -470,13 +490,13 @@ class TestSessionManagement:
         assert export_path.exists()
 
         # Verify content
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             data = json.load(f)
 
-        assert data['subject'] == sample_subject
-        assert 'phases' in data
-        assert 'final_output' in data
-        assert len(data['phases']) > 0
+        assert data["subject"] == sample_subject
+        assert "phases" in data
+        assert "final_output" in data
+        assert len(data["phases"]) > 0
 
     def test_session_export_no_active_session(self, agent_with_mock_llm, tmp_path):
         """Test export with no active session"""
@@ -503,8 +523,8 @@ class TestErrorHandling:
     def test_llm_failure_handling(self, agent_with_mock_llm, sample_subject):
         """Test handling of LLM failures"""
         # Mock LLM to raise exception
-        agent_with_mock_llm.llm_manager.get_available_provider().generate_response = Mock(
-            side_effect=Exception("LLM API error")
+        agent_with_mock_llm.llm_manager.get_available_provider().generate_response = (
+            Mock(side_effect=Exception("LLM API error"))
         )
 
         with pytest.raises(Exception) as exc_info:
@@ -514,12 +534,16 @@ class TestErrorHandling:
 
     def test_invalid_output_type(self, agent_with_mock_llm, sample_subject):
         """Test handling of invalid output type"""
-        synthesis = {'biological_truth': 'Test'}
+        synthesis = {"biological_truth": "Test"}
 
         # OutputType enum should prevent invalid values, but test anyway
-        valid_types = [OutputType.EVOLUTIONARY, OutputType.BIOHACKER,
-                      OutputType.PARADIGM_SHIFT, OutputType.VILLAGE_WISDOM,
-                      OutputType.PROCEED]
+        valid_types = [
+            OutputType.EVOLUTIONARY,
+            OutputType.BIOHACKER,
+            OutputType.PARADIGM_SHIFT,
+            OutputType.VILLAGE_WISDOM,
+            OutputType.PROCEED,
+        ]
 
         for output_type in valid_types:
             output = agent_with_mock_llm._phase4_generate_output(
@@ -551,14 +575,15 @@ class TestEnums:
 class TestInteractiveMode:
     """Test interactive mode with mocked user input"""
 
-    @patch('builtins.input', side_effect=['Both', 'Proceed', 'P'])
+    @patch("builtins.input", side_effect=["Both", "Proceed", "P"])
     def test_interactive_prompts(self, mock_input, mock_llm_manager, sample_subject):
         """Test interactive prompts work correctly"""
-        with patch('medical_fact_checker.medical_fact_checker_agent.create_llm_manager', return_value=mock_llm_manager):
+        with patch(
+            "medical_fact_checker.medical_fact_checker_agent.create_llm_manager",
+            return_value=mock_llm_manager,
+        ):
             agent = MedicalFactChecker(
-                primary_llm_provider="claude",
-                enable_logging=False,
-                interactive=True
+                primary_llm_provider="claude", enable_logging=False, interactive=True
             )
 
             session = agent.start_analysis(sample_subject, "")
@@ -569,27 +594,27 @@ class TestInteractiveMode:
 
     def test_prompt_user_phase1(self, agent_with_mock_llm):
         """Test Phase 1 user prompt"""
-        with patch('builtins.input', return_value='Both'):
+        with patch("builtins.input", return_value="Both"):
             choice = agent_with_mock_llm._prompt_user_phase1()
-            assert choice in ['Official', 'Independent', 'Both']
+            assert choice in ["Official", "Independent", "Both"]
 
     def test_prompt_user_phase2(self, agent_with_mock_llm):
         """Test Phase 2 user prompt"""
         phase2_content = {
-            'industry_funded_studies': 'Test studies',
-            'independent_research': 'Test research',
-            'anecdotal_signals': 'Test signals'
+            "industry_funded_studies": "Test studies",
+            "independent_research": "Test research",
+            "anecdotal_signals": "Test signals",
         }
 
-        with patch('builtins.input', return_value='Proceed'):
+        with patch("builtins.input", return_value="Proceed"):
             choice = agent_with_mock_llm._prompt_user_phase2(phase2_content)
-            assert choice in ['Dig', 'Proceed']
+            assert choice in ["Dig", "Proceed"]
 
     def test_prompt_user_phase3(self, agent_with_mock_llm):
         """Test Phase 3 user prompt"""
-        with patch('builtins.input', return_value='A'):
+        with patch("builtins.input", return_value="A"):
             choice = agent_with_mock_llm._prompt_user_phase3()
-            assert choice in ['A', 'B', 'C', 'D', 'P']
+            assert choice in ["A", "B", "C", "D", "P"]
 
 
 # Test Token Usage
@@ -639,10 +664,10 @@ class TestIntegration:
 
         # Verify export
         assert export_path.exists()
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             data = json.load(f)
 
-        assert data['subject'] == sample_subject
+        assert data["subject"] == sample_subject
 
     def test_multiple_analyses_same_agent(self, agent_with_mock_llm):
         """Test running multiple analyses with same agent instance"""

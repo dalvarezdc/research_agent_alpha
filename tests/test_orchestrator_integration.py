@@ -4,6 +4,8 @@ Test suite for Router + Orchestrator Integration
 Tests end-to-end flow: routing → execution → result formatting
 """
 
+import os
+
 from router import route_agent, AgentSpec
 from run_analysis import AgentOrchestrator
 
@@ -15,25 +17,25 @@ def get_test_agents():
             id="medication_agent",
             name="Medication Specialist",
             description="Handles queries about medications, drugs, dosages, side effects, and prescriptions",
-            routing_notes="Use for pharmaceutical and medication-related questions"
+            routing_notes="Use for pharmaceutical and medication-related questions",
         ),
         AgentSpec(
             id="procedure_agent",
             name="Medical Procedure Specialist",
             description="Handles queries about medical procedures, surgeries, and treatments",
-            routing_notes="Use for procedural and interventional medical questions"
+            routing_notes="Use for procedural and interventional medical questions",
         ),
         AgentSpec(
             id="diagnostic_agent",
             name="Diagnostic Specialist",
             description="Handles queries about symptoms, diagnoses, and medical conditions",
-            routing_notes="Use for diagnostic and condition-related questions"
+            routing_notes="Use for diagnostic and condition-related questions",
         ),
         AgentSpec(
             id="general_agent",
             name="General Medical Assistant",
-            description="Handles general medical queries that don't fit other specialized categories"
-        )
+            description="Handles general medical queries that don't fit other specialized categories",
+        ),
     ]
 
 
@@ -120,6 +122,7 @@ def test_full_execution():
 
     # Map model to provider
     from llm_integrations import get_available_models
+
     available_models_dict = get_available_models()
     llm_provider = available_models_dict.get(model, "grok-4-1-fast")
 
@@ -144,15 +147,12 @@ def test_full_execution():
                 indication=None,
                 other_medications=None,
                 llm_provider=llm_provider,
-                timeout=300
+                timeout=300,
             )
         else:
             # Fallback to fact checker
             result, files = orchestrator.run_fact_checker(
-                subject=test_query,
-                context="",
-                llm_provider=llm_provider,
-                timeout=300
+                subject=test_query, context="", llm_provider=llm_provider, timeout=300
             )
 
         print("✓ Execution successful!")
@@ -167,6 +167,7 @@ def test_full_execution():
     except Exception as e:
         print(f"\n✗ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
