@@ -4,6 +4,7 @@ Observability module — Arize Phoenix + OpenTelemetry tracing.
 Call setup_phoenix() once at process startup (router.py:main).
 Call get_tracer() anywhere you need a manual span.
 """
+
 from __future__ import annotations
 
 import logging
@@ -15,15 +16,22 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from openinference.instrumentation.langchain import LangChainInstrumentor
 
+# Logging imports for Phoenix log ingestion
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+
 logger = logging.getLogger(__name__)
 
 _tracer_provider: Optional[TracerProvider] = None
+_logger_provider: Optional[LoggerProvider] = None
 _phoenix_app = None
 
 
 def _launch_phoenix():
     """Start the Phoenix server. Separated for testability."""
     import phoenix as px
+
     return px.launch_app()
 
 
@@ -62,7 +70,18 @@ def setup_phoenix() -> Optional[str]:
         # 3. Auto-instrument LangChain
         LangChainInstrumentor().instrument(tracer_provider=_tracer_provider)
 
-        logger.info("Phoenix tracing active at %s", phoenix_url)
+        # 4. Configure logging to Phoenix via OTLP
+        global _logger_provider
+        _logger_provider = LoggerProvider(resource=resource)
+        log_exporter = OTLPLogExporter(endpoint="http://localhost:6006/v1/logs")
+        _logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        logging_handler = LoggingHandler(
+            level=logging.INFO, logger_provider=_logger_provider
+        )
+        logging.getLogger().addHandler(logging_handler)
+        logging.getLogger().setLevel(logging.INFO)
+
+        logger.info("Phoenix tracing + logging active at %s", phoenix_url)
         print(f"  Phoenix UI: {phoenix_url}")
         return phoenix_url
 
@@ -74,3 +93,17 @@ def setup_phoenix() -> Optional[str]:
 def get_tracer() -> trace.Tracer:
     """Return the project-level OpenTelemetry tracer."""
     return trace.get_tracer("research-agent-alpha")
+
+
+def add_span_attributes(attributes: dict):
+    """Add custom attributes to the current active span (safe no-op if no span)."""
+    try:
+        span = trace.get_current_span()
+        if span and span.is_recording():
+            for key, value in attributes.items():
+                if value is not None:
+                    span.set_attribute(
+                        str(key), str(value)[:500]
+                    )  # Truncate long values
+    except Exception:
+        pass  # Never break execution on observability
