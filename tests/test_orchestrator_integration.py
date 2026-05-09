@@ -4,13 +4,6 @@ Test suite for Router + Orchestrator Integration
 Tests end-to-end flow: routing → execution → result formatting
 """
 
-import sys
-import os
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from router import route_agent, AgentSpec
 from run_analysis import AgentOrchestrator
 

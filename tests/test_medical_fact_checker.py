@@ -5,14 +5,9 @@ Pytest tests for Medical Fact Checker Agent
 
 import pytest
 import json
-import os
-import sys
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 from pathlib import Path
-
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from medical_fact_checker.medical_fact_checker_agent import (
     MedicalFactChecker,

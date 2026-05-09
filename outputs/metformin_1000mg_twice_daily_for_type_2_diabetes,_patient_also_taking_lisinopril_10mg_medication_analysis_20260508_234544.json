@@ -1,0 +1,236 @@
+{
+  "timestamp": "2026-05-08T23:45:44.432030",
+  "agent_type": "medication_analyzer",
+  "medication_name": "Metformin",
+  "drug_class": "Biguanide antidiabetic agent",
+  "mechanism_of_action": "Decreases hepatic glucose production by inhibiting gluconeogenesis, reduces intestinal absorption of glucose, and improves insulin sensitivity by increasing peripheral glucose uptake and utilization in muscle and adipose tissue.",
+  "pharmacokinetics": {
+    "absorption": "Oral bioavailability is 50-60 percent with absorption occurring primarily in the small intestine via saturable active transport; peak plasma levels occur in 2-3 hours.",
+    "metabolism": "Not metabolized by the liver or any cytochrome P450 enzymes; remains unchanged in the body.",
+    "elimination": "Excreted unchanged in urine via glomerular filtration and active tubular secretion with 90 percent renal clearance.",
+    "half_life": "4.5 to 6.2 hours in patients with normal renal function; prolonged in renal impairment."
+  },
+  "clinical_use": {
+    "approved_indications": [
+      "Type 2 diabetes mellitus as monotherapy or combination therapy"
+    ],
+    "off_label_uses": [
+      "Polycystic ovary syndrome to improve ovulation",
+      "Prevention of type 2 diabetes in high-risk individuals",
+      "Management of antipsychotic-induced weight gain"
+    ],
+    "standard_dosing": "Initial 500 mg twice daily with meals, titrated by 500 mg weekly to 1000 mg twice daily; maximum 2550 mg per day in divided doses.",
+    "dose_adjustments": {
+      "renal_impairment": "Reduce dose if eGFR 30-45 mL/min/1.73 m2; contraindicated below 30 mL/min/1.73 m2",
+      "hepatic_impairment": "Use with caution; avoid in severe liver disease due to lactic acidosis risk",
+      "elderly": "Initiate at 500 mg daily and titrate slowly based on renal function"
+    }
+  },
+  "safety_profile": {
+    "common_adverse_effects": [
+      "Nausea and vomiting",
+      "Diarrhea",
+      "Abdominal discomfort or bloating",
+      "Metallic taste in mouth"
+    ],
+    "serious_adverse_effects": [
+      "Lactic acidosis especially with renal impairment",
+      "Vitamin B12 deficiency with prolonged use",
+      "Hypoglycemia when combined with insulin or sulfonylureas"
+    ],
+    "contraindications": [
+      {
+        "condition": "Severe renal impairment with eGFR less than 30 mL/min/1.73 m2"
+      },
+      {
+        "condition": "Acute or chronic metabolic acidosis including diabetic ketoacidosis"
+      },
+      {
+        "condition": "Known hypersensitivity to metformin or any component"
+      }
+    ],
+    "black_box_warnings": [
+      "Risk of lactic acidosis which can be fatal; assess renal function before initiation and periodically thereafter"
+    ]
+  },
+  "interactions": {
+    "drug_interactions": [
+      {
+        "type": "drug-drug",
+        "agent": "Lisinopril",
+        "severity": "moderate",
+        "mechanism": "ACE inhibitor may reduce renal function leading to decreased metformin clearance and accumulation",
+        "clinical_effect": "Increased risk of lactic acidosis and hyperkalemia",
+        "management": "Monitor serum creatinine and eGFR at baseline and every 3 months; adjust metformin dose if eGFR declines",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Iodinated contrast media",
+        "severity": "severe",
+        "mechanism": "Contrast-induced nephropathy reduces metformin excretion",
+        "clinical_effect": "Elevated risk of lactic acidosis",
+        "management": "Withhold metformin for 48 hours after contrast procedure and resume only after renal function is confirmed stable",
+        "time_separation": "48 hours post-procedure",
+        "evidence_level": "strong"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Alcohol",
+        "severity": "moderate",
+        "mechanism": "Alcohol inhibits gluconeogenesis and may potentiate metformin effects on lactate",
+        "clinical_effect": "Increased risk of hypoglycemia and lactic acidosis",
+        "management": "Limit alcohol intake to less than 2 drinks daily and monitor blood glucose",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      }
+    ],
+    "food_interactions": [
+      {
+        "type": "drug-drug",
+        "agent": "High-fat meals",
+        "severity": "minor",
+        "mechanism": "May slightly delay absorption but does not reduce overall bioavailability",
+        "clinical_effect": "Delayed onset of action",
+        "management": "Administer with meals to minimize gastrointestinal adverse effects"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Alcohol-containing foods or beverages",
+        "severity": "moderate",
+        "mechanism": "Potentiates lactate accumulation",
+        "clinical_effect": "Risk of lactic acidosis",
+        "management": "Avoid excessive intake and counsel on moderation"
+      }
+    ],
+    "environmental_considerations": [
+      "Dispose via drug take-back programs to prevent water contamination",
+      "Metformin is not readily biodegradable in aquatic environments",
+      "Avoid flushing tablets to minimize ecological impact on waterways"
+    ]
+  },
+  "recommendations": {
+    "what_to_do": [
+      {
+        "action": "Monitor renal function with eGFR calculation at baseline and every 3 to 6 months",
+        "rationale": "Detects early decline allowing timely dose adjustment to prevent lactic acidosis",
+        "evidence_level": "strong",
+        "implementation": "Order serum creatinine and calculate eGFR using CKD-EPI equation",
+        "expected_outcome": "Reduced incidence of metformin-associated lactic acidosis",
+        "monitoring": "Review results before each prescription refill"
+      },
+      {
+        "action": "Assess vitamin B12 levels annually in patients on long-term therapy",
+        "rationale": "Metformin interferes with B12 absorption increasing deficiency risk after 5 years",
+        "evidence_level": "moderate",
+        "implementation": "Order serum B12 and methylmalonic acid if borderline",
+        "expected_outcome": "Prevention of neuropathy and anemia",
+        "monitoring": "Supplement with 1000 mcg cyanocobalamin if deficient"
+      },
+      {
+        "action": "Titrate dose slowly over 4 weeks while monitoring gastrointestinal tolerance",
+        "rationale": "Minimizes discontinuation due to side effects and improves adherence",
+        "evidence_level": "strong",
+        "implementation": "Start 500 mg once daily with evening meal and increase weekly",
+        "expected_outcome": "Greater than 80 percent tolerability at target dose",
+        "monitoring": "Patient-reported symptom diary at each visit"
+      }
+    ],
+    "what_not_to_do": [
+      {
+        "action": "Do not initiate or continue metformin if eGFR falls below 30 mL/min/1.73 m2",
+        "risks": "Life-threatening lactic acidosis requiring hemodialysis",
+        "safer_alternative": "Switch to DPP-4 inhibitor or SGLT2 inhibitor with renal dosing"
+      },
+      {
+        "action": "Do not administer iodinated contrast without holding metformin for 48 hours",
+        "risks": "Acute kidney injury precipitating metformin accumulation",
+        "safer_alternative": "Use alternative imaging or confirm eGFR recovery before resumption"
+      },
+      {
+        "action": "Do not combine with excessive alcohol intake without counseling",
+        "risks": "Synergistic lactate production and hypoglycemia",
+        "safer_alternative": "Limit to one standard drink per day with blood glucose checks"
+      }
+    ],
+    "debunked_claims": [
+      {
+        "claim": "Metformin causes significant weight gain in all patients",
+        "reason_debunked": "Clinical trials show average weight loss of 1-2 kg or neutrality",
+        "evidence": "UKPDS and ADOPT trials demonstrated weight neutrality or loss",
+        "why_harmful": "May deter appropriate prescribing leading to poorer glycemic control",
+        "debunked_by": "ADA Standards of Medical Care 2023"
+      },
+      {
+        "claim": "Metformin is completely safe without any renal monitoring",
+        "reason_debunked": "FDA black box warning and guidelines mandate periodic eGFR checks",
+        "evidence": "Post-marketing surveillance data on lactic acidosis cases",
+        "why_harmful": "Delays recognition of accumulating drug levels",
+        "debunked_by": "FDA prescribing information"
+      },
+      {
+        "claim": "Metformin cures type 2 diabetes and can be stopped after HbA1c normalization",
+        "reason_debunked": "It controls but does not cure the progressive disease",
+        "evidence": "Long-term studies show need for ongoing therapy or additional agents",
+        "why_harmful": "Premature discontinuation results in hyperglycemia rebound",
+        "debunked_by": "ADA/EASD consensus guidelines"
+      }
+    ]
+  },
+  "monitoring": {
+    "requirements": [
+      "Serum creatinine and eGFR at baseline then every 3-6 months",
+      "Vitamin B12 level annually after 5 years of therapy",
+      "Fasting plasma glucose and HbA1c every 3 months until stable",
+      "Liver function tests at baseline and as clinically indicated"
+    ],
+    "warning_signs": [
+      {
+        "sign": "Unexplained muscle pain, weakness, or fatigue",
+        "description": "Early indicator of lactic acidosis requiring immediate medical evaluation"
+      },
+      {
+        "sign": "Rapid breathing, dizziness, or abdominal pain",
+        "description": "Suggests metabolic acidosis; discontinue metformin and seek emergency care"
+      },
+      {
+        "sign": "Persistent nausea, vomiting, or diarrhea leading to dehydration",
+        "description": "May precipitate acute kidney injury and drug accumulation"
+      }
+    ]
+  },
+  "metadata": {
+    "evidence_quality": "moderate",
+    "analysis_confidence": 0.85,
+    "reasoning_steps_count": 1
+  },
+  "cost_analysis": {
+    "total_cost": 0.036101999999999995,
+    "total_duration": 120.775646,
+    "phases": [
+      {
+        "phase": "Medication Analysis (LangChain)",
+        "cost": 0.036101999999999995,
+        "duration": 120.775646,
+        "input_tokens": 1514,
+        "output_tokens": 2104,
+        "models_used": [
+          "grok-4.3"
+        ]
+      }
+    ],
+    "most_expensive": [
+      {
+        "phase": "Medication Analysis (LangChain)",
+        "cost": 0.036101999999999995,
+        "duration": 120.775646,
+        "input_tokens": 1514,
+        "output_tokens": 2104,
+        "models_used": [
+          "grok-4.3"
+        ]
+      }
+    ]
+  }
+}

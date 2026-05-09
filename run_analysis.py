@@ -17,6 +17,7 @@ from check_llms import print_llm_status
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass  # dotenv not installed, skip
@@ -28,13 +29,19 @@ from cost_tracker import get_cost_summary
 from pdf_generator import convert_markdown_to_pdf_safe
 
 # Import medical procedure analyzer
-from medical_procedure_analyzer import MedicalReasoningAgent, MedicalInput as ProcedureInput
+from medical_procedure_analyzer import (
+    MedicalReasoningAgent,
+    MedicalInput as ProcedureInput,
+)
 
 # Import medical fact checker
 from medical_fact_checker import MedicalFactChecker
 
 # Import medication analyzer
-from medical_procedure_analyzer.medication_analyzer import MedicationAnalyzer, MedicationInput
+from medical_procedure_analyzer.medication_analyzer import (
+    MedicationAnalyzer,
+    MedicationInput,
+)
 from reference_validation.core.citation_url_correspondence_validator import (
     CitationURLCorrespondenceValidator,
 )
@@ -65,7 +72,18 @@ class AgentOrchestrator:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         self._reference_validation_cache: Dict[int, Dict[str, Any]] = {}
-        self._citation_url_validator: Optional[CitationURLCorrespondenceValidator] = None
+        self._citation_url_validator: Optional[CitationURLCorrespondenceValidator] = (
+            None
+        )
+
+    @staticmethod
+    def _get_agent_cost_summary(agent: Any) -> Dict[str, Any]:
+        """Return cost summary from the agent's per-instance tracker if available,
+        falling back to the module-level tracker."""
+        agent_tracker = getattr(agent, "cost_tracker", None)
+        if agent_tracker is not None:
+            return agent_tracker.get_summary()
+        return get_cost_summary()
 
     def _get_citation_url_validator(self) -> CitationURLCorrespondenceValidator:
         if self._citation_url_validator is None:
@@ -91,7 +109,9 @@ class AgentOrchestrator:
         return None
 
     @staticmethod
-    def _format_reference_citation(ref: Dict[str, Any], url: Optional[str]) -> Optional[str]:
+    def _format_reference_citation(
+        ref: Dict[str, Any], url: Optional[str]
+    ) -> Optional[str]:
         citation = str(ref.get("raw_citation", "")).strip()
         if not citation:
             return None
@@ -113,18 +133,28 @@ class AgentOrchestrator:
     ) -> Tuple[Optional[str], Optional[str], Optional[float], Optional[str]]:
         citation_meta = validator.parse_apa_citation(citation)
         if not citation_meta.title:
-            return None, "Unable to extract citation title for URL validation", None, None
+            return (
+                None,
+                "Unable to extract citation title for URL validation",
+                None,
+                None,
+            )
 
         candidate_url = url or citation_meta.url
         match_confidence = None
         corrected_url = None
 
         if candidate_url:
-            correspondence = validator.check_url_correspondence(candidate_url, citation_meta)
+            correspondence = validator.check_url_correspondence(
+                candidate_url, citation_meta
+            )
             match_confidence = correspondence.confidence
             if correspondence.matches:
                 return candidate_url, None, match_confidence, None
-            reason = "; ".join(correspondence.mismatch_reasons) or "URL does not match citation"
+            reason = (
+                "; ".join(correspondence.mismatch_reasons)
+                or "URL does not match citation"
+            )
         else:
             reason = "No URL provided in reference"
 
@@ -134,7 +164,10 @@ class AgentOrchestrator:
             match_confidence = corrected.confidence
             if corrected.matches:
                 return corrected_url, None, match_confidence, corrected_url
-            corrected_reason = "; ".join(corrected.mismatch_reasons) or "Suggested URL does not match citation"
+            corrected_reason = (
+                "; ".join(corrected.mismatch_reasons)
+                or "Suggested URL does not match citation"
+            )
             reason = f"{reason}; {corrected_reason}"
 
         return None, reason, match_confidence, corrected_url
@@ -174,8 +207,8 @@ class AgentOrchestrator:
                 continue
 
             candidate_url = self._build_reference_url(ref)
-            resolved_url, reason, match_confidence, corrected_url = self._resolve_reference_url(
-                citation, candidate_url, validator
+            resolved_url, reason, match_confidence, corrected_url = (
+                self._resolve_reference_url(citation, candidate_url, validator)
             )
             if resolved_url:
                 formatted = self._format_reference_citation(ref, resolved_url)
@@ -199,12 +232,15 @@ class AgentOrchestrator:
         if implementation == "langchain":
             if agent_type == "procedure":
                 from langchain_agents import LangChainMedicalReasoningAgent
+
                 return LangChainMedicalReasoningAgent
             if agent_type == "medication":
                 from langchain_agents import LangChainMedicationAnalyzer
+
                 return LangChainMedicationAnalyzer
             if agent_type == "factcheck":
                 from langchain_agents import LangChainMedicalFactChecker
+
                 return LangChainMedicalFactChecker
             raise ValueError(f"Unknown agent type: {agent_type}")
 
@@ -241,7 +277,7 @@ class AgentOrchestrator:
             enable_web_research=enable_web_research,
         )
         # Update timeout if agent's LLM manager exists
-        if hasattr(agent, 'llm_manager') and agent.llm_manager:
+        if hasattr(agent, "llm_manager") and agent.llm_manager:
             for config in agent.llm_manager.configs:
                 config.timeout = timeout
 
@@ -297,6 +333,77 @@ class AgentOrchestrator:
             result,
             procedure,
             audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
+        )
+
+        return result, files
+
+    def run_medication_analyzer(
+        self,
+        medication: str,
+        indication: Optional[str] = None,
+        other_medications: Optional[List[str]] = None,
+        llm_provider: str = "claude",
+        timeout: int = 300,
+        implementation: str = "original",
+        enable_web_research: bool = False,
+    ) -> Tuple[Any, Dict[str, str]]:
+        """Run the Medication Analyzer"""
+        print("=" * 80)
+        print("💊 Medication Analyzer")
+        print("=" * 80)
+        print()
+
+        # Initialize agent
+        print(f"🤖 Initializing agent with {llm_provider} (timeout: {timeout}s)...")
+        agent_class = self._resolve_agent_class("medication", implementation)
+        agent = agent_class(
+            primary_llm_provider=llm_provider,
+            fallback_providers=[],
+            enable_logging=True,
+            enable_web_research=enable_web_research,
+        )
+        # Update timeout if agent's LLM manager exists
+        if hasattr(agent, "llm_manager") and agent.llm_manager:
+            for config in agent.llm_manager.configs:
+                config.timeout = timeout
+
+        # Create input
+        medical_input = MedicationInput(
+            medication_name=medication,
+            indication=indication,
+            patient_medications=other_medications or [],
+            patient_context="Standard adult patient",
+        )
+
+        print(f"📋 Analyzing: {medical_input.medication_name}")
+        if indication:
+            print(f"   Indication: {indication}")
+        if other_medications:
+            print(f"   Other medications: {', '.join(other_medications)}")
+        print()
+        print("⏳ Running medication analysis pipeline...")
+        print()
+
+        # Run analysis
+        result = agent.analyze_medication(medical_input)
+
+        print()
+        print("=" * 80)
+        print("✅ Analysis Complete!")
+        print("=" * 80)
+        print(f"💊 Medication: {result.medication_name}")
+        print(f"💊 Drug Class: {result.drug_class}")
+        print(f"🧬 Mechanism: {result.mechanism_of_action[:80]}...")
+        print()
+
+        # Save outputs
+        print("💾 Saving outputs...")
+        files = self._save_medication_analysis(
+            result,
+            medication,
+            audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
         )
 
         return result, files
@@ -327,7 +434,7 @@ class AgentOrchestrator:
             enable_web_research=enable_web_research,
         )
         # Update timeout if agent's LLM manager exists
-        if hasattr(agent, 'llm_manager') and agent.llm_manager:
+        if hasattr(agent, "llm_manager") and agent.llm_manager:
             for config in agent.llm_manager.configs:
                 config.timeout = timeout
 
@@ -369,6 +476,7 @@ class AgentOrchestrator:
             session,
             subject,
             audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
         )
 
         return session, files
@@ -389,11 +497,11 @@ class AgentOrchestrator:
         # Initialize agent
         print(f"🤖 Initializing agent with {llm_provider}...")
         from medical_diagnostic_analyzer.diagnostic_agent import MedicalDiagnosticAgent
-        
+
         agent = MedicalDiagnosticAgent(
             primary_llm_provider=llm_provider,
             enable_logging=True,
-            interactive=interactive
+            interactive=interactive,
         )
 
         print(f"📋 Investigating symptoms from query...")
@@ -407,7 +515,7 @@ class AgentOrchestrator:
         print("=" * 80)
         print("✅ Analysis Complete!")
         print("=" * 80)
-        report = result['report']
+        report = result["report"]
         print(f"📊 Most Probable: {report['most_probable']}")
         print(f"🚨 Most Serious: {report['most_serious']}")
         print(f"🧪 Top 5: {', '.join(report['top_5_candidates'])}")
@@ -423,46 +531,54 @@ class AgentOrchestrator:
 
         return result, files
 
-    def _save_diagnostic_analysis(self, result: Dict[str, Any], query: str) -> Dict[str, str]:
+    def _save_diagnostic_analysis(
+        self, result: Dict[str, Any], query: str
+    ) -> Dict[str, str]:
         """Save diagnostic analysis outputs to files"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_query = "".join([c if c.isalnum() else "_" for c in query[:30]]).strip("_")
-        
+
         files = {}
-        
+
         # Save JSON session
-        json_path = os.path.join(self.output_dir, f"{safe_query}_diagnostic_{timestamp}.json")
-        with open(json_path, 'w') as f:
+        json_path = os.path.join(
+            self.output_dir, f"{safe_query}_diagnostic_{timestamp}.json"
+        )
+        with open(json_path, "w") as f:
             json.dump(result, f, indent=2)
         files["json_session"] = json_path
-        
+
         # Save Markdown report
-        md_path = os.path.join(self.output_dir, f"{safe_query}_diagnostic_report_{timestamp}.md")
-        report = result['report']
-        with open(md_path, 'w') as f:
+        md_path = os.path.join(
+            self.output_dir, f"{safe_query}_diagnostic_report_{timestamp}.md"
+        )
+        report = result["report"]
+        with open(md_path, "w") as f:
             f.write(f"# 🩺 Medical Diagnostic Report\n\n")
             f.write(f"**Query:** {query}\n\n")
             f.write(f"## 📊 Summary\n")
             f.write(f"- **Most Probable:** {report['most_probable']}\n")
             f.write(f"- **Most Serious:** {report['most_serious']}\n\n")
             f.write(f"## 📋 Potential Conditions (Ranked by Probability)\n")
-            for res in result['probabilities'][:5]:
-                f.write(f"- **{res['name']}**: {res['probability']:.1%} (Severity: {res['severity']}/5)\n")
+            for res in result["probabilities"][:5]:
+                f.write(
+                    f"- **{res['name']}**: {res['probability']:.1%} (Severity: {res['severity']}/5)\n"
+                )
             f.write(f"\n## 🧠 Clinical Reasoning\n{report['reasoning_summary']}\n\n")
             f.write(f"## ✅ Recommended Next Steps\n")
-            for step in report['recommended_next_steps']:
+            for step in report["recommended_next_steps"]:
                 f.write(f"- {step}\n")
             f.write(f"\n## ➡️ Follow-up\n")
             f.write(f"**Suggested Agent:** {report['suggested_agent']}\n")
             f.write(f"**Rationale:** {report['routing_rationale']}\n")
-            
+
         files["markdown_report"] = md_path
-        
+
         # Generate PDF
         pdf_path = md_path.replace(".md", ".pdf")
         if convert_markdown_to_pdf_safe(md_path, pdf_path):
             files["pdf_report"] = pdf_path
-            
+
         return files
         # Update timeout if agent's LLM manager exists
         if hasattr(agent, "llm_manager") and agent.llm_manager:
@@ -506,9 +622,13 @@ class AgentOrchestrator:
         print("🔍 Analysis Summary:")
         print(f"   🔗 Drug-Drug Interactions: {len(result.drug_interactions)}")
         if result.drug_interactions:
-            severe = [i for i in result.drug_interactions if i.severity.value == "severe"]
+            severe = [
+                i for i in result.drug_interactions if i.severity.value == "severe"
+            ]
             if severe:
-                print(f"      ⚠️  SEVERE: {len(severe)} interactions requiring immediate attention")
+                print(
+                    f"      ⚠️  SEVERE: {len(severe)} interactions requiring immediate attention"
+                )
 
         print(f"   🍎 Food Interactions: {len(result.food_interactions)}")
         print(f"   ⚕️  Contraindications: {len(result.contraindications)}")
@@ -527,6 +647,7 @@ class AgentOrchestrator:
             result,
             medication,
             audit_events=getattr(agent, "audit_events", None),
+            cost_summary=self._get_agent_cost_summary(agent),
         )
 
         return result, files
@@ -536,14 +657,16 @@ class AgentOrchestrator:
         result: Any,
         procedure_name: str,
         audit_events: list[dict] | None = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save procedure analysis results"""
         base_name = procedure_name.replace(" ", "_").lower()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
-        # Get cost summary
-        cost_summary = get_cost_summary()
+        # Use provided cost summary or fall back to module-level tracker
+        if cost_summary is None:
+            cost_summary = get_cost_summary()
 
         # 1. Reasoning trace
         trace_file = f"{self.output_dir}/{base_name}_reasoning_trace_{timestamp}.json"
@@ -607,8 +730,12 @@ class AgentOrchestrator:
 
         # 3.5. Practitioner report (markdown + PDF) - Detailed technical report for medical professionals
         if result.practitioner_report:
-            practitioner_file = f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
-            practitioner_complete = self._append_hardcoded_disclaimer(result.practitioner_report)
+            practitioner_file = (
+                f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
+            )
+            practitioner_complete = self._append_hardcoded_disclaimer(
+                result.practitioner_report
+            )
             with open(practitioner_file, "w") as f:
                 f.write(practitioner_complete)
             print(f"✓ Practitioner report: {os.path.basename(practitioner_file)}")
@@ -650,14 +777,16 @@ class AgentOrchestrator:
         session: Any,
         subject: str,
         audit_events: list[dict] | None = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save fact check analysis results"""
         base_name = subject.replace(" ", "_").lower()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
-        # Get cost summary
-        cost_summary = get_cost_summary()
+        # Use provided cost summary or fall back to module-level tracker
+        if cost_summary is None:
+            cost_summary = get_cost_summary()
 
         # 1. Session data (phases and choices)
         session_file = f"{self.output_dir}/{base_name}_session_{timestamp}.json"
@@ -701,9 +830,15 @@ class AgentOrchestrator:
 
         # 2.5. Practitioner report (markdown + PDF) - Complex output for medical professionals
         if session.practitioner_report:
-            practitioner_file = f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
-            practitioner_with_refs = self._append_references_section(session.practitioner_report, session)
-            practitioner_complete = self._append_hardcoded_disclaimer(practitioner_with_refs)
+            practitioner_file = (
+                f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
+            )
+            practitioner_with_refs = self._append_references_section(
+                session.practitioner_report, session
+            )
+            practitioner_complete = self._append_hardcoded_disclaimer(
+                practitioner_with_refs
+            )
             with open(practitioner_file, "w") as f:
                 f.write(practitioner_complete)
             print(f"✓ Practitioner report: {os.path.basename(practitioner_file)}")
@@ -717,7 +852,9 @@ class AgentOrchestrator:
 
         # 3. Final output (markdown) with references and disclaimer appended
         output_file = f"{self.output_dir}/{base_name}_patient_report_{timestamp}.md"
-        output_with_refs = self._append_references_section(session.final_output, session)
+        output_with_refs = self._append_references_section(
+            session.final_output, session
+        )
         output_complete = self._append_hardcoded_disclaimer(output_with_refs)
         with open(output_file, "w") as f:
             f.write(output_complete)
@@ -760,6 +897,7 @@ class AgentOrchestrator:
         result: Any,
         medication_name: str,
         audit_events: list[dict] | None = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save medication analysis results"""
         base_name = medication_name.replace(" ", "_").lower()
@@ -767,7 +905,9 @@ class AgentOrchestrator:
         files = {}
 
         # 1. Analysis result (JSON)
-        result_file = f"{self.output_dir}/{base_name}_medication_analysis_{timestamp}.json"
+        result_file = (
+            f"{self.output_dir}/{base_name}_medication_analysis_{timestamp}.json"
+        )
         analysis_data = {
             "timestamp": datetime.now().isoformat(),
             "agent_type": "medication_analyzer",
@@ -835,8 +975,9 @@ class AgentOrchestrator:
             },
         }
 
-        # Add cost information
-        cost_summary = get_cost_summary()
+        # Add cost information (use provided summary or fall back to module-level tracker)
+        if cost_summary is None:
+            cost_summary = get_cost_summary()
         analysis_data["cost_analysis"] = cost_summary
 
         with open(result_file, "w") as f:
@@ -853,8 +994,12 @@ class AgentOrchestrator:
 
         # 2.5. Practitioner report (markdown + PDF) - Comprehensive report for medical professionals
         if result.practitioner_report:
-            practitioner_file = f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
-            practitioner_complete = self._append_hardcoded_disclaimer(result.practitioner_report)
+            practitioner_file = (
+                f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
+            )
+            practitioner_complete = self._append_hardcoded_disclaimer(
+                result.practitioner_report
+            )
             with open(practitioner_file, "w") as f:
                 f.write(practitioner_complete)
             print(f"✓ Practitioner report: {os.path.basename(practitioner_file)}")
@@ -867,7 +1012,9 @@ class AgentOrchestrator:
                 files["practitioner_pdf"] = practitioner_pdf
 
         # 3. Summary report (Markdown with disclaimer)
-        summary_file = f"{self.output_dir}/{base_name}_medication_summary_{timestamp}.md"
+        summary_file = (
+            f"{self.output_dir}/{base_name}_medication_summary_{timestamp}.md"
+        )
         summary = self._generate_medication_summary(result, cost_summary)
         summary_complete = self._append_hardcoded_disclaimer(summary)
 
@@ -883,7 +1030,9 @@ class AgentOrchestrator:
             files["summary_pdf"] = summary_pdf
 
         # 4. Comprehensive report (detailed Markdown with disclaimer)
-        detailed_file = f"{self.output_dir}/{base_name}_medication_detailed_{timestamp}.md"
+        detailed_file = (
+            f"{self.output_dir}/{base_name}_medication_detailed_{timestamp}.md"
+        )
         detailed = self._generate_medication_detailed_report(result, cost_summary)
         detailed_complete = self._append_hardcoded_disclaimer(detailed)
 
@@ -907,10 +1056,12 @@ class AgentOrchestrator:
 
         return files
 
-    def _generate_procedure_summary(self, result: Any, cost_summary: Dict = None) -> str:
+    def _generate_procedure_summary(
+        self, result: Any, cost_summary: Dict = None
+    ) -> str:
         """Generate markdown summary for procedure analysis"""
         summary = f"""# 🔬 Medical Procedure Analysis Report
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **Analysis System:** MedicalReasoningAgent (5-Phase Pipeline)
 
 ---
@@ -932,8 +1083,8 @@ class AgentOrchestrator:
 
 **Risk Assessment:**
 - Risk Level: **{organ.risk_level.upper()}**
-- Procedure Impact: {'YES - Directly affected' if organ.affected_by_procedure else 'NO - Minimal impact'}
-- At Risk: {'YES - Requires monitoring' if organ.at_risk else 'NO - Low concern'}
+- Procedure Impact: {"YES - Directly affected" if organ.affected_by_procedure else "NO - Minimal impact"}
+- At Risk: {"YES - Requires monitoring" if organ.at_risk else "NO - Low concern"}
 - Evidence Quality: **{organ.evidence_quality.upper()}**
 
 **Biological Pathways:**
@@ -952,7 +1103,9 @@ class AgentOrchestrator:
                     summary += f"{j}. {rec}\n"
 
             if organ.debunked_claims:
-                summary += f"\n**❌ DEBUNKED/HARMFUL** ({len(organ.debunked_claims)} items):\n"
+                summary += (
+                    f"\n**❌ DEBUNKED/HARMFUL** ({len(organ.debunked_claims)} items):\n"
+                )
                 for j, claim in enumerate(organ.debunked_claims, 1):
                     summary += f"{j}. {claim}\n"
 
@@ -1039,7 +1192,11 @@ This analysis aims to inform and educate, not to direct medical care. When in do
     def _append_references_section(self, output: str, session: Any) -> str:
         """Append aggregated references section from all phases"""
         # Check if references already embedded in output
-        if "## 📚 References" in output or "## References" in output or "## REFERENCES" in output.upper():
+        if (
+            "## 📚 References" in output
+            or "## References" in output
+            or "## REFERENCES" in output.upper()
+        ):
             # References already present in the LLM-generated output
             # But still append phase-collected references if available
             pass
@@ -1047,7 +1204,9 @@ This analysis aims to inform and educate, not to direct medical care. When in do
         kept_references, _ = self._collect_validated_references(session)
 
         # If no phase references and no embedded references, add note
-        if not kept_references and ("## 📚 References" not in output and "## References" not in output):
+        if not kept_references and (
+            "## 📚 References" not in output and "## References" not in output
+        ):
             refs_section = "\n\n---\n\n## 📚 References\n\n"
             refs_section += "_Note: This analysis synthesizes information from medical literature, clinical guidelines, and evidence-based medicine databases. Specific citations are included for individual studies and recommendations throughout the analysis._\n"
             return output + refs_section
@@ -1057,7 +1216,9 @@ This analysis aims to inform and educate, not to direct medical care. When in do
             refs_section = "\n\n---\n\n## 📚 Research References\n\n"
             refs_section += "_References collected during analysis phases:_\n\n"
 
-            for i, citation in enumerate(kept_references[:30], 1):  # Limit to 30 references
+            for i, citation in enumerate(
+                kept_references[:30], 1
+            ):  # Limit to 30 references
                 refs_section += f"[{i}] {citation}\n\n"
 
             return output + refs_section
@@ -1066,7 +1227,7 @@ This analysis aims to inform and educate, not to direct medical care. When in do
 
     def _append_cost_section(self, output: str, cost_summary: Dict) -> str:
         """Append cost analysis section to output"""
-        if cost_summary.get('total_cost', 0) == 0:
+        if cost_summary.get("total_cost", 0) == 0:
             return output
 
         cost_section = f"""
@@ -1075,28 +1236,34 @@ This analysis aims to inform and educate, not to direct medical care. When in do
 
 ## 💰 Analysis Cost Summary
 
-**Total Cost:** ${cost_summary['total_cost']:.4f}
-**Total Duration:** {cost_summary['total_duration']:.1f}s
+**Total Cost:** ${cost_summary["total_cost"]:.4f}
+**Total Duration:** {cost_summary["total_duration"]:.1f}s
 
 ### Phase Breakdown:
 """
-        for phase in cost_summary.get('phases', []):
-            pct = (phase['cost'] / cost_summary['total_cost'] * 100) if cost_summary['total_cost'] > 0 else 0
+        for phase in cost_summary.get("phases", []):
+            pct = (
+                (phase["cost"] / cost_summary["total_cost"] * 100)
+                if cost_summary["total_cost"] > 0
+                else 0
+            )
             cost_section += f"- **{phase['phase']}**: ${phase['cost']:.4f} ({pct:.1f}%) - {phase['duration']:.1f}s\n"
 
         return output + cost_section
 
-    def _generate_fact_check_summary(self, session: Any, cost_summary: Dict = None) -> str:
+    def _generate_fact_check_summary(
+        self, session: Any, cost_summary: Dict = None
+    ) -> str:
         """Generate markdown summary for fact check analysis"""
         summary = f"""# 🔎 Medical Fact Check Report
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **Analysis System:** MedicalFactChecker (Independent Bio-Investigator)
 
 ---
 
 ## 📋 Subject
 **Topic:** {session.subject}
-**Analysis Started:** {session.started_at.strftime('%Y-%m-%d %H:%M:%S')}
+**Analysis Started:** {session.started_at.strftime("%Y-%m-%d %H:%M:%S")}
 **Phases Completed:** {len(session.phase_results)}
 
 ---
@@ -1117,7 +1284,9 @@ This analysis aims to inform and educate, not to direct medical care. When in do
             for key, value in phase_result.content.items():
                 if value and len(str(value)) > 0:
                     preview = (
-                        str(value)[:200] + "..." if len(str(value)) > 200 else str(value)
+                        str(value)[:200] + "..."
+                        if len(str(value)) > 200
+                        else str(value)
                     )
                     summary += f"- {key.replace('_', ' ').title()}: {preview}\n"
 
@@ -1141,7 +1310,7 @@ This analysis aims to inform and educate, not to direct medical care. When in do
                 summary += "\n"
             summary += "\n---\n\n"
 
-        summary += """## 📄 Final Output
+        summary += f"""## 📄 Final Output
 
 See the detailed output file for the complete analysis.
 
@@ -1155,10 +1324,12 @@ See the detailed output file for the complete analysis.
 
         return summary
 
-    def _generate_medication_summary(self, result: Any, cost_summary: Dict = None) -> str:
+    def _generate_medication_summary(
+        self, result: Any, cost_summary: Dict = None
+    ) -> str:
         """Generate markdown summary for medication analysis"""
         summary = f"""# 💊 Medication Analysis Report
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **Analysis System:** MedicationAnalyzer (Comprehensive Drug Analysis)
 
 ---
@@ -1171,14 +1342,14 @@ See the detailed output file for the complete analysis.
 ---
 
 ## 🧬 Mechanism of Action
-{result.mechanism_of_action[:300] + '...' if len(result.mechanism_of_action) > 300 else result.mechanism_of_action}
+{result.mechanism_of_action[:300] + "..." if len(result.mechanism_of_action) > 300 else result.mechanism_of_action}
 
 ---
 
 ## ⚗️ Pharmacokinetics Summary
-- **Absorption:** {result.absorption[:100] + '...' if len(result.absorption) > 100 else result.absorption}
-- **Metabolism:** {result.metabolism[:100] + '...' if len(result.metabolism) > 100 else result.metabolism}
-- **Elimination:** {result.elimination[:100] + '...' if len(result.elimination) > 100 else result.elimination}
+- **Absorption:** {result.absorption[:100] + "..." if len(result.absorption) > 100 else result.absorption}
+- **Metabolism:** {result.metabolism[:100] + "..." if len(result.metabolism) > 100 else result.metabolism}
+- **Elimination:** {result.elimination[:100] + "..." if len(result.elimination) > 100 else result.elimination}
 - **Half-Life:** {result.half_life}
 
 ---
@@ -1209,8 +1380,12 @@ See the detailed output file for the complete analysis.
 """
 
         if result.drug_interactions:
-            severe = [i for i in result.drug_interactions if i.severity.value == "severe"]
-            moderate = [i for i in result.drug_interactions if i.severity.value == "moderate"]
+            severe = [
+                i for i in result.drug_interactions if i.severity.value == "severe"
+            ]
+            moderate = [
+                i for i in result.drug_interactions if i.severity.value == "moderate"
+            ]
 
             if severe:
                 summary += f"### 🔴 SEVERE Drug Interactions ({len(severe)})\n\n"
@@ -1241,9 +1416,9 @@ See the detailed output file for the complete analysis.
         if result.evidence_based_recommendations:
             for i, rec in enumerate(result.evidence_based_recommendations[:5], 1):
                 if isinstance(rec, dict):
-                    action = self._clean_text(rec.get("intervention")) or self._clean_text(
-                        rec.get("implementation")
-                    )
+                    action = self._clean_text(
+                        rec.get("intervention")
+                    ) or self._clean_text(rec.get("implementation"))
                     rationale = self._clean_text(rec.get("rationale"))
                     if action:
                         summary += f"{i}. **{action}**\n"
@@ -1285,11 +1460,13 @@ See the detailed output file for the complete analysis.
 
         return summary
 
-    def _generate_medication_detailed_report(self, result: Any, cost_summary: Dict = None) -> str:
+    def _generate_medication_detailed_report(
+        self, result: Any, cost_summary: Dict = None
+    ) -> str:
         """Generate comprehensive detailed report for medication"""
         report = f"""# 💊 Comprehensive Medication Analysis: {result.medication_name}
 
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **Analysis Confidence:** {result.analysis_confidence:.2f}
 **Evidence Quality:** {result.evidence_quality}
 
@@ -1365,7 +1542,13 @@ See the detailed output file for the complete analysis.
 
         if result.drug_interactions:
             for interaction in result.drug_interactions:
-                severity_emoji = "🔴" if interaction.severity.value == "severe" else "🟡" if interaction.severity.value == "moderate" else "🟢"
+                severity_emoji = (
+                    "🔴"
+                    if interaction.severity.value == "severe"
+                    else "🟡"
+                    if interaction.severity.value == "moderate"
+                    else "🟢"
+                )
                 report += f"\n#### {severity_emoji} {interaction.interacting_agent} ({interaction.severity.value.upper()})\n\n"
                 report += f"**Mechanism:** {interaction.mechanism}\n\n"
                 report += f"**Clinical Effect:** {interaction.clinical_effect}\n\n"
@@ -1427,7 +1610,7 @@ See the detailed output file for the complete analysis.
                 if isinstance(contra, dict):
                     report += f"**{contra.get('condition', 'N/A')}** ({contra.get('severity', 'N/A')})\n"
                     report += f"- Reason: {contra.get('reason', 'N/A')}\n"
-                    if contra.get('alternative'):
+                    if contra.get("alternative"):
                         report += f"- Alternative: {contra.get('alternative')}\n"
                     report += "\n"
 
@@ -1450,10 +1633,13 @@ See the detailed output file for the complete analysis.
         if result.evidence_based_recommendations:
             for i, rec in enumerate(result.evidence_based_recommendations, 1):
                 if isinstance(rec, dict):
-                    title = self._clean_text(rec.get("intervention")) or f"Recommendation {i}"
-                    action = self._clean_text(rec.get("intervention")) or self._clean_text(
-                        rec.get("implementation")
+                    title = (
+                        self._clean_text(rec.get("intervention"))
+                        or f"Recommendation {i}"
                     )
+                    action = self._clean_text(
+                        rec.get("intervention")
+                    ) or self._clean_text(rec.get("implementation"))
                     rationale = self._clean_text(rec.get("rationale"))
                     evidence_level = self._clean_text(rec.get("evidence_level"))
                     implementation = self._clean_text(rec.get("implementation"))
@@ -1614,7 +1800,9 @@ Examples:
     )
 
     parser.add_argument(
-        "--subject", type=str, help="Subject to analyze (procedure name or health topic)"
+        "--subject",
+        type=str,
+        help="Subject to analyze (procedure name or health topic)",
     )
 
     parser.add_argument(
@@ -1648,9 +1836,15 @@ Examples:
         type=str,
         default="claude-sonnet",
         choices=[
-            "claude-sonnet", "claude-opus", "openai", "ollama", 
-            "grok-4-2-fast", "grok-4-2-reasoning",
-            "grok-4-1-fast", "grok-4-1-code", "grok-4-1-reasoning"
+            "claude-sonnet",
+            "claude-opus",
+            "openai",
+            "ollama",
+            "grok-4-2-fast",
+            "grok-4-2-reasoning",
+            "grok-4-1-fast",
+            "grok-4-1-code",
+            "grok-4-1-reasoning",
         ],
         help="LLM provider to use (default: claude-sonnet). Options: claude-sonnet (Sonnet 4.5), claude-opus (Opus 4.5), openai (GPT-4), ollama (local), grok-4-2-fast (fastest), grok-4-2-reasoning (advanced reasoning), grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning",
     )
@@ -1704,7 +1898,9 @@ Examples:
     # Validate arguments
     if not args.agent:
         parser.print_help()
-        print("\n❌ Error: Please specify an agent (procedure, medication, or factcheck)")
+        print(
+            "\n❌ Error: Please specify an agent (procedure, medication, or factcheck)"
+        )
         print("   Use --list to see available agents")
         sys.exit(1)
 

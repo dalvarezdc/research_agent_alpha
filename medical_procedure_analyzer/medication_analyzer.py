@@ -10,13 +10,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 import logging
-import sys
 import json
 from pathlib import Path
 
-# Add parent directory to path for cost_tracker import
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from cost_tracker import track_cost, print_cost_summary, reset_tracking
+from cost_tracker import track_cost, print_cost_summary, reset_tracking, CostTracker
 
 from .medical_reasoning_agent import (
     MedicalReasoningAgent, TokenUsage, ReasoningStage, ReasoningStep
@@ -190,7 +187,8 @@ class MedicationAnalyzer(MedicalReasoningAgent):
         """
         self.logger.info(f"Starting medication analysis for: {medication_input.medication_name}")
         self.reasoning_trace = []  # Reset trace
-        reset_tracking()  # Reset cost tracking for this analysis
+        reset_tracking()            # Reset module-level tracker (used by @track_cost decorators)
+        self.cost_tracker.reset()  # Reset per-instance tracker
 
         # Initialize token usage tracker for this analysis
         self.total_token_usage = TokenUsage()
@@ -230,8 +228,12 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                 monitoring
             )
 
+            # Sync module-level phase data into this agent's per-instance tracker
+            from cost_tracker import get_cost_summary as _module_summary
+            self.cost_tracker._phase_costs = _module_summary()["phases"][:]
+
             # Print cost summary
-            print_cost_summary()
+            self.cost_tracker.print_summary()
 
             return output
 

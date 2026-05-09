@@ -622,7 +622,7 @@ class CitationURLCorrespondenceValidator(BaseValidator):
         try:
             response = self.session.head(url, timeout=5, allow_redirects=True)
             return 200 <= response.status_code < 400
-        except:
+        except Exception:
             return False
 
     def _calculate_title_similarity(self, title1: str, title2: str) -> float:

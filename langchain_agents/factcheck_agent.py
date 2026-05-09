@@ -4,12 +4,14 @@ LangChain-based medical fact checker.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from cost_tracker import print_cost_summary, reset_tracking, track_cost
+from cost_tracker import print_cost_summary, reset_tracking, track_cost, CostTracker
 from medical_fact_checker.medical_fact_checker_agent import (
     AnalysisPhase,
     FactCheckSession,
@@ -43,6 +45,29 @@ class _Phase3Model(BaseModel):
     references: List[str] = Field(default_factory=list)
 
 
+class PerspectiveLens(Enum):
+    """User-chosen perspective lens for Phase 4 and Phase 5."""
+    MAINSTREAM = "M"   # Evidence-based medicine and clinical guidelines
+    NATURIST   = "N"   # Evolutionary biology and ancestral health
+    BIOHACKER  = "B"   # Optimization, cutting-edge, n=1 protocols
+    BALANCED   = "A"   # All perspectives weighted equally (default)
+
+
+class _PerspectiveOutput(BaseModel):
+    """Output from one perspective agent in Phase 4."""
+    findings: str
+    recommendations: List[str] = Field(default_factory=list)
+    key_insight: str = ""
+    citations: List[str] = Field(default_factory=list)
+
+
+class _Phase4PerspectivesModel(BaseModel):
+    """Assembled output from all three perspective agents."""
+    mainstream: _PerspectiveOutput
+    naturist: _PerspectiveOutput
+    biohacker: _PerspectiveOutput
+
+
 class LangChainMedicalFactChecker(LangChainAgentBase):
     """
     LangChain-based fact checker following the same phase protocol.
@@ -67,9 +92,11 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         super().__init__(config)
         self.interactive = interactive
         self.current_session: Optional[FactCheckSession] = None
+        self.cost_tracker = CostTracker()
 
     def start_analysis(self, subject: str, clarifying_info: str = "") -> FactCheckSession:
         reset_tracking()
+        self.cost_tracker.reset()
         self.current_session = FactCheckSession(subject=subject)
         self.web_context = self._build_web_context(subject)
 
@@ -92,26 +119,50 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         phase3 = self._phase3_synthesis_menu(subject, phase1.content, phase2.content)
         self.current_session.phase_results.append(phase3)
 
+        # Pick perspective lens (replaces old A/B/C/D/P output-type selection)
         if self.interactive:
-            phase3.user_choice = self._prompt_user_phase3()
+            lens_str = self._prompt_user_lens()
         else:
-            phase3.user_choice = "P"
+            lens_str = PerspectiveLens.BALANCED.value  # "A"
 
-        output_type = OutputType(phase3.user_choice)
-        phase4 = self._phase4_generate_output(subject, phase3.content, output_type)
+        try:
+            lens = PerspectiveLens(lens_str)
+        except ValueError:
+            lens = PerspectiveLens.BALANCED
+        phase3.user_choice = lens.value
+
+        # Phase 4: three parallel perspective agents → assembled report
+        phase4 = self._phase4_generate_output(subject, phase3.content, lens)
         self.current_session.phase_results.append(phase4)
-        self.current_session.practitioner_report = phase4.content.get("output", "")
 
-        phase5 = self._phase5_simplify_output(phase4.content.get("output", ""))
+        # Split body from references before Phase 5 so citations survive simplification
+        assembled = phase4.content.get("output", "")
+        ref_separator = "\n## 📚 References\n"
+        if ref_separator in assembled:
+            body, refs_block = assembled.split(ref_separator, 1)
+        else:
+            body, refs_block = assembled, ""
+
+        self.current_session.practitioner_report = assembled
+
+        # Phase 5: simplify only the body, using the chosen lens for framing
+        phase5 = self._phase5_simplify_output(body, lens=lens)
         self.current_session.phase_results.append(phase5)
-        self.current_session.final_output = phase5.content.get("simplified_output", "")
+
+        # Reattach the references verbatim — they are never touched by Phase 5
+        simplified = phase5.content.get("simplified_output", body)
+        if refs_block:
+            simplified = simplified + ref_separator + refs_block
+        self.current_session.final_output = simplified
 
         if self.enable_reference_validation and self.reference_validator:
             self.current_session.validation_report = self.reference_validator.validate_analysis(
                 self.current_session
             )
 
-        print_cost_summary()
+        from cost_tracker import get_cost_summary as _module_summary
+        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
+        self.cost_tracker.print_summary()
         return self.current_session
 
     @track_cost("Phase 1: Conflict Scan (LangChain)")
@@ -253,58 +304,261 @@ Schema:
             references=self._normalize_references(model.references),
         )
 
-    @track_cost("Phase 4: Complex Output (LangChain)")
-    def _phase4_generate_output(
-        self, subject: str, synthesis: Dict[str, Any], output_type: OutputType
-    ) -> PhaseResult:
-        system_prompt = "You are a clinical researcher. Write a detailed report."
-        user_prompt = """
-Write a detailed report for {subject}.
+    def _call_perspective(
+        self,
+        perspective: str,
+        subject: str,
+        synthesis: Dict[str, Any],
+        lens: "PerspectiveLens",
+    ) -> "_PerspectiveOutput":
+        """
+        Call the LLM for one perspective (mainstream / naturist / biohacker).
+        Returns _PerspectiveOutput. Falls back to empty output on any failure.
+        Thread-safe: _call_llm holds the GIL during network I/O.
+        """
+        _SYSTEM_PROMPTS = {
+            "mainstream": (
+                "You are a clinical researcher writing evidence-based medical analysis. "
+                "Prioritize RCTs, Cochrane reviews, FDA/EMA guidance, and GRADE-A evidence. "
+                "Third-person, objective tone. Cite DOI/PMID for every claim. "
+                "Return ONLY valid JSON matching the schema provided."
+            ),
+            "naturist": (
+                "You are an evolutionary medicine researcher. Prioritize ancestral biology, "
+                "circadian alignment, whole-food interventions, and small independent studies. "
+                "Use evolutionary logic as a tiebreaker when RCT evidence is mixed. "
+                "Cite peer-reviewed support where available. "
+                "Return ONLY valid JSON matching the schema provided."
+            ),
+            "biohacker": (
+                "You are an optimization researcher. Prioritize recent cutting-edge findings, "
+                "promising n=1 protocols, quantified self data, and emerging mechanisms even "
+                "with limited RCT backing. Label evidence level explicitly (e.g. 'Limited RCT', "
+                "'Anecdotal', 'Mechanistic'). "
+                "Return ONLY valid JSON matching the schema provided."
+            ),
+        }
 
-Output type: {output_type}
-Synthesis data: {synthesis}
-Web research context:
-{web_context}
-
-Use clear headings and include a short references section.
-"""
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
-            audit_step="factcheck_phase_4",
-            subject=subject,
-            output_type=output_type.value,
-            synthesis=synthesis,
-            web_context=self.web_context or "None",
+        system_prompt = _SYSTEM_PROMPTS.get(perspective, _SYSTEM_PROMPTS["mainstream"])
+        user_prompt = (
+            "Analyze {subject} from the {perspective} perspective.\n\n"
+            "Synthesis context:\n{synthesis}\n\n"
+            "Web research context:\n{web_context}\n\n"
+            "Return JSON with this exact schema:\n{schema}\n\n"
+            "Requirements:\n"
+            "- findings: 3-5 paragraphs covering evidence, mechanisms, and context\n"
+            "- recommendations: 3-5 concrete, actionable items\n"
+            "- key_insight: single sentence capturing the most important takeaway\n"
+            "- citations: 5-10 APA 7 references, each MUST include a DOI, PMID, or direct URL\n"
         )
-        references = self._extract_references_from_text(response)
+
+        try:
+            response = self._call_llm(
+                system_prompt,
+                user_prompt,
+                audit_step=f"factcheck_phase4_{perspective}",
+                subject=subject,
+                perspective=perspective,
+                synthesis=synthesis,
+                web_context=self.web_context or "None",
+                schema=_PerspectiveOutput.model_json_schema(),
+            )
+            parsed = self._parse_json(response)
+            if isinstance(parsed, dict):
+                try:
+                    return _PerspectiveOutput.model_validate(parsed)
+                except Exception:
+                    pass
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Perspective '{perspective}' LLM call failed: {exc}"
+            )
+
+        return _PerspectiveOutput(
+            findings=f"Analysis unavailable for {perspective} perspective.",
+            recommendations=[],
+            key_insight="",
+            citations=[],
+        )
+
+    @track_cost("Phase 4: Multi-Perspective Output (LangChain)")
+    def _phase4_generate_output(
+        self,
+        subject: str,
+        synthesis: Dict[str, Any],
+        lens: "PerspectiveLens",
+    ) -> PhaseResult:
+        """
+        Run three perspective agents in parallel, then assemble into a single report.
+        Total LLM calls: 3 parallel + 1 assembler = 4.
+        """
+        # ── 1. Run three perspectives in parallel ────────────────────────────
+        perspectives = ("mainstream", "naturist", "biohacker")
+        results: Dict[str, _PerspectiveOutput] = {}
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            future_map = {
+                pool.submit(self._call_perspective, p, subject, synthesis, lens): p
+                for p in perspectives
+            }
+            for future in as_completed(future_map):
+                name = future_map[future]
+                try:
+                    results[name] = future.result()
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Perspective {name} failed: {exc}")
+                    results[name] = _PerspectiveOutput(
+                        findings="Analysis unavailable.",
+                        recommendations=[],
+                        key_insight="",
+                        citations=[],
+                    )
+
+        mainstream = results["mainstream"]
+        naturist   = results["naturist"]
+        biohacker  = results["biohacker"]
+
+        # ── 2. Collect and deduplicate all citations ─────────────────────────
+        all_citations = mainstream.citations + naturist.citations + biohacker.citations
+        seen_keys: set = set()
+        unique_refs: List[Dict[str, Any]] = []
+        for c in all_citations:
+            key = c.strip().lower()[:100]
+            if key and key not in seen_keys:
+                seen_keys.add(key)
+                unique_refs.append({"raw_citation": c.strip()})
+
+        # ── 3. Assemble the final report via LLM ─────────────────────────────
+        lens_label = {
+            "M": "Mainstream", "N": "Naturist", "B": "Biohacker", "A": "All Perspectives",
+        }.get(lens.value, "Balanced")
+
+        assembler_system = (
+            "You are a medical report editor. Combine the three perspective summaries "
+            "into a clear, well-structured markdown report. Write concisely. "
+            "Do NOT add information — only organize what is given."
+        )
+        assembler_user = (
+            "Combine these three perspectives on {subject} into a markdown report.\n\n"
+            "Chosen lens: {lens_label}\n\n"
+            "MAINSTREAM PERSPECTIVE:\n"
+            "Key insight: {mainstream_insight}\n"
+            "Findings: {mainstream_findings}\n"
+            "Recommendations:\n{mainstream_recs}\n\n"
+            "NATURIST PERSPECTIVE:\n"
+            "Key insight: {naturist_insight}\n"
+            "Findings: {naturist_findings}\n"
+            "Recommendations:\n{naturist_recs}\n\n"
+            "BIOHACKER PERSPECTIVE:\n"
+            "Key insight: {biohacker_insight}\n"
+            "Findings: {biohacker_findings}\n"
+            "Recommendations:\n{biohacker_recs}\n\n"
+            "ALL CITATIONS (include all, deduplicated):\n{all_citations}\n\n"
+            "Required output structure (use exactly these markdown headings):\n\n"
+            "## 🎯 Your Focus: {lens_label} Perspective\n"
+            "[2-3 sentences: the chosen perspective key_insight + top 3 recommendations]\n\n"
+            "---\n\n"
+            "## 🏥 Mainstream Medicine View\n"
+            "[findings + recommendations for mainstream]\n\n"
+            "## 🌿 Naturist / Evolutionary View\n"
+            "[findings + recommendations for naturist]\n\n"
+            "## 🚀 Biohacker / Optimization View\n"
+            "[findings + recommendations for biohacker]\n\n"
+            "\n## 📚 References\n"
+            "[All citations, numbered, APA 7 format]\n"
+        )
+
+        assembled = self._call_llm(
+            assembler_system,
+            assembler_user,
+            audit_step="factcheck_phase4_assembler",
+            subject=subject,
+            lens_label=lens_label,
+            mainstream_insight=mainstream.key_insight,
+            mainstream_findings=mainstream.findings[:500],
+            mainstream_recs="\n".join(f"- {r}" for r in mainstream.recommendations),
+            naturist_insight=naturist.key_insight,
+            naturist_findings=naturist.findings[:500],
+            naturist_recs="\n".join(f"- {r}" for r in naturist.recommendations),
+            biohacker_insight=biohacker.key_insight,
+            biohacker_findings=biohacker.findings[:500],
+            biohacker_recs="\n".join(f"- {r}" for r in biohacker.recommendations),
+            all_citations="\n".join(c["raw_citation"] for c in unique_refs),
+        )
+
         return PhaseResult(
             phase=AnalysisPhase.COMPLEX_OUTPUT,
             timestamp=datetime.now(),
-            content={"output": response, "output_type": output_type.value},
-            references=references,
+            content={"output": assembled, "output_type": lens.value},
+            references=unique_refs,
         )
 
     @track_cost("Phase 5: Simplified Output (LangChain)")
-    def _phase5_simplify_output(self, complex_output: str) -> PhaseResult:
-        system_prompt = (
-            "You are a medical writer simplifying content for a general audience."
-        )
-        user_prompt = """
-Simplify the following content for a general audience.
+    def _phase5_simplify_output(
+        self,
+        body: str,
+        lens: "PerspectiveLens" = None,
+    ) -> PhaseResult:
+        """
+        Simplify the body text for a general audience using the chosen lens for framing.
+        References are NOT passed in — they are re-attached verbatim by start_analysis.
+        """
+        if lens is None:
+            lens = PerspectiveLens.BALANCED
 
-Content:
-{content}
-Web research context:
-{web_context}
-"""
+        _LENS_FRAMING = {
+            "M": (
+                "clinical, evidence-graded tone. Use 'your doctor recommends' framing. "
+                "Emphasize the strength of the evidence behind each recommendation."
+            ),
+            "N": (
+                "warm, nature-first tone. Use 'your body evolved to...' framing. "
+                "Emphasize ancestral wisdom and natural approaches."
+            ),
+            "B": (
+                "optimization mindset tone. Use 'here is your protocol' framing. "
+                "Emphasize measurable outcomes, n=1 experimentation, and cutting-edge insights."
+            ),
+            "A": (
+                "balanced, neutral tone. Cover all perspectives equally. "
+                "Let the reader decide which approach suits them."
+            ),
+        }
+        framing = _LENS_FRAMING.get(lens.value, _LENS_FRAMING["A"])
+
+        system_prompt = (
+            f"You are a medical writer simplifying content for a general audience. "
+            f"Use a {framing} "
+            f"Write at a 6th grade reading level. Use short sentences and common words. "
+            f"Replace statistical notation (RR, OR, CI, p-values) with plain language. "
+            f"Keep essential biomarkers (HbA1c, LDL, etc.) but explain them simply in parentheses. "
+            f"Do NOT include a References section — that will be added separately."
+        )
+
+        user_prompt = (
+            "Simplify this medical content for a non-medical reader.\n\n"
+            "Content to simplify:\n{body}\n\n"
+            "Web research context:\n{web_context}\n\n"
+            "Structure the output as:\n"
+            "# Simplified Guide: [topic from content]\n\n"
+            "## Key Findings\n"
+            "## Practical Recommendations\n"
+            "## What to Watch Out For\n"
+            "## Tests or Markers to Track (if applicable)\n"
+            "## Supplements or Medications Mentioned (if applicable)\n\n"
+            "Do NOT include a References section."
+        )
+
         response = self._call_llm(
             system_prompt,
             user_prompt,
             audit_step="factcheck_phase_5",
-            content=complex_output,
+            body=body,
             web_context=self.web_context or "None",
         )
+
         return PhaseResult(
             phase=AnalysisPhase.SIMPLIFIED_OUTPUT,
             timestamp=datetime.now(),
@@ -384,11 +638,15 @@ Web research context:
                 return choice.capitalize()
             print("Invalid choice.")
 
-    def _prompt_user_phase3(self) -> str:
-        print("\nPHASE 3 COMPLETE")
-        print("Select output format: A / B / C / D / P")
+    def _prompt_user_lens(self) -> str:
+        print("\nPHASE 3 COMPLETE: Synthesis")
+        print("Which perspective resonates most with you?\n")
+        print("  [M] Mainstream   — Clinical guidelines and established evidence")
+        print("  [N] Naturist     — Evolutionary biology and ancestral health")
+        print("  [B] Biohacker    — Optimization, cutting-edge, n=1 protocols")
+        print("  [A] All equal    — Balanced report, no preference\n")
         while True:
-            choice = input("Your choice: ").strip().upper()
-            if choice in ["A", "B", "C", "D", "P"]:
+            choice = input("Your choice (M/N/B/A): ").strip().upper()
+            if choice in ("M", "N", "B", "A"):
                 return choice
-            print("Invalid choice.")
+            print("Invalid choice. Enter M, N, B, or A.")

@@ -2285,7 +2285,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "tavily-python" },
-    { name = "vulture" },
     { name = "weasyprint" },
     { name = "xai-sdk" },
 ]
@@ -2299,6 +2298,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "ruff" },
+    { name = "vulture" },
 ]
 notebook = [
     { name = "ipykernel" },
@@ -2308,6 +2308,14 @@ viz = [
     { name = "matplotlib" },
     { name = "plotly" },
     { name = "seaborn" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
 ]
 
 [package.metadata]
@@ -2340,11 +2348,19 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "seaborn", marker = "extra == 'viz'", specifier = ">=0.12.0" },
     { name = "tavily-python", specifier = ">=0.7.12" },
-    { name = "vulture", specifier = ">=2.14" },
+    { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.14" },
     { name = "weasyprint", specifier = ">=60.0" },
     { name = "xai-sdk", specifier = ">=0.0.1" },
 ]
 provides-extras = ["dev", "viz", "notebook"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest-asyncio", specifier = ">=1.2.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.15.1" },
+]
 
 [[package]]
 name = "mistune"

@@ -121,11 +121,12 @@ class LLMProvider(Enum):
     CLAUDE_OPUS = "claude-opus"
     OPENAI = "openai"
     OLLAMA = "ollama"
+    # Grok 4.3 — current flagship (replaces all grok-4-1-* models, retiring May 15 2026)
+    GROK_43 = "grok-4.3"
+    # Legacy grok-4-1 entries kept for backwards compatibility until retirement
     GROK_41_FAST = "grok-4-1-fast"
     GROK_41_CODE = "grok-4-1-code"
     GROK_41_REASONING = "grok-4-1-reasoning"
-    GROK_42_FAST = "grok-4-2-fast"
-    GROK_42_REASONING = "grok-4-2-reasoning"
 
 
 @dataclass
@@ -203,7 +204,7 @@ class ClaudeLLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Build professional system prompt
@@ -310,7 +311,7 @@ class OpenAILLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Build professional system prompt
@@ -411,7 +412,7 @@ class OllamaLLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
+            except Exception:
                 pass  # Cost tracking optional
 
             # Build professional system prompt
@@ -472,25 +473,27 @@ class OllamaLLM(LLMInterface):
 
 
 class XaiLLM(LLMInterface):
-    """xAI Grok LLM implementation using OpenAI-compatible API"""
+    """xAI Grok LLM implementation"""
 
     def __init__(self, config: LLMConfig):
         self.config = config
         self.logger = logging.getLogger(__name__)
 
+        if XAIClient is None:
+            raise ImportError("XAIClient not available. Install xai-sdk: pip install xai-sdk")
+
         try:
-            from openai import OpenAI
-            self.client = OpenAI(
+            self.client = XAIClient(
                 api_key=config.api_key or os.getenv("GROK_API_KEY"),
-                base_url="https://api.x.ai/v1"
+                timeout=config.timeout
             )
         except Exception as e:
-            self.logger.warning(f"Failed to initialize xAI client: {e}")
+            self.logger.warning(f"Failed to initialize xAI client (fallback provider): {e}")
             self.client = None
 
     @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
     def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
-        """Generate response using xAI Grok via OpenAI-compatible API"""
+        """Generate response using xAI Grok"""
         if self.client is None:
             raise RuntimeError("xAI client not initialized")
 
@@ -499,29 +502,59 @@ class XaiLLM(LLMInterface):
             try:
                 from cost_tracker import record_model_usage
                 record_model_usage(self.config.model)
-            except:
-                pass
+            except Exception:
+                pass  # Cost tracking optional
 
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
-
-            response = self.client.chat.completions.create(
+            # Create chat session
+            chat = self.client.chat.create(
                 model=self.config.model,
-                messages=messages,
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature
             )
 
-            # Extract token usage
-            token_usage = TokenUsage()
-            if response.usage:
-                token_usage.input_tokens = response.usage.prompt_tokens
-                token_usage.output_tokens = response.usage.completion_tokens
-                token_usage.total_tokens = response.usage.total_tokens
+            # Build professional system prompt
+            base_system_prompt = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
+            if system_prompt:
+                full_system_prompt = f"{base_system_prompt}\n\n{system_prompt}"
+            else:
+                full_system_prompt = base_system_prompt
 
-            content = response.choices[0].message.content
+            # Prefix user message with professional tone instruction
+            professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+            # Build the full prompt with system message
+            full_prompt = f"{full_system_prompt}\n\n{professional_prompt}"
+
+            # Append user message and sample response
+            chat.append(xai_user(full_prompt))
+            response = chat.sample()
+
+            # Extract token usage from response
+            token_usage = TokenUsage()
+            if hasattr(response, 'usage') and response.usage:
+                # Try dictionary access first, then attribute access
+                if isinstance(response.usage, dict):
+                    token_usage.input_tokens = response.usage.get('prompt_tokens', 0)
+                    token_usage.output_tokens = response.usage.get('completion_tokens', 0)
+                    token_usage.total_tokens = response.usage.get('total_tokens', 0)
+                else:
+                    # Access as object attributes
+                    token_usage.input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                    token_usage.output_tokens = getattr(response.usage, 'completion_tokens', 0)
+                    token_usage.total_tokens = getattr(response.usage, 'total_tokens', 0)
+
+                # Calculate total if not provided
+                if not token_usage.total_tokens:
+                    token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+
+            # Get the text content from response
+            if hasattr(response, 'message') and hasattr(response.message, 'content'):
+                content = response.message.content
+            elif hasattr(response, 'content'):
+                content = response.content
+            else:
+                content = str(response)
+
             return content, token_usage
 
         except Exception as e:
@@ -552,16 +585,11 @@ class XaiLLM(LLMInterface):
 
     def is_available(self) -> bool:
         """Check if xAI is available"""
-        if self.client is None or not (self.config.api_key or os.getenv("GROK_API_KEY")):
+        if self.client is None:
             return False
         try:
-            # Short test call
-            self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[{"role": "user", "content": "OK"}],
-                max_tokens=5
-            )
-            return True
+            test_response, _ = self.generate_response("Test", "Respond with 'OK'")
+            return "OK" in test_response or len(test_response) > 0
         except Exception:
             return False
 
@@ -589,8 +617,10 @@ class LLMManager:
                 elif config.provider == LLMProvider.OLLAMA:
                     self.providers[config.provider] = OllamaLLM(config)
                 elif config.provider in [
-                    LLMProvider.GROK_41_FAST, LLMProvider.GROK_41_CODE, LLMProvider.GROK_41_REASONING,
-                    LLMProvider.GROK_42_FAST, LLMProvider.GROK_42_REASONING
+                    LLMProvider.GROK_43,
+                    LLMProvider.GROK_41_FAST,
+                    LLMProvider.GROK_41_CODE,
+                    LLMProvider.GROK_41_REASONING,
                 ]:
                     self.providers[config.provider] = XaiLLM(config)
 
@@ -600,7 +630,7 @@ class LLMManager:
                 self.logger.error(f"Failed to initialize {config.provider.value}: {str(e)}")
     
     def get_available_provider(self) -> Optional[LLMInterface]:
-        """Get first available LLM provider"""
+        """Get first available LLM provider (calls is_available() health check)."""
         for provider_type, provider in self.providers.items():
             if provider.is_available():
                 self.current_provider = provider_type
@@ -608,6 +638,21 @@ class LLMManager:
                 return provider
         
         self.logger.error("No LLM providers available")
+        return None
+
+    def get_provider_direct(self) -> Optional[LLMInterface]:
+        """
+        Return the first initialized provider WITHOUT calling is_available().
+
+        Use this in hot paths (like call_model / routing) where the extra
+        round-trip API health check is unacceptable. The provider is assumed
+        to be usable if it was successfully initialized.
+
+        Returns:
+            First initialized LLMInterface, or None if no providers exist.
+        """
+        for provider in self.providers.values():
+            return provider
         return None
     
     def medical_analysis_with_fallback(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
@@ -671,24 +716,6 @@ class LLMManager:
             )
             dspy.settings.configure(lm=lm)
 
-        elif self.current_provider in [
-            LLMProvider.GROK_41_FAST, LLMProvider.GROK_41_CODE, LLMProvider.GROK_41_REASONING,
-            LLMProvider.GROK_42_FAST, LLMProvider.GROK_42_REASONING
-        ]:
-            api_key = os.getenv("GROK_API_KEY")
-            if not api_key:
-                raise RuntimeError("GROK_API_KEY not set")
-            
-            # Using OpenAI client as Grok is OpenAI-compatible for DSPy purposes
-            lm = dspy.OpenAI(
-                model=self.configs[0].model,
-                api_key=api_key,
-                base_url="https://api.x.ai/v1",
-                temperature=self.configs[0].temperature,
-                max_tokens=self.configs[0].max_tokens
-            )
-            dspy.settings.configure(lm=lm)
-
         self.logger.info(f"DSPy configured with {self.current_provider.value}")
         return True
 
@@ -707,43 +734,38 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
     if primary_provider == "claude-sonnet":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_SONNET,
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             temperature=0.1
         ))
     elif primary_provider == "claude-opus":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_OPUS,
-            model="claude-opus-4-5-20251101",
+            model="claude-opus-4-7",
             temperature=0.1
         ))
+    elif primary_provider == "grok-4.3":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
+            temperature=0.1
+        ))
+    # Legacy grok-4-1 provider keys — kept for backwards compat, map to grok-4.3
     elif primary_provider == "grok-4-1-fast":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK_41_FAST,
-            model="grok-4-1-fast-non-reasoning-latest",
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
             temperature=0.1
         ))
     elif primary_provider == "grok-4-1-code":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK_41_CODE,
-            model="grok-code-fast",
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
             temperature=0.1
         ))
     elif primary_provider == "grok-4-1-reasoning":
         configs.append(LLMConfig(
-            provider=LLMProvider.GROK_41_REASONING,
-            model="grok-4-1-fast-reasoning-latest",
-            temperature=0.1
-        ))
-    elif primary_provider == "grok-4-2-fast":
-        configs.append(LLMConfig(
-            provider=LLMProvider.GROK_42_FAST,
-            model="grok-4.2-fast",
-            temperature=0.1
-        ))
-    elif primary_provider == "grok-4-2-reasoning":
-        configs.append(LLMConfig(
-            provider=LLMProvider.GROK_42_REASONING,
-            model="grok-4.2-reasoning",
+            provider=LLMProvider.GROK_43,
+            model="grok-4.3",
             temperature=0.1
         ))
 
@@ -752,7 +774,7 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
         if provider == "openai":
             configs.append(LLMConfig(
                 provider=LLMProvider.OPENAI,
-                model="gpt-4-turbo-preview",
+                model="gpt-4o",
                 temperature=0.1
             ))
         elif provider == "ollama":
@@ -765,44 +787,38 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
         elif provider == "claude-sonnet":
             configs.append(LLMConfig(
                 provider=LLMProvider.CLAUDE_SONNET,
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 temperature=0.1
             ))
         elif provider == "claude-opus":
             configs.append(LLMConfig(
                 provider=LLMProvider.CLAUDE_OPUS,
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-7",
                 temperature=0.1
             ))
-        elif provider == "grok-4-2-fast":
+        elif provider == "grok-4.3":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_42_FAST,
-                model="grok-4.2-fast",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
-        elif provider == "grok-4-2-reasoning":
-            configs.append(LLMConfig(
-                provider=LLMProvider.GROK_42_REASONING,
-                model="grok-4.2-reasoning",
-                temperature=0.1
-            ))
-
+        # Legacy grok-4-1 fallback keys — map to grok-4.3
         elif provider == "grok-4-1-fast":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_41_FAST,
-                model="grok-4-1-fast-non-reasoning-latest",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
         elif provider == "grok-4-1-code":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_41_CODE,
-                model="grok-code-fast",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
         elif provider == "grok-4-1-reasoning":
             configs.append(LLMConfig(
-                provider=LLMProvider.GROK_41_REASONING,
-                model="grok-4-1-fast-reasoning-latest",
+                provider=LLMProvider.GROK_43,
+                model="grok-4.3",
                 temperature=0.1
             ))
 
@@ -817,22 +833,24 @@ def get_available_models() -> dict[str, str]:
         Dictionary mapping model names to provider identifiers
     """
     return {
-        # Claude models
+        # Claude models — current
+        "claude-sonnet-4-6": "claude-sonnet",
+        "claude-opus-4-7": "claude-opus",
+        "claude-haiku-4-5": "claude-sonnet",   # cheapest Claude, maps to sonnet provider
+        # Claude models — legacy (still usable, not yet deprecated)
         "claude-sonnet-4-5-20250929": "claude-sonnet",
         "claude-opus-4-5-20251101": "claude-opus",
-        # Grok models
-        "grok-4.2-fast": "grok-4-2-fast",
-        "grok-4.2-reasoning": "grok-4-2-reasoning",
-        "grok-4-2-fast-non-reasoning-latest": "grok-4-2-fast",
-        "grok-4-2-fast-reasoning-latest": "grok-4-2-reasoning",
+        # Grok models — current
+        "grok-4.3": "grok-4.3",
+        # Grok models — legacy (retiring May 15 2026, map to grok-4.3 provider)
         "grok-4-1-fast-non-reasoning-latest": "grok-4-1-fast",
-        "grok-code-fast": "grok-4-1-code",
         "grok-4-1-fast-reasoning-latest": "grok-4-1-reasoning",
+        "grok-code-fast": "grok-4-1-code",
         # OpenAI models
-        "gpt-4-turbo-preview": "openai",
         "gpt-4o": "openai",
         "gpt-4o-mini": "openai",
         "gpt-4-turbo": "openai",
+        "gpt-4-turbo-preview": "openai",
         "gpt-3.5-turbo": "openai",
         # Local models
         "llama2:13b": "ollama",
@@ -911,10 +929,10 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     except Exception as e:
         raise RuntimeError(f"Failed to create LLM manager for {provider_name}: {e}")
 
-    # Get the LLM provider interface
-    llm_provider = llm_manager.get_available_provider()
+    # Get the LLM provider interface directly (no is_available() health check ping)
+    llm_provider = llm_manager.get_provider_direct()
     if not llm_provider:
-        raise RuntimeError(f"LLM provider {provider_name} not available")
+        raise RuntimeError(f"LLM provider {provider_name} not available or not initialized")
 
     # Call the LLM
     try:
