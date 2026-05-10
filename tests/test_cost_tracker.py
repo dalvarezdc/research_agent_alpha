@@ -1,7 +1,7 @@
 """Unit tests for the class-based CostTracker."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from cost_tracker import CostTracker, calculate_cost
 
 
@@ -122,7 +122,14 @@ def test_get_summary_emits_span_attributes():
     tracker = CostTracker()
     # Simulate a phase being tracked
     tracker._phase_costs = [
-        {"phase": "Phase 1", "cost": 0.05, "duration": 1.2, "model": "grok-4.3"}
+        {
+            "phase": "Phase 1",
+            "cost": 0.05,
+            "duration": 1.2,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "models_used": ["grok-4.3"],
+        }
     ]
     with patch("cost_tracker.add_span_attributes") as mock_attrs:
         result = tracker.get_summary()
@@ -133,5 +140,6 @@ def test_get_summary_emits_span_attributes():
     assert call_kwargs["cost.total"] == 0.05
     assert "cost.phases_count" in call_kwargs
     assert call_kwargs["cost.phases_count"] == 1
+    assert abs(call_kwargs["cost.duration"] - 1.2) < 0.001
     # Return value must still be the dict
     assert result["total_cost"] == 0.05
