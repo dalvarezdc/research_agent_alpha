@@ -220,6 +220,44 @@ When adding new agents:
 3. Add tests
 4. Update this README
 
+## Observability (Arize Phoenix)
+
+LLM request tracing is always-on when running `uv run python router.py`.
+
+### Starting the UI
+
+Phoenix starts automatically when you run the router. The URL is printed at startup:
+
+```
+Tracing (Phoenix): http://localhost:6006
+```
+
+Open that URL in your browser to see the Phoenix trace explorer.
+
+### What is traced
+
+| Span | Name | Key attributes |
+|---|---|---|
+| Full query session | `router.session` | `query`, `routed_to`, `model`, `implementation` |
+| Raw LLM call (router) | `llm.call` | `llm.model_name`, `llm.provider`, `llm.input_messages`, `llm.output.value`, token counts |
+| Agent phase calls (LangChain) | auto-instrumented | model, prompt, completion, latency, token counts |
+
+### Running Phoenix separately
+
+To keep the Phoenix UI running across multiple router sessions, start it in one terminal and the router in another:
+
+```bash
+# Terminal 1 — Phoenix server
+uv run python -m phoenix.server.main serve
+
+# Terminal 2 — Router
+uv run python router.py
+```
+
+### Disabling tracing
+
+Phoenix startup is silent-fail — if the port is in use or the package fails to load, the router continues normally. A warning is written to the log but no exception is raised.
+
 ## License
 
 Part of the medical reasoning agent research project.

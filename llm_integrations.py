@@ -17,6 +17,16 @@ import dspy
 from pydantic import BaseModel
 
 
+def _get_tracer():
+    """Lazy import to avoid circular dependency with observability module."""
+    try:
+        from observability import get_tracer
+        return get_tracer()
+    except ImportError:
+        from opentelemetry import trace
+        return trace.get_tracer("research-agent-alpha")
+
+
 @dataclass
 class TokenUsage:
     """Track token usage across pipeline"""
@@ -114,6 +124,13 @@ except ImportError:
     XAIClient = None
     xai_user = None
 
+try:
+    from langchain_google_vertexai import ChatVertexAI
+    from langchain_google_vertexai.model_garden import ChatAnthropicVertex
+except ImportError:
+    ChatVertexAI = None
+    ChatAnthropicVertex = None
+
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
@@ -127,6 +144,10 @@ class LLMProvider(Enum):
     GROK_41_FAST = "grok-4-1-fast"
     GROK_41_CODE = "grok-4-1-code"
     GROK_41_REASONING = "grok-4-1-reasoning"
+    # GCP Vertex AI providers
+    CLAUDE_VERTEX = "claude-vertex"
+    CLAUDE_VERTEX_OPUS = "claude-vertex-opus"
+    GEMINI_VERTEX = "gemini-vertex"
 
 
 @dataclass
@@ -137,7 +158,7 @@ class LLMConfig:
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     temperature: float = 0.1
-    max_tokens: int = 4096  # Increased for detailed responses
+    max_tokens: int = 32_000  # Large enough for complex structured JSON responses
     timeout: int = 300  # 5 minutes for complex medical analysis
 
 
@@ -594,6 +615,202 @@ class XaiLLM(LLMInterface):
             return False
 
 
+class ClaudeVertexLLM(LLMInterface):
+    """Claude on Google Cloud Vertex AI (no ANTHROPIC_API_KEY required — uses ADC)."""
+
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        if ChatAnthropicVertex is None:
+            raise ImportError(
+                "ChatAnthropicVertex not available. "
+                "Install langchain-google-vertexai: pip install langchain-google-vertexai"
+            )
+
+        project = os.getenv("VERTEX_PROJECT", "")
+        if not project:
+            raise ValueError(
+                "VERTEX_PROJECT env var is required for ClaudeVertexLLM. "
+                "Set it to your GCP project ID (e.g. 'my-gcp-project-123')."
+            )
+        location = os.getenv("VERTEX_LOCATION", "us-east5")
+
+        try:
+            self.client = ChatAnthropicVertex(
+                model=config.model,
+                project=project,
+                location=location,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize ClaudeVertex client: {e}")
+            self.client = None
+
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        """Generate response using Claude on Vertex AI."""
+        if self.client is None:
+            raise RuntimeError("ClaudeVertex client not initialized")
+
+        try:
+            from cost_tracker import record_model_usage
+            record_model_usage(self.config.model)
+        except Exception:
+            pass
+
+        base_system = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
+        full_system = f"{base_system}\n\n{system_prompt}" if system_prompt else base_system
+        professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+        messages = [
+            SystemMessage(content=full_system),
+            HumanMessage(content=professional_prompt),
+        ]
+
+        try:
+            response = self.client.invoke(messages)
+
+            token_usage = TokenUsage()
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                meta = response.usage_metadata
+                if isinstance(meta, dict):
+                    token_usage.input_tokens = meta.get("input_tokens", 0)
+                    token_usage.output_tokens = meta.get("output_tokens", 0)
+                else:
+                    # UsageMetadata object (langchain-google-vertexai / anthropic SDK)
+                    token_usage.input_tokens = getattr(meta, "input_tokens", 0)
+                    token_usage.output_tokens = getattr(meta, "output_tokens", 0)
+                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+            elif hasattr(response, "response_metadata") and response.response_metadata:
+                usage = response.response_metadata.get("usage", {})
+                token_usage.input_tokens = usage.get("input_tokens", 0)
+                token_usage.output_tokens = usage.get("output_tokens", 0)
+                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+
+            return response.content, token_usage
+
+        except Exception as e:
+            self.logger.error(f"ClaudeVertex API error: {e}")
+            raise
+
+    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+        """Specialized medical analysis using Claude on Vertex AI."""
+        system_prompt = (
+            "You are a medical reasoning AI that provides systematic analysis "
+            "of medical procedures. Focus on evidence-based recommendations."
+        )
+        prompt = f"Medical Input: {medical_input}\nReasoning Stage: {stage}\n\nProvide analysis with confidence scores."
+        response, token_usage = self.generate_response(prompt, system_prompt)
+        return {"analysis": response, "confidence": 0.8, "sources_needed": [], "token_usage": token_usage}
+
+    def is_available(self) -> bool:
+        """Check if ClaudeVertex client is initialized."""
+        return self.client is not None
+
+
+class GeminiVertexLLM(LLMInterface):
+    """Gemini on Google Cloud Vertex AI (uses ADC / service account)."""
+
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        if ChatVertexAI is None:
+            raise ImportError(
+                "ChatVertexAI not available. "
+                "Install langchain-google-vertexai: pip install langchain-google-vertexai"
+            )
+
+        project = os.getenv("VERTEX_PROJECT", "")
+        if not project:
+            raise ValueError(
+                "VERTEX_PROJECT env var is required for GeminiVertexLLM. "
+                "Set it to your GCP project ID (e.g. 'my-gcp-project-123')."
+            )
+        location = os.getenv("VERTEX_LOCATION", "us-central1")
+
+        try:
+            self.client = ChatVertexAI(
+                model=config.model,
+                project=project,
+                location=location,
+                temperature=config.temperature,
+                max_output_tokens=config.max_tokens,
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize GeminiVertex client: {e}")
+            self.client = None
+
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        """Generate response using Gemini on Vertex AI."""
+        if self.client is None:
+            raise RuntimeError("GeminiVertex client not initialized")
+
+        try:
+            from cost_tracker import record_model_usage
+            record_model_usage(self.config.model)
+        except Exception:
+            pass
+
+        base_system = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
+        full_system = f"{base_system}\n\n{system_prompt}" if system_prompt else base_system
+        professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+        messages = [
+            SystemMessage(content=full_system),
+            HumanMessage(content=professional_prompt),
+        ]
+
+        try:
+            response = self.client.invoke(messages)
+
+            token_usage = TokenUsage()
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                meta = response.usage_metadata
+                if isinstance(meta, dict):
+                    # Dict form: try normalized keys first, then legacy Gemini keys
+                    token_usage.input_tokens = meta.get(
+                        "input_tokens", meta.get("prompt_token_count", 0)
+                    )
+                    token_usage.output_tokens = meta.get(
+                        "output_tokens", meta.get("candidates_token_count", 0)
+                    )
+                else:
+                    # Object form: try normalized attrs first, then legacy Gemini attrs
+                    token_usage.input_tokens = getattr(
+                        meta, "input_tokens",
+                        getattr(meta, "prompt_token_count", 0)
+                    )
+                    token_usage.output_tokens = getattr(
+                        meta, "output_tokens",
+                        getattr(meta, "candidates_token_count", 0)
+                    )
+                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+
+            return response.content, token_usage
+
+        except Exception as e:
+            self.logger.error(f"GeminiVertex API error: {e}")
+            raise
+
+    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+        """Specialized medical analysis using Gemini on Vertex AI."""
+        system_prompt = (
+            "You are a medical reasoning AI that provides systematic analysis "
+            "of medical procedures. Focus on evidence-based recommendations."
+        )
+        prompt = f"Medical Input: {medical_input}\nReasoning Stage: {stage}\n\nProvide analysis with confidence scores."
+        response, token_usage = self.generate_response(prompt, system_prompt)
+        return {"analysis": response, "confidence": 0.8, "sources_needed": [], "token_usage": token_usage}
+
+    def is_available(self) -> bool:
+        """Check if GeminiVertex client is initialized."""
+        return self.client is not None
+
+
 class LLMManager:
     """Manages multiple LLM providers with fallback mechanisms"""
 
@@ -623,9 +840,17 @@ class LLMManager:
                     LLMProvider.GROK_41_REASONING,
                 ]:
                     self.providers[config.provider] = XaiLLM(config)
+                elif config.provider in (LLMProvider.CLAUDE_VERTEX, LLMProvider.CLAUDE_VERTEX_OPUS):
+                    self.providers[config.provider] = ClaudeVertexLLM(config)
+                elif config.provider == LLMProvider.GEMINI_VERTEX:
+                    self.providers[config.provider] = GeminiVertexLLM(config)
 
                 self.logger.info(f"Initialized {config.provider.value} provider")
 
+            except ValueError as e:
+                # Configuration errors (missing env vars, bad values) — re-raise immediately
+                # so the caller gets a clear message instead of a silent empty providers dict.
+                raise
             except Exception as e:
                 self.logger.error(f"Failed to initialize {config.provider.value}: {str(e)}")
     
@@ -727,7 +952,24 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
 
     if fallback_providers is None:
         fallback_providers = ["openai", "ollama"]
-    
+
+    # When running on GCP, redirect Claude providers to Vertex AI equivalents
+    _is_gcp = os.getenv("IS_GCP", "").lower() in ("true", "1", "yes")
+
+    if _is_gcp:
+        if primary_provider == "claude-sonnet":
+            primary_provider = "claude-vertex"
+        elif primary_provider == "claude-opus":
+            primary_provider = "claude-vertex-opus"
+        if fallback_providers:
+            fallback_providers = [
+                "claude-vertex" if p == "claude-sonnet"
+                else "claude-vertex-opus" if p == "claude-opus"
+                else p
+                for p in fallback_providers
+            ]
+        # Gemini is GCP-native; openai/grok keep their own paths
+
     configs = []
     
     # Primary provider
@@ -766,6 +1008,24 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
         configs.append(LLMConfig(
             provider=LLMProvider.GROK_43,
             model="grok-4.3",
+            temperature=0.1
+        ))
+    elif primary_provider == "claude-vertex":
+        configs.append(LLMConfig(
+            provider=LLMProvider.CLAUDE_VERTEX,
+            model="claude-sonnet-4-6",
+            temperature=0.1
+        ))
+    elif primary_provider == "claude-vertex-opus":
+        configs.append(LLMConfig(
+            provider=LLMProvider.CLAUDE_VERTEX_OPUS,
+            model="claude-opus-4-7",
+            temperature=0.1
+        ))
+    elif primary_provider == "gemini-vertex":
+        configs.append(LLMConfig(
+            provider=LLMProvider.GEMINI_VERTEX,
+            model="gemini-1.5-pro",
             temperature=0.1
         ))
 
@@ -821,6 +1081,24 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
                 model="grok-4.3",
                 temperature=0.1
             ))
+        elif provider == "claude-vertex":
+            configs.append(LLMConfig(
+                provider=LLMProvider.CLAUDE_VERTEX,
+                model="claude-sonnet-4-6",
+                temperature=0.1
+            ))
+        elif provider == "claude-vertex-opus":
+            configs.append(LLMConfig(
+                provider=LLMProvider.CLAUDE_VERTEX_OPUS,
+                model="claude-opus-4-7",
+                temperature=0.1
+            ))
+        elif provider == "gemini-vertex":
+            configs.append(LLMConfig(
+                provider=LLMProvider.GEMINI_VERTEX,
+                model="gemini-1.5-pro",
+                temperature=0.1
+            ))
 
     return LLMManager(configs)
 
@@ -854,6 +1132,10 @@ def get_available_models() -> dict[str, str]:
         "gpt-3.5-turbo": "openai",
         # Local models
         "llama2:13b": "ollama",
+        # GCP Vertex AI models
+        "claude-sonnet-4-6-vertex": "claude-vertex",
+        "claude-opus-4-7-vertex": "claude-vertex-opus",
+        "gemini-1.5-pro": "gemini-vertex",
     }
 
 
@@ -926,6 +1208,10 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
             primary_provider=provider_name,
             fallback_providers=[]  # No fallbacks for explicit model calls
         )
+    except ValueError:
+        # Configuration errors (e.g. missing VERTEX_PROJECT) — re-raise as-is
+        # so the user sees the exact message, not a wrapped RuntimeError.
+        raise
     except Exception as e:
         raise RuntimeError(f"Failed to create LLM manager for {provider_name}: {e}")
 
@@ -934,12 +1220,23 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     if not llm_provider:
         raise RuntimeError(f"LLM provider {provider_name} not available or not initialized")
 
-    # Call the LLM
-    try:
-        response_text, token_usage = llm_provider.generate_response(
-            prompt=user_prompt,
-            system_prompt=system_prompt
-        )
-        return response_text
-    except Exception as e:
-        raise RuntimeError(f"LLM call failed for model {model_name}: {e}")
+    # Call the LLM inside an OTEL span for traceability
+    tracer = _get_tracer()
+    with tracer.start_as_current_span("llm.call") as span:
+        span.set_attribute("llm.model_name", model_name)
+        span.set_attribute("llm.provider", provider_name)
+        span.set_attribute("llm.input_messages", str(messages)[:2000])
+        try:
+            response_text, token_usage = llm_provider.generate_response(
+                prompt=user_prompt,
+                system_prompt=system_prompt
+            )
+            span.set_attribute("llm.output.value", response_text[:2000])
+            if token_usage:
+                span.set_attribute("llm.token_count.prompt", token_usage.input_tokens)
+                span.set_attribute("llm.token_count.completion", token_usage.output_tokens)
+                span.set_attribute("llm.token_count.total", token_usage.total_tokens)
+            return response_text
+        except Exception as e:
+            span.record_exception(e)
+            raise RuntimeError(f"LLM call failed for model {model_name}: {e}")

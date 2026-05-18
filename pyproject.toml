@@ -28,6 +28,8 @@ dependencies = [
     "langchain-community>=0.0.10",
     "langchain-openai>=0.0.5",
     "langchain-anthropic>=0.1.0",
+    "langchain-google-vertexai>=2.0.0",
+    "langchain-google-genai>=2.0.0",
     "dspy-ai>=2.4.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
@@ -42,6 +44,10 @@ dependencies = [
     "markdown>=3.5.0",
     "weasyprint>=60.0",
     "pygments>=2.17.0",
+    "arize-phoenix>=15.0.0",
+    "openinference-instrumentation-langchain>=0.1.63",
+    "openinference-instrumentation>=0.1.49",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
 ]
 
 [project.optional-dependencies]
