@@ -125,14 +125,11 @@ except ImportError:
     xai_user = None
 
 try:
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_google_vertexai import ChatVertexAI
     from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 except ImportError:
-    ChatGoogleGenerativeAI = None
-    try:
-        from langchain_google_vertexai.model_garden import ChatAnthropicVertex
-    except ImportError:
-        ChatAnthropicVertex = None
+    ChatVertexAI = None
+    ChatAnthropicVertex = None
 
 
 class LLMProvider(Enum):
@@ -161,7 +158,7 @@ class LLMConfig:
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     temperature: float = 0.1
-    max_tokens: int = 4096  # Increased for detailed responses
+    max_tokens: int = 32_000  # Large enough for complex structured JSON responses
     timeout: int = 300  # 5 minutes for complex medical analysis
 
 
@@ -720,10 +717,10 @@ class GeminiVertexLLM(LLMInterface):
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        if ChatGoogleGenerativeAI is None:
+        if ChatVertexAI is None:
             raise ImportError(
-                "ChatGoogleGenerativeAI not available. "
-                "Install langchain-google-genai: pip install langchain-google-genai"
+                "ChatVertexAI not available. "
+                "Install langchain-google-vertexai: pip install langchain-google-vertexai"
             )
 
         project = os.getenv("VERTEX_PROJECT", "")
@@ -735,9 +732,10 @@ class GeminiVertexLLM(LLMInterface):
         location = os.getenv("VERTEX_LOCATION", "us-central1")
 
         try:
-            self.client = ChatGoogleGenerativeAI(
+            self.client = ChatVertexAI(
                 model=config.model,
-                google_api_key=None,  # use ADC / GOOGLE_APPLICATION_CREDENTIALS
+                project=project,
+                location=location,
                 temperature=config.temperature,
                 max_output_tokens=config.max_tokens,
             )
@@ -842,9 +840,7 @@ class LLMManager:
                     LLMProvider.GROK_41_REASONING,
                 ]:
                     self.providers[config.provider] = XaiLLM(config)
-                elif config.provider == LLMProvider.CLAUDE_VERTEX:
-                    self.providers[config.provider] = ClaudeVertexLLM(config)
-                elif config.provider == LLMProvider.CLAUDE_VERTEX_OPUS:
+                elif config.provider in (LLMProvider.CLAUDE_VERTEX, LLMProvider.CLAUDE_VERTEX_OPUS):
                     self.providers[config.provider] = ClaudeVertexLLM(config)
                 elif config.provider == LLMProvider.GEMINI_VERTEX:
                     self.providers[config.provider] = GeminiVertexLLM(config)

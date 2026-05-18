@@ -97,7 +97,7 @@ def test_create_llm_manager_returns_gemini_vertex_when_is_gcp_true(monkeypatch):
 
     mock_client_cls = MagicMock(return_value=MagicMock())
 
-    with patch("llm_integrations.ChatGoogleGenerativeAI", mock_client_cls):
+    with patch("llm_integrations.ChatVertexAI", mock_client_cls):
         from llm_integrations import create_llm_manager, LLMProvider, GeminiVertexLLM
         manager = create_llm_manager(primary_provider="gemini-vertex")
 
@@ -174,25 +174,24 @@ def test_is_gcp_false_keeps_api_key_path(monkeypatch):
     assert isinstance(manager.providers[LLMProvider.CLAUDE_SONNET], ClaudeLLM)
     assert LLMProvider.CLAUDE_VERTEX not in manager.providers
 
-def test_gemini_vertex_llm_init_uses_model(monkeypatch):
-    """GeminiVertexLLM initialises ChatGoogleGenerativeAI with the correct model."""
+def test_gemini_vertex_llm_init_uses_project_and_location(monkeypatch):
+    """GeminiVertexLLM initialises ChatVertexAI with project/location from env."""
     monkeypatch.setenv("VERTEX_PROJECT", "my-gcp-project")
     monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
 
     mock_client_cls = MagicMock()
     mock_client_cls.return_value = MagicMock()
 
-    with patch("llm_integrations.ChatGoogleGenerativeAI", mock_client_cls):
+    with patch("llm_integrations.ChatVertexAI", mock_client_cls):
         from llm_integrations import GeminiVertexLLM, LLMConfig, LLMProvider
         config = LLMConfig(provider=LLMProvider.GEMINI_VERTEX, model="gemini-1.5-pro")
         llm = GeminiVertexLLM(config)
 
     mock_client_cls.assert_called_once()
     call_kwargs = mock_client_cls.call_args.kwargs
+    assert call_kwargs["project"] == "my-gcp-project"
+    assert call_kwargs["location"] == "us-central1"
     assert call_kwargs["model"] == "gemini-1.5-pro"
-    # ChatGoogleGenerativeAI uses ADC — project/location are not passed as constructor args
-    assert "project" not in call_kwargs
-    assert "location" not in call_kwargs
 
 
 def test_gemini_vertex_llm_generate_response_returns_content(monkeypatch):
@@ -209,7 +208,7 @@ def test_gemini_vertex_llm_generate_response_returns_content(monkeypatch):
 
     mock_client_cls = MagicMock(return_value=mock_client)
 
-    with patch("llm_integrations.ChatGoogleGenerativeAI", mock_client_cls):
+    with patch("llm_integrations.ChatVertexAI", mock_client_cls):
         from llm_integrations import GeminiVertexLLM, LLMConfig, LLMProvider
         config = LLMConfig(provider=LLMProvider.GEMINI_VERTEX, model="gemini-1.5-pro")
         llm = GeminiVertexLLM(config)
@@ -228,7 +227,7 @@ def test_gemini_vertex_llm_is_available_false_when_no_client(monkeypatch):
 
     mock_client_cls = MagicMock(side_effect=Exception("no vertex"))
 
-    with patch("llm_integrations.ChatGoogleGenerativeAI", mock_client_cls):
+    with patch("llm_integrations.ChatVertexAI", mock_client_cls):
         from llm_integrations import GeminiVertexLLM, LLMConfig, LLMProvider
         config = LLMConfig(provider=LLMProvider.GEMINI_VERTEX, model="gemini-1.5-pro")
         llm = GeminiVertexLLM(config)
@@ -257,7 +256,7 @@ def test_gemini_vertex_llm_raises_on_missing_project(monkeypatch):
     monkeypatch.delenv("VERTEX_PROJECT", raising=False)
 
     mock_client_cls = MagicMock(return_value=MagicMock())
-    with patch("llm_integrations.ChatGoogleGenerativeAI", mock_client_cls):
+    with patch("llm_integrations.ChatVertexAI", mock_client_cls):
         from llm_integrations import GeminiVertexLLM, LLMConfig, LLMProvider
         config = LLMConfig(provider=LLMProvider.GEMINI_VERTEX, model="gemini-1.5-pro")
         with pytest.raises(ValueError, match="VERTEX_PROJECT"):

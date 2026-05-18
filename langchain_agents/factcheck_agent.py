@@ -569,33 +569,26 @@ Schema:
         self, response: str, model_cls: type[BaseModel], subject: str
     ) -> BaseModel:
         parsed = self._parse_json(response)
-        if isinstance(parsed, dict):
-            try:
-                return model_cls.model_validate(parsed)
-            except Exception:
-                pass
-        if model_cls is _Phase1Model:
-            return _Phase1Model(
-                official_narrative=f"Analysis unavailable for {subject}.",
-                counter_narrative="",
-                key_conflicts="",
-                references=[],
+
+        if not isinstance(parsed, dict):
+            raise RuntimeError(
+                f"Fact-check phase failed for '{subject}': LLM response could not be parsed "
+                f"as JSON (model: {model_cls.__name__}). "
+                f"Response length: {len(response)} chars. "
+                f"This usually means the response was truncated (max_tokens too low) "
+                f"or the model returned plain text instead of JSON. "
+                f"Response preview: {response[:200]!r}"
             )
-        if model_cls is _Phase2Model:
-            return _Phase2Model(
-                industry_funded_studies="",
-                independent_research="",
-                methodology_quality="",
-                anecdotal_signals="",
-                time_weighted_evidence="",
-                references=[],
-            )
-        return _Phase3Model(
-            biological_truth="",
-            industry_bias="",
-            grey_zone="",
-            references=[],
-        )
+
+        try:
+            return model_cls.model_validate(parsed)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Fact-check phase failed for '{subject}': LLM returned valid JSON but it "
+                f"did not match the expected schema ({model_cls.__name__}). "
+                f"Validation error: {exc}. "
+                f"JSON keys returned: {list(parsed.keys())}"
+            ) from exc
 
     def _normalize_references(self, references: List[str]) -> List[Dict[str, Any]]:
         normalized: List[Dict[str, Any]] = []

@@ -158,25 +158,25 @@ Grok-specific requirements:
             schema=_MedicationOutputModel.model_json_schema(),
         )
         parsed = self._parse_json(response)
-        model: Optional[_MedicationOutputModel] = None
 
-        if isinstance(parsed, dict):
-            try:
-                model = _MedicationOutputModel.model_validate(parsed)
-            except Exception:
-                model = None
-
-        if model is None:
-            model = _MedicationOutputModel(
-                medication_name=medication_input.medication_name,
-                drug_class="unknown",
-                mechanism_of_action="",
-                absorption="",
-                metabolism="",
-                elimination="",
-                half_life="",
-                analysis_confidence=0.5,
+        if not isinstance(parsed, dict):
+            raise RuntimeError(
+                f"Medication analysis failed: LLM response could not be parsed as JSON. "
+                f"Response length: {len(response)} chars. "
+                f"This usually means the response was truncated (max_tokens too low) "
+                f"or the model returned plain text instead of JSON. "
+                f"Response preview: {response[:200]!r}"
             )
+
+        try:
+            model = _MedicationOutputModel.model_validate(parsed)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Medication analysis failed: LLM returned valid JSON but it did not match "
+                f"the expected schema for {medication_input.medication_name}. "
+                f"Validation error: {exc}. "
+                f"JSON keys returned: {list(parsed.keys())}"
+            ) from exc
 
         self._log_step(
             ReasoningStage.INPUT_ANALYSIS,

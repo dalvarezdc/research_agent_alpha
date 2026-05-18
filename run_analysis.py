@@ -14,13 +14,16 @@ from typing import Any, Dict, Optional, Tuple, List
 # Optional diagnostics
 from check_llms import print_llm_status
 
-# Load environment variables from .env file
+# Load environment variables: .env.dev first (dev overrides), then .env (base)
 try:
     from dotenv import load_dotenv
+    import pathlib as _pathlib
 
-    load_dotenv()
+    _repo_root = _pathlib.Path(__file__).parent
+    load_dotenv(_repo_root / ".env.dev", override=False)  # dev-specific vars (e.g. IS_GCP)
+    load_dotenv(_repo_root / ".env", override=False)       # base vars
 except ImportError:
-    pass  # dotenv not installed, skip
+    pass  # dotenv not installed, rely on shell environment
 
 # Import cost tracking
 from cost_tracker import get_cost_summary

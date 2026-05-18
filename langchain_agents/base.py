@@ -221,11 +221,21 @@ class LangChainAgentBase:
             pass
 
     def _parse_json(self, text: str) -> Optional[Any]:
+        # Attempt 1: direct parse
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
+        # Attempt 2: strip markdown code fence (```json ... ``` or ``` ... ```)
+        stripped = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+
+        # Attempt 3: extract first JSON object or array via regex
         match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
         if not match:
             return None
