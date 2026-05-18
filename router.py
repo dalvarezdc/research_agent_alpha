@@ -16,6 +16,17 @@ from llm_integrations import LLMProvider, get_available_models, call_model
 from check_llms import print_llm_status
 from observability import setup_phoenix, get_tracer
 
+# Load environment variables: .env.dev first (dev-specific), then .env (base)
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    import pathlib as _pathlib
+
+    _repo_root = _pathlib.Path(__file__).parent
+    _load_dotenv(_repo_root / ".env.dev", override=False)  # dev-specific vars
+    _load_dotenv(_repo_root / ".env", override=False)       # base vars (don't overwrite)
+except ImportError:
+    pass  # python-dotenv not installed, rely on shell environment
+
 
 # Default model for routing — grok-4.3 is the current xAI flagship
 DEFAULT_ROUTING_MODEL = "grok-4.3"
