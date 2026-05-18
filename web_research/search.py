@@ -39,18 +39,28 @@ class WebResearchClient:
         self.max_results = max_results
 
     def search(self, query: str) -> List[WebSearchResult]:
-        results: List[WebSearchResult] = []
+        """Search using a priority chain: Tavily → SerpAPI → DuckDuckGo.
 
-        if "tavily" in self.providers:
-            results.extend(self._search_tavily(query))
+        Returns results from the first provider that yields any, with
+        DuckDuckGo always attempted last if no premium provider succeeded.
+        """
+        # Priority 1: Tavily (best quality, needs API key)
+        if "tavily" in self.providers and os.getenv("TAVILY_API_KEY"):
+            results = self._search_tavily(query)
+            if results:
+                return results
 
-        if "serpapi" in self.providers:
-            results.extend(self._search_serpapi(query))
+        # Priority 2: SerpAPI (Google results, needs API key)
+        if "serpapi" in self.providers and os.getenv("SERPAPI_API_KEY"):
+            results = self._search_serpapi(query)
+            if results:
+                return results
 
+        # Priority 3: DuckDuckGo (no key needed, always the fallback)
         if "duckduckgo" in self.providers:
-            results.extend(self._search_duckduckgo(query))
+            return self._search_duckduckgo(query)
 
-        return results
+        return []
 
     def _search_tavily(self, query: str) -> List[WebSearchResult]:
         if TavilySearchResults is None:
@@ -85,13 +95,51 @@ class WebResearchClient:
     def _search_duckduckgo(self, query: str) -> List[WebSearchResult]:
         if DuckDuckGoSearchResults is None:
             return []
-
         try:
             tool = DuckDuckGoSearchResults(max_results=self.max_results)
             raw = tool.invoke(query)
+            # DDG sometimes returns a formatted string like:
+            # "[snippet] [url]\n[snippet] [url]\n..."
+            # Parse it into WebSearchResult objects directly.
+            if isinstance(raw, str) and raw.strip():
+                return self._parse_ddg_string(raw)
             return self._normalize_results(raw, provider="duckduckgo")
         except Exception:
             return []
+
+    def _parse_ddg_string(self, raw: str) -> List[WebSearchResult]:
+        """Parse DuckDuckGo's formatted string response into WebSearchResult objects."""
+        import re
+        results = []
+        # DuckDuckGo string format: entries separated by newlines or "snippet [url]" pattern
+        # Try to extract url+snippet pairs using a regex
+        pattern = re.compile(r"\[([^\]]+)\]\s*\(?(https?://[^\s\)]+)\)?")
+        for match in pattern.finditer(raw):
+            snippet, url = match.group(1), match.group(2)
+            results.append(
+                WebSearchResult(
+                    title=snippet[:80],
+                    url=url,
+                    snippet=snippet,
+                    source=self._infer_source(url),
+                    provider="duckduckgo",
+                )
+            )
+        if not results:
+            # Fallback: treat each non-empty line as a snippet with no URL
+            for line in raw.splitlines():
+                line = line.strip()
+                if line:
+                    results.append(
+                        WebSearchResult(
+                            title=line[:80],
+                            url="",
+                            snippet=line,
+                            source="web",
+                            provider="duckduckgo",
+                        )
+                    )
+        return results
 
     def _normalize_results(self, raw: Any, provider: str) -> List[WebSearchResult]:
         results: List[WebSearchResult] = []

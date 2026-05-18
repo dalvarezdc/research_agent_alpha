@@ -109,6 +109,14 @@ class LangChainAgentBase:
         results = self.web_research.search(query)
         if not results:
             return ""
+        import logging as _logging
+        provider_used = results[0].provider
+        _logging.getLogger(__name__).info(
+            "Web research: %d results from '%s' for query: %s",
+            len(results),
+            provider_used,
+            query[:60],
+        )
         lines = []
         for idx, item in enumerate(results, 1):
             lines.append(
