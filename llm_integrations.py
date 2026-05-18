@@ -125,11 +125,14 @@ except ImportError:
     xai_user = None
 
 try:
-    from langchain_google_vertexai import ChatVertexAI
+    from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 except ImportError:
-    ChatVertexAI = None
-    ChatAnthropicVertex = None
+    ChatGoogleGenerativeAI = None
+    try:
+        from langchain_google_vertexai.model_garden import ChatAnthropicVertex
+    except ImportError:
+        ChatAnthropicVertex = None
 
 
 class LLMProvider(Enum):
@@ -146,6 +149,7 @@ class LLMProvider(Enum):
     GROK_41_REASONING = "grok-4-1-reasoning"
     # GCP Vertex AI providers
     CLAUDE_VERTEX = "claude-vertex"
+    CLAUDE_VERTEX_OPUS = "claude-vertex-opus"
     GEMINI_VERTEX = "gemini-vertex"
 
 
@@ -628,6 +632,11 @@ class ClaudeVertexLLM(LLMInterface):
             )
 
         project = os.getenv("VERTEX_PROJECT", "")
+        if not project:
+            raise ValueError(
+                "VERTEX_PROJECT env var is required for ClaudeVertexLLM. "
+                "Set it to your GCP project ID (e.g. 'my-gcp-project-123')."
+            )
         location = os.getenv("VERTEX_LOCATION", "us-east5")
 
         try:
@@ -668,8 +677,14 @@ class ClaudeVertexLLM(LLMInterface):
 
             token_usage = TokenUsage()
             if hasattr(response, "usage_metadata") and response.usage_metadata:
-                token_usage.input_tokens = response.usage_metadata.get("input_tokens", 0)
-                token_usage.output_tokens = response.usage_metadata.get("output_tokens", 0)
+                meta = response.usage_metadata
+                if isinstance(meta, dict):
+                    token_usage.input_tokens = meta.get("input_tokens", 0)
+                    token_usage.output_tokens = meta.get("output_tokens", 0)
+                else:
+                    # UsageMetadata object (langchain-google-vertexai / anthropic SDK)
+                    token_usage.input_tokens = getattr(meta, "input_tokens", 0)
+                    token_usage.output_tokens = getattr(meta, "output_tokens", 0)
                 token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
             elif hasattr(response, "response_metadata") and response.response_metadata:
                 usage = response.response_metadata.get("usage", {})
@@ -705,20 +720,24 @@ class GeminiVertexLLM(LLMInterface):
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        if ChatVertexAI is None:
+        if ChatGoogleGenerativeAI is None:
             raise ImportError(
-                "ChatVertexAI not available. "
-                "Install langchain-google-vertexai: pip install langchain-google-vertexai"
+                "ChatGoogleGenerativeAI not available. "
+                "Install langchain-google-genai: pip install langchain-google-genai"
             )
 
         project = os.getenv("VERTEX_PROJECT", "")
+        if not project:
+            raise ValueError(
+                "VERTEX_PROJECT env var is required for GeminiVertexLLM. "
+                "Set it to your GCP project ID (e.g. 'my-gcp-project-123')."
+            )
         location = os.getenv("VERTEX_LOCATION", "us-central1")
 
         try:
-            self.client = ChatVertexAI(
+            self.client = ChatGoogleGenerativeAI(
                 model=config.model,
-                project=project,
-                location=location,
+                google_api_key=None,  # use ADC / GOOGLE_APPLICATION_CREDENTIALS
                 temperature=config.temperature,
                 max_output_tokens=config.max_tokens,
             )
@@ -753,13 +772,24 @@ class GeminiVertexLLM(LLMInterface):
             token_usage = TokenUsage()
             if hasattr(response, "usage_metadata") and response.usage_metadata:
                 meta = response.usage_metadata
-                # Gemini Vertex reports prompt_token_count / candidates_token_count
-                if hasattr(meta, "prompt_token_count"):
-                    token_usage.input_tokens = meta.prompt_token_count
-                    token_usage.output_tokens = meta.candidates_token_count
-                elif isinstance(meta, dict):
-                    token_usage.input_tokens = meta.get("prompt_token_count", 0)
-                    token_usage.output_tokens = meta.get("candidates_token_count", 0)
+                if isinstance(meta, dict):
+                    # Dict form: try normalized keys first, then legacy Gemini keys
+                    token_usage.input_tokens = meta.get(
+                        "input_tokens", meta.get("prompt_token_count", 0)
+                    )
+                    token_usage.output_tokens = meta.get(
+                        "output_tokens", meta.get("candidates_token_count", 0)
+                    )
+                else:
+                    # Object form: try normalized attrs first, then legacy Gemini attrs
+                    token_usage.input_tokens = getattr(
+                        meta, "input_tokens",
+                        getattr(meta, "prompt_token_count", 0)
+                    )
+                    token_usage.output_tokens = getattr(
+                        meta, "output_tokens",
+                        getattr(meta, "candidates_token_count", 0)
+                    )
                 token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
 
             return response.content, token_usage
@@ -814,11 +844,17 @@ class LLMManager:
                     self.providers[config.provider] = XaiLLM(config)
                 elif config.provider == LLMProvider.CLAUDE_VERTEX:
                     self.providers[config.provider] = ClaudeVertexLLM(config)
+                elif config.provider == LLMProvider.CLAUDE_VERTEX_OPUS:
+                    self.providers[config.provider] = ClaudeVertexLLM(config)
                 elif config.provider == LLMProvider.GEMINI_VERTEX:
                     self.providers[config.provider] = GeminiVertexLLM(config)
 
                 self.logger.info(f"Initialized {config.provider.value} provider")
 
+            except ValueError as e:
+                # Configuration errors (missing env vars, bad values) — re-raise immediately
+                # so the caller gets a clear message instead of a silent empty providers dict.
+                raise
             except Exception as e:
                 self.logger.error(f"Failed to initialize {config.provider.value}: {str(e)}")
     
@@ -925,8 +961,17 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
     _is_gcp = os.getenv("IS_GCP", "").lower() in ("true", "1", "yes")
 
     if _is_gcp:
-        if primary_provider in ("claude-sonnet", "claude-opus"):
+        if primary_provider == "claude-sonnet":
             primary_provider = "claude-vertex"
+        elif primary_provider == "claude-opus":
+            primary_provider = "claude-vertex-opus"
+        if fallback_providers:
+            fallback_providers = [
+                "claude-vertex" if p == "claude-sonnet"
+                else "claude-vertex-opus" if p == "claude-opus"
+                else p
+                for p in fallback_providers
+            ]
         # Gemini is GCP-native; openai/grok keep their own paths
 
     configs = []
@@ -973,6 +1018,12 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_VERTEX,
             model="claude-sonnet-4-6",
+            temperature=0.1
+        ))
+    elif primary_provider == "claude-vertex-opus":
+        configs.append(LLMConfig(
+            provider=LLMProvider.CLAUDE_VERTEX_OPUS,
+            model="claude-opus-4-7",
             temperature=0.1
         ))
     elif primary_provider == "gemini-vertex":
@@ -1040,6 +1091,12 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
                 model="claude-sonnet-4-6",
                 temperature=0.1
             ))
+        elif provider == "claude-vertex-opus":
+            configs.append(LLMConfig(
+                provider=LLMProvider.CLAUDE_VERTEX_OPUS,
+                model="claude-opus-4-7",
+                temperature=0.1
+            ))
         elif provider == "gemini-vertex":
             configs.append(LLMConfig(
                 provider=LLMProvider.GEMINI_VERTEX,
@@ -1081,6 +1138,7 @@ def get_available_models() -> dict[str, str]:
         "llama2:13b": "ollama",
         # GCP Vertex AI models
         "claude-sonnet-4-6-vertex": "claude-vertex",
+        "claude-opus-4-7-vertex": "claude-vertex-opus",
         "gemini-1.5-pro": "gemini-vertex",
     }
 
@@ -1154,6 +1212,10 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
             primary_provider=provider_name,
             fallback_providers=[]  # No fallbacks for explicit model calls
         )
+    except ValueError:
+        # Configuration errors (e.g. missing VERTEX_PROJECT) — re-raise as-is
+        # so the user sees the exact message, not a wrapped RuntimeError.
+        raise
     except Exception as e:
         raise RuntimeError(f"Failed to create LLM manager for {provider_name}: {e}")
 

@@ -268,6 +268,17 @@ def main():
     else:
         selected_model = DEFAULT_ROUTING_MODEL
 
+    # Vertex models require VERTEX_PROJECT — catch misconfiguration at selection time
+    _vertex_providers = ("claude-vertex", "gemini-vertex", "claude-vertex-opus")
+    _selected_provider = get_available_models().get(selected_model, "")
+    if _selected_provider in _vertex_providers and not os.getenv("VERTEX_PROJECT"):
+        print(
+            f"\n⚠️  Model '{selected_model}' requires Vertex AI configuration.\n"
+            f"   Set VERTEX_PROJECT in your .env.dev file (and optionally VERTEX_LOCATION).\n"
+            f"   Falling back to default model: {DEFAULT_ROUTING_MODEL}\n"
+        )
+        selected_model = DEFAULT_ROUTING_MODEL
+
     print(f"\nUsing model: {selected_model}")
     print(f"Implementation: {implementation}")
     print(f"Web research: {'enabled' if web_search_enabled else 'disabled'}")
