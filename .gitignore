@@ -211,3 +211,6 @@ outputs/older_results/
 
 # Git worktrees
 .worktrees/
+
+# Superpowers docs
+docs/superpowers/
