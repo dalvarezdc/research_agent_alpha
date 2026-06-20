@@ -1,0 +1,172 @@
+{
+  "timestamp": "2026-05-09T22:01:26.408638",
+  "agent_type": "medication_analyzer",
+  "medication_name": "paracetamol",
+  "drug_class": "Analgesic and antipyretic; para-aminophenol derivative",
+  "mechanism_of_action": "Inhibits cyclooxygenase (COX) enzymes, primarily COX-2, in the central nervous system, reducing prostaglandin synthesis from arachidonic acid to mediate analgesic and antipyretic effects with minimal peripheral anti-inflammatory activity.",
+  "pharmacokinetics": {
+    "absorption": "Rapidly absorbed from the gastrointestinal tract with bioavailability of 70-90%. Onset of action within 30-60 minutes and peak plasma concentrations at 1-2 hours.",
+    "metabolism": "Primarily hepatic via glucuronidation (45-55%) and sulfation (25-35%); minor CYP2E1 pathway produces NAPQI metabolite.",
+    "elimination": "Excreted primarily in urine as inactive conjugates; renal route predominates.",
+    "half_life": "2-3 hours in healthy adults"
+  },
+  "clinical_use": {
+    "approved_indications": [
+      "Relief of mild to moderate pain",
+      "Reduction of fever"
+    ],
+    "off_label_uses": [
+      "Osteoarthritis pain management",
+      "Postoperative analgesia"
+    ],
+    "standard_dosing": "Adults: 325-650 mg orally every 4-6 hours as needed, maximum 4 g daily.",
+    "dose_adjustments": {
+      "hepatic_impairment": "Reduce dose or avoid in severe hepatic impairment",
+      "renal_impairment": "Extend dosing interval in severe renal impairment"
+    }
+  },
+  "safety_profile": {
+    "common_adverse_effects": [],
+    "serious_adverse_effects": [],
+    "contraindications": [],
+    "black_box_warnings": []
+  },
+  "interactions": {
+    "drug_interactions": [
+      {
+        "type": "drug-drug",
+        "agent": "Warfarin",
+        "severity": "moderate",
+        "mechanism": "Pharmacodynamic: possible additive effects on coagulation or inhibition of warfarin metabolism",
+        "clinical_effect": "Increased INR and risk of bleeding",
+        "management": "Monitor INR frequently and adjust warfarin dose as necessary",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Rifampin",
+        "severity": "moderate",
+        "mechanism": "Pharmacokinetic: CYP enzyme induction increasing formation of toxic NAPQI metabolite",
+        "clinical_effect": "Increased risk of hepatotoxicity",
+        "management": "Monitor liver function tests and consider alternative analgesics",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      },
+      {
+        "type": "drug-drug",
+        "agent": "Phenytoin",
+        "severity": "minor",
+        "mechanism": "Pharmacokinetic: CYP enzyme induction may reduce paracetamol efficacy",
+        "clinical_effect": "Decreased analgesic effect",
+        "management": "Monitor pain control and adjust paracetamol dose if needed",
+        "time_separation": null,
+        "evidence_level": "moderate"
+      }
+    ],
+    "food_interactions": [],
+    "environmental_considerations": []
+  },
+  "recommendations": {
+    "what_to_do": [],
+    "what_not_to_do": [],
+    "debunked_claims": []
+  },
+  "monitoring": {
+    "requirements": [],
+    "warning_signs": []
+  },
+  "metadata": {
+    "evidence_quality": "moderate",
+    "analysis_confidence": 0.75,
+    "reasoning_steps_count": 4
+  },
+  "cost_analysis": {
+    "total_cost": 0.0026145,
+    "total_duration": 178.13762400000002,
+    "phases": [
+      {
+        "phase": "Phase 1: Pharmacology Analysis",
+        "cost": 0.00032720000000000004,
+        "duration": 24.121737,
+        "input_tokens": 806,
+        "output_tokens": 332,
+        "models_used": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "phase": "Phase 2: Interaction Analysis",
+        "cost": 0.0008796,
+        "duration": 81.444084,
+        "input_tokens": 1833,
+        "output_tokens": 1026,
+        "models_used": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "phase": "Phase 3: Safety Profile Assessment",
+        "cost": 0.0005071,
+        "duration": 24.669157,
+        "input_tokens": 443,
+        "output_tokens": 837,
+        "models_used": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "phase": "Phase 4: Recommendation Synthesis",
+        "cost": 0.0006549,
+        "duration": 22.145489,
+        "input_tokens": 612,
+        "output_tokens": 1065,
+        "models_used": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "phase": "Phase 5: Monitoring Requirements",
+        "cost": 0.0002457,
+        "duration": 25.757157,
+        "input_tokens": 301,
+        "output_tokens": 371,
+        "models_used": [
+          "grok-4.3"
+        ]
+      }
+    ],
+    "most_expensive": [
+      {
+        "phase": "Phase 2: Interaction Analysis",
+        "cost": 0.0008796,
+        "duration": 81.444084,
+        "input_tokens": 1833,
+        "output_tokens": 1026,
+        "models_used": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "phase": "Phase 4: Recommendation Synthesis",
+        "cost": 0.0006549,
+        "duration": 22.145489,
+        "input_tokens": 612,
+        "output_tokens": 1065,
+        "models_used": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "phase": "Phase 3: Safety Profile Assessment",
+        "cost": 0.0005071,
+        "duration": 24.669157,
+        "input_tokens": 443,
+        "output_tokens": 837,
+        "models_used": [
+          "grok-4.3"
+        ]
+      }
+    ]
+  }
+}

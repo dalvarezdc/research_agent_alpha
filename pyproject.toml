@@ -79,6 +79,7 @@ Issues = "https://github.com/research-agent-alpha/medical-reasoning-agent/issues
 
 [project.scripts]
 medical-router = "router:main"
+medical-api = "api:main"
 
 [dependency-groups]
 dev = [

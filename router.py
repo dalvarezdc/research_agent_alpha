@@ -41,6 +41,34 @@ class AgentSpec:
     routing_notes: Optional[str] = None
 
 
+# Define sample agents at the module level for clean importing
+sample_agents = [
+    AgentSpec(
+        id="medication_agent",
+        name="Medication Specialist",
+        description="Handles queries about medications, drugs, dosages, side effects, and prescriptions",
+        routing_notes="Use for pharmaceutical and medication-related questions"
+    ),
+    AgentSpec(
+        id="procedure_agent",
+        name="Medical Procedure Specialist",
+        description="Handles queries about medical procedures, surgeries, and treatments",
+        routing_notes="Use for procedural and interventional medical questions"
+    ),
+    AgentSpec(
+        id="diagnostic_agent",
+        name="Diagnostic Specialist",
+        description="Handles queries about symptoms, diagnoses, and medical conditions",
+        routing_notes="Use for diagnostic and condition-related questions"
+    ),
+    AgentSpec(
+        id="general_agent",
+        name="General Medical Assistant",
+        description="Handles general medical queries that don't fit other specialized categories"
+    )
+]
+
+
 def call_llm(messages: list[dict[str, str]], model: str = DEFAULT_ROUTING_MODEL) -> str:
     """
     Call LLM for routing decision using the universal call_model function.
@@ -215,32 +243,7 @@ def main():
             "Optional: set LANGCHAIN_PROJECT."
         )
 
-    # Define sample agents
-    sample_agents = [
-        AgentSpec(
-            id="medication_agent",
-            name="Medication Specialist",
-            description="Handles queries about medications, drugs, dosages, side effects, and prescriptions",
-            routing_notes="Use for pharmaceutical and medication-related questions"
-        ),
-        AgentSpec(
-            id="procedure_agent",
-            name="Medical Procedure Specialist",
-            description="Handles queries about medical procedures, surgeries, and treatments",
-            routing_notes="Use for procedural and interventional medical questions"
-        ),
-        AgentSpec(
-            id="diagnostic_agent",
-            name="Diagnostic Specialist",
-            description="Handles queries about symptoms, diagnoses, and medical conditions",
-            routing_notes="Use for diagnostic and condition-related questions"
-        ),
-        AgentSpec(
-            id="general_agent",
-            name="General Medical Assistant",
-            description="Handles general medical queries that don't fit other specialized categories"
-        )
-    ]
+    # Using module-level sample_agents
 
     # Get available models
     available_models = list(get_available_models().keys())

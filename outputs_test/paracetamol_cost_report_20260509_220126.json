@@ -1,0 +1,88 @@
+{
+  "total_cost": 0.0026145,
+  "total_duration": 178.13762400000002,
+  "phases": [
+    {
+      "phase": "Phase 1: Pharmacology Analysis",
+      "cost": 0.00032720000000000004,
+      "duration": 24.121737,
+      "input_tokens": 806,
+      "output_tokens": 332,
+      "models_used": [
+        "grok-4.3"
+      ]
+    },
+    {
+      "phase": "Phase 2: Interaction Analysis",
+      "cost": 0.0008796,
+      "duration": 81.444084,
+      "input_tokens": 1833,
+      "output_tokens": 1026,
+      "models_used": [
+        "grok-4.3"
+      ]
+    },
+    {
+      "phase": "Phase 3: Safety Profile Assessment",
+      "cost": 0.0005071,
+      "duration": 24.669157,
+      "input_tokens": 443,
+      "output_tokens": 837,
+      "models_used": [
+        "grok-4.3"
+      ]
+    },
+    {
+      "phase": "Phase 4: Recommendation Synthesis",
+      "cost": 0.0006549,
+      "duration": 22.145489,
+      "input_tokens": 612,
+      "output_tokens": 1065,
+      "models_used": [
+        "grok-4.3"
+      ]
+    },
+    {
+      "phase": "Phase 5: Monitoring Requirements",
+      "cost": 0.0002457,
+      "duration": 25.757157,
+      "input_tokens": 301,
+      "output_tokens": 371,
+      "models_used": [
+        "grok-4.3"
+      ]
+    }
+  ],
+  "most_expensive": [
+    {
+      "phase": "Phase 2: Interaction Analysis",
+      "cost": 0.0008796,
+      "duration": 81.444084,
+      "input_tokens": 1833,
+      "output_tokens": 1026,
+      "models_used": [
+        "grok-4.3"
+      ]
+    },
+    {
+      "phase": "Phase 4: Recommendation Synthesis",
+      "cost": 0.0006549,
+      "duration": 22.145489,
+      "input_tokens": 612,
+      "output_tokens": 1065,
+      "models_used": [
+        "grok-4.3"
+      ]
+    },
+    {
+      "phase": "Phase 3: Safety Profile Assessment",
+      "cost": 0.0005071,
+      "duration": 24.669157,
+      "input_tokens": 443,
+      "output_tokens": 837,
+      "models_used": [
+        "grok-4.3"
+      ]
+    }
+  ]
+}

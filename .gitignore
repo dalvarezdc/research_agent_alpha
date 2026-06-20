@@ -211,3 +211,7 @@ outputs/older_results/
 
 # Git worktrees
 .worktrees/
+.DS_Store
+.beads/
+ignore/
+outputs/
