@@ -1843,13 +1843,18 @@ Examples:
             "claude-opus",
             "openai",
             "ollama",
-            "grok-4-2-fast",
-            "grok-4-2-reasoning",
+            "grok-4.3",
             "grok-4-1-fast",
             "grok-4-1-code",
             "grok-4-1-reasoning",
         ],
-        help="LLM provider to use (default: claude-sonnet). Options: claude-sonnet (Sonnet 4.5), claude-opus (Opus 4.5), openai (GPT-4), ollama (local), grok-4-2-fast (fastest), grok-4-2-reasoning (advanced reasoning), grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning",
+        help=(
+            "LLM provider to use (default: claude-sonnet). Options: "
+            "claude-sonnet (Sonnet 4.6), claude-opus (Opus 4.7), openai (GPT-4o), "
+            "ollama (local), grok-4.3 (current xAI flagship), "
+            "grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning "
+            "(legacy, mapped to grok-4.3, retiring May 15 2026)"
+        ),
     )
 
     parser.add_argument(

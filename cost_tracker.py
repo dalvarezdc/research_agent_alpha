@@ -36,6 +36,13 @@ PRICING = {
         "cache_read": 0.30,
         "cache_write": 3.75,
     },
+    # claude-opus-4-8 (current flagship)
+    "claude-opus-4-8": {
+        "input": 5.00,
+        "output": 25.00,
+        "cache_read": 0.50,
+        "cache_write": 6.25,
+    },
     # claude-opus-4-7
     "claude-opus-4-7": {
         "input": 5.00,
@@ -100,6 +107,14 @@ PRICING = {
     "grok-4-fast-non-reasoning": {"input": 0.20, "output": 0.50},
     "grok-code-fast": {"input": 0.20, "output": 1.50},
     "grok-4-0709": {"input": 3.00, "output": 15.00},
+    # ── Google Gemini (Vertex AI) ─────────────────────────────────────────────
+    # gemini-3.5-flash: $1.50/1M input, $9.00/1M output (Global tier, flat;
+    #   cached input $0.15). Output price includes reasoning/thinking tokens.
+    "gemini-3.5-flash": {"input": 1.50, "output": 9.00, "cache_read": 0.15},
+    # gemini-3.1-pro: $2.00/1M input (<=200k), $12.00/1M output (Global tier)
+    "gemini-3.1-pro": {"input": 2.00, "output": 12.00, "cache_read": 0.20},
+    # gemini-1.5-pro (legacy): $1.25/1M input, $5.00/1M output (<= 128k tokens)
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
     # Default
     "default": {"input": 3.00, "output": 15.00},
 }
@@ -108,7 +123,7 @@ PRICING = {
 def calculate_cost(
     input_tokens: int,
     output_tokens: int,
-    model: str = "claude-sonnet-4",
+    model: str = "claude-sonnet-4-6",
     cache_read: int = 0,
     cache_write: int = 0,
 ) -> float:
@@ -229,7 +244,7 @@ class CostTracker:
                         getattr(tu, "cache_write_tokens", 0) - start_cache_write
                     )
 
-                    model = getattr(agent_self, "primary_llm", "claude-sonnet-4")
+                    model = getattr(agent_self, "primary_llm", "claude-sonnet-4-6")
                     cost = calculate_cost(
                         phase_input,
                         phase_output,

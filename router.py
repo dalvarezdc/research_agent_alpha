@@ -11,7 +11,14 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Import LLM utilities from shared integrations module
-from llm_integrations import LLMProvider, get_available_models, call_model
+from llm_integrations import (
+    LLMProvider,
+    get_available_models,
+    get_active_models,
+    get_models_by_supplier,
+    is_model_deprecated,
+    call_model,
+)
 
 from check_llms import print_llm_status
 from observability import setup_phoenix, get_tracer
@@ -245,17 +252,35 @@ def main():
 
     # Using module-level sample_agents
 
-    # Get available models
-    available_models = list(get_available_models().keys())
+    # Get selectable (non-deprecated) models. Deprecated models (release date
+    # > 1 year ago) remain callable via the API but are hidden from the menu.
+    available_models = list(get_active_models().keys())
 
     print("Medical Multi-Agent Router - Test REPL")
     print("=" * 50)
 
-    # Display available models
-    print("\nAvailable LLM models:")
-    for i, model in enumerate(available_models, 1):
-        default_marker = " (default)" if model == DEFAULT_ROUTING_MODEL else ""
-        print(f"  {i}. {model}{default_marker}")
+    # Log available LLM models grouped by supplier BEFORE accepting any input.
+    print("\nAvailable LLM models by supplier:")
+    _menu_index: dict[str, int] = {
+        model: i for i, model in enumerate(available_models, 1)
+    }
+    for supplier, models in get_models_by_supplier().items():
+        # Only show suppliers that have at least one active model
+        active_for_supplier = [m for m in models if m in _menu_index]
+        if not active_for_supplier:
+            continue
+        print(f"\n  {supplier}:")
+        for model in active_for_supplier:
+            default_marker = " (default)" if model == DEFAULT_ROUTING_MODEL else ""
+            print(f"    {_menu_index[model]}. {model}{default_marker}")
+
+    # Note any deprecated models that were hidden from selection
+    _deprecated = [m for m in get_available_models() if is_model_deprecated(m)]
+    if _deprecated:
+        print(
+            f"\n  ⚠️  {len(_deprecated)} model(s) deprecated (>1 year old) and hidden "
+            f"from selection: {', '.join(sorted(_deprecated))}"
+        )
 
     # Model selection
     print(f"\nSelect a model (1-{len(available_models)}) or press Enter for default [{DEFAULT_ROUTING_MODEL}]: ", end="")

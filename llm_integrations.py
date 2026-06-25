@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any, Union, Tuple, Callable
 from abc import ABC, abstractmethod
 import os
 from dataclasses import dataclass
+from datetime import date, datetime
 import logging
 from enum import Enum
 import time
@@ -161,6 +162,22 @@ class LLMProvider(Enum):
     GEMINI_VERTEX = "gemini-vertex"
 
 
+# Reasoning effort levels mapped to a Gemini "thinking_budget" (tokens).
+# Gemini 3.x exposes thinking_level (MINIMAL/LOW/MEDIUM/HIGH); the langchain
+# ChatVertexAI client accepts an integer thinking_budget instead, so we map
+# named levels to representative token budgets here. -1 = dynamic, 0 = disabled.
+REASONING_LEVELS: dict[str, int] = {
+    "none": 0,        # thinking disabled
+    "minimal": 512,
+    "low": 2_048,
+    "medium": 8_192,  # provider default-equivalent
+    "high": 24_576,
+    "dynamic": -1,    # let the model decide
+}
+
+DEFAULT_REASONING_EFFORT = "medium"
+
+
 @dataclass
 class LLMConfig:
     """Configuration for LLM providers"""
@@ -172,6 +189,18 @@ class LLMConfig:
     temperature: float = 0.1
     max_tokens: int = 32_000  # Large enough for complex structured JSON responses
     timeout: int = 300  # 5 minutes for complex medical analysis
+    # Reasoning effort for models that support a thinking budget (e.g. Gemini 3.x).
+    # One of REASONING_LEVELS keys: none/minimal/low/medium/high/dynamic.
+    reasoning_effort: Optional[str] = None
+
+    def thinking_budget(self) -> Optional[int]:
+        """Resolve reasoning_effort to a thinking_budget token count, or None."""
+        if self.reasoning_effort is None:
+            return None
+        return REASONING_LEVELS.get(
+            self.reasoning_effort.lower(),
+            REASONING_LEVELS[DEFAULT_REASONING_EFFORT],
+        )
 
 
 class MedicalQuerySignature(dspy.Signature):
@@ -822,14 +851,35 @@ class GeminiVertexLLM(LLMInterface):
             )
         location = os.getenv("VERTEX_LOCATION", "us-central1")
 
+        # Resolve reasoning effort -> thinking_budget (Gemini 3.x supports thinking).
+        thinking_budget = config.thinking_budget()
+        client_kwargs: Dict[str, Any] = dict(
+            model=config.model,
+            project=project,
+            location=location,
+            temperature=config.temperature,
+            max_output_tokens=config.max_tokens,
+        )
+        if thinking_budget is not None:
+            # ChatVertexAI accepts thinking_budget natively and nests it into
+            # the request's thinking_config. -1 = dynamic, 0 = disabled.
+            client_kwargs["thinking_budget"] = thinking_budget
+
         try:
-            self.client = ChatVertexAI(
-                model=config.model,
-                project=project,
-                location=location,
-                temperature=config.temperature,
-                max_output_tokens=config.max_tokens,
+            self.client = ChatVertexAI(**client_kwargs)
+        except TypeError:
+            # Older langchain-google-vertexai without thinking_budget support:
+            # retry without it so the client still initializes.
+            self.logger.warning(
+                "ChatVertexAI does not accept thinking_budget; "
+                "initializing without reasoning configuration."
             )
+            client_kwargs.pop("thinking_budget", None)
+            try:
+                self.client = ChatVertexAI(**client_kwargs)
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize GeminiVertex client: {e}")
+                self.client = None
         except Exception as e:
             self.logger.warning(f"Failed to initialize GeminiVertex client: {e}")
             self.client = None
@@ -1050,12 +1100,37 @@ class LLMManager:
 
 # Factory function for easy setup
 def create_llm_manager(
-    primary_provider: str = "claude-sonnet", fallback_providers: List[str] = None
+    primary_provider: str = "claude-sonnet",
+    fallback_providers: List[str] = None,
+    *,
+    model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> LLMManager:
-    """Create LLM manager with default configurations"""
+    """Create LLM manager with default configurations.
+
+    Args:
+        primary_provider: provider key (e.g. "gemini-vertex", "claude-opus").
+        fallback_providers: ordered fallback provider keys.
+        model: optional explicit model ID override for the PRIMARY provider.
+            Lets a single provider (e.g. "gemini-vertex") serve multiple model
+            IDs ("gemini-3.5-flash" vs "gemini-3.1-pro").
+        reasoning_effort: optional reasoning level for the PRIMARY provider on
+            models that support a thinking budget (Gemini 3.x). One of
+            REASONING_LEVELS keys: none/minimal/low/medium/high/dynamic.
+    """
 
     if fallback_providers is None:
         fallback_providers = ["openai", "ollama"]
+
+    # Normalize legacy/alias provider keys to canonical provider names.
+    # "claude" is a historical default sprinkled across many agents but is not a
+    # real branch below — without this it would silently produce a manager with
+    # no primary provider. Map it to the canonical "claude-sonnet".
+    _PROVIDER_ALIASES = {"claude": "claude-sonnet"}
+    primary_provider = _PROVIDER_ALIASES.get(primary_provider, primary_provider)
+    fallback_providers = [
+        _PROVIDER_ALIASES.get(p, p) for p in fallback_providers
+    ]
 
     # When running on GCP, redirect Claude providers to Vertex AI equivalents
     _is_gcp = os.getenv("IS_GCP", "").lower() in ("true", "1", "yes")
@@ -1088,7 +1163,7 @@ def create_llm_manager(
         configs.append(
             LLMConfig(
                 provider=LLMProvider.CLAUDE_OPUS,
-                model="claude-opus-4-7",
+                model="claude-opus-4-8",
                 temperature=0.1,
             )
         )
@@ -1109,11 +1184,6 @@ def create_llm_manager(
         configs.append(
             LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
         )
-        configs.append(LLMConfig(
-            provider=LLMProvider.GROK_43,
-            model="grok-4.3",
-            temperature=0.1
-        ))
     elif primary_provider == "claude-vertex":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_VERTEX,
@@ -1123,15 +1193,23 @@ def create_llm_manager(
     elif primary_provider == "claude-vertex-opus":
         configs.append(LLMConfig(
             provider=LLMProvider.CLAUDE_VERTEX_OPUS,
-            model="claude-opus-4-7",
+            model="claude-opus-4-8",
             temperature=0.1
         ))
     elif primary_provider == "gemini-vertex":
         configs.append(LLMConfig(
             provider=LLMProvider.GEMINI_VERTEX,
-            model="gemini-1.5-pro",
-            temperature=0.1
+            model="gemini-3.5-flash",
+            temperature=0.1,
+            reasoning_effort=DEFAULT_REASONING_EFFORT,
         ))
+
+    # Apply explicit model / reasoning_effort overrides to the PRIMARY config.
+    if configs:
+        if model is not None:
+            configs[0].model = model
+        if reasoning_effort is not None:
+            configs[0].reasoning_effort = reasoning_effort
 
     # Fallback providers
     for provider in fallback_providers:
@@ -1160,7 +1238,7 @@ def create_llm_manager(
             configs.append(
                 LLMConfig(
                     provider=LLMProvider.CLAUDE_OPUS,
-                    model="claude-opus-4-7",
+                    model="claude-opus-4-8",
                     temperature=0.1,
                 )
             )
@@ -1189,11 +1267,6 @@ def create_llm_manager(
                     provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
                 )
             )
-            configs.append(LLMConfig(
-                provider=LLMProvider.GROK_43,
-                model="grok-4.3",
-                temperature=0.1
-            ))
         elif provider == "claude-vertex":
             configs.append(LLMConfig(
                 provider=LLMProvider.CLAUDE_VERTEX,
@@ -1203,14 +1276,15 @@ def create_llm_manager(
         elif provider == "claude-vertex-opus":
             configs.append(LLMConfig(
                 provider=LLMProvider.CLAUDE_VERTEX_OPUS,
-                model="claude-opus-4-7",
+                model="claude-opus-4-8",
                 temperature=0.1
             ))
         elif provider == "gemini-vertex":
             configs.append(LLMConfig(
                 provider=LLMProvider.GEMINI_VERTEX,
-                model="gemini-1.5-pro",
-                temperature=0.1
+                model="gemini-3.5-flash",
+                temperature=0.1,
+                reasoning_effort=DEFAULT_REASONING_EFFORT,
             ))
 
     return LLMManager(configs)
@@ -1224,32 +1298,125 @@ def get_available_models() -> dict[str, str]:
         Dictionary mapping model names to provider identifiers
     """
     return {
-        # Claude models — current
-        "claude-sonnet-4-6": "claude-sonnet",
+        # ── Anthropic (Claude) — current ──────────────────────────────────────
+        "claude-opus-4-8": "claude-opus",      # newest flagship
         "claude-opus-4-7": "claude-opus",
-        "claude-haiku-4-5": "claude-sonnet",  # cheapest Claude, maps to sonnet provider
-        # Claude models — legacy (still usable, not yet deprecated)
+        "claude-sonnet-4-6": "claude-sonnet",
+        "claude-haiku-4-5": "claude-sonnet",   # cheapest Claude, maps to sonnet provider
+        # Anthropic — legacy (still usable, not yet deprecated)
         "claude-sonnet-4-5-20250929": "claude-sonnet",
         "claude-opus-4-5-20251101": "claude-opus",
-        # Grok models — current
+        # ── xAI (Grok) — current ──────────────────────────────────────────────
         "grok-4.3": "grok-4.3",
-        # Grok models — legacy (retiring May 15 2026, map to grok-4.3 provider)
+        # Grok — legacy (retiring May 15 2026, map to grok-4.3 provider)
         "grok-4-1-fast-non-reasoning-latest": "grok-4-1-fast",
         "grok-4-1-fast-reasoning-latest": "grok-4-1-reasoning",
         "grok-code-fast": "grok-4-1-code",
-        # OpenAI models
+        # ── OpenAI — legacy (>1yr old, kept callable; hidden from menu) ────────
         "gpt-4o": "openai",
         "gpt-4o-mini": "openai",
         "gpt-4-turbo": "openai",
         "gpt-4-turbo-preview": "openai",
         "gpt-3.5-turbo": "openai",
-        # Local models
+        # ── Local models ──────────────────────────────────────────────────────
         "llama2:13b": "ollama",
-        # GCP Vertex AI models
+        # ── Google Vertex AI — current ────────────────────────────────────────
+        "gemini-3.5-flash": "gemini-vertex",   # current Flash, supports reasoning levels
+        "gemini-3.1-pro": "gemini-vertex",     # current Pro
+        # Google Vertex AI — legacy (>1yr old, hidden from menu)
+        "gemini-1.5-pro": "gemini-vertex",
+        # ── Claude on Vertex AI ───────────────────────────────────────────────
+        "claude-opus-4-8-vertex": "claude-vertex-opus",
         "claude-sonnet-4-6-vertex": "claude-vertex",
         "claude-opus-4-7-vertex": "claude-vertex-opus",
-        "gemini-1.5-pro": "gemini-vertex",
     }
+
+
+# Canonical per-model metadata. ``release_date`` is the public availability date
+# (ISO yyyy-mm-dd) and drives automatic deprecation of models older than one year.
+# ``supplier`` is the human-readable vendor used for grouped display.
+# Keep this in sync with get_available_models().
+MODEL_METADATA: dict[str, dict[str, str]] = {
+    # ── Anthropic (Claude) ────────────────────────────────────────────────────
+    "claude-opus-4-8": {"supplier": "Anthropic", "release_date": "2026-05-01"},
+    "claude-opus-4-7": {"supplier": "Anthropic", "release_date": "2026-03-01"},
+    "claude-sonnet-4-6": {"supplier": "Anthropic", "release_date": "2026-02-01"},
+    "claude-haiku-4-5": {"supplier": "Anthropic", "release_date": "2025-10-01"},
+    "claude-sonnet-4-5-20250929": {"supplier": "Anthropic", "release_date": "2025-09-29"},
+    "claude-opus-4-5-20251101": {"supplier": "Anthropic", "release_date": "2025-11-01"},
+    # ── xAI (Grok) ────────────────────────────────────────────────────────────
+    "grok-4.3": {"supplier": "xAI", "release_date": "2026-01-15"},
+    "grok-4-1-fast-non-reasoning-latest": {"supplier": "xAI", "release_date": "2025-11-01"},
+    "grok-4-1-fast-reasoning-latest": {"supplier": "xAI", "release_date": "2025-11-01"},
+    "grok-code-fast": {"supplier": "xAI", "release_date": "2025-08-01"},
+    # ── OpenAI ────────────────────────────────────────────────────────────────
+    "gpt-4o": {"supplier": "OpenAI", "release_date": "2024-05-13"},
+    "gpt-4o-mini": {"supplier": "OpenAI", "release_date": "2024-07-18"},
+    "gpt-4-turbo": {"supplier": "OpenAI", "release_date": "2024-04-09"},
+    "gpt-4-turbo-preview": {"supplier": "OpenAI", "release_date": "2024-01-25"},
+    "gpt-3.5-turbo": {"supplier": "OpenAI", "release_date": "2023-03-01"},
+    # ── Meta (local via Ollama) ───────────────────────────────────────────────
+    "llama2:13b": {"supplier": "Meta (local)", "release_date": "2023-07-18"},
+    # ── Google (Vertex AI) ────────────────────────────────────────────────────
+    "gemini-3.5-flash": {"supplier": "Google", "release_date": "2026-04-01"},
+    "gemini-3.1-pro": {"supplier": "Google", "release_date": "2026-03-15"},
+    "gemini-1.5-pro": {"supplier": "Google", "release_date": "2024-02-15"},
+    # Claude served via Google Vertex AI
+    "claude-opus-4-8-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-05-01"},
+    "claude-sonnet-4-6-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-02-01"},
+    "claude-opus-4-7-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-03-01"},
+}
+
+# Models older than this many days are treated as deprecated.
+MODEL_DEPRECATION_AGE_DAYS = 365
+
+
+def is_model_deprecated(model_name: str, *, today: Optional[date] = None) -> bool:
+    """Return True if a model's release date is more than one year before today.
+
+    Models without metadata are treated as NOT deprecated (fail-open) so newly
+    added models are never accidentally hidden before metadata is filled in.
+    """
+    meta = MODEL_METADATA.get(model_name)
+    if not meta or not meta.get("release_date"):
+        return False
+
+    try:
+        released = datetime.strptime(meta["release_date"], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return False
+
+    reference = today or date.today()
+    return (reference - released).days > MODEL_DEPRECATION_AGE_DAYS
+
+
+def get_active_models() -> dict[str, str]:
+    """Return get_available_models() filtered to non-deprecated models only."""
+    return {
+        model: provider
+        for model, provider in get_available_models().items()
+        if not is_model_deprecated(model)
+    }
+
+
+def get_models_by_supplier(
+    *, include_deprecated: bool = False
+) -> dict[str, list[str]]:
+    """Group available models by their supplier for display.
+
+    Args:
+        include_deprecated: when False (default) deprecated models are omitted.
+
+    Returns:
+        Ordered mapping of supplier name -> list of model identifiers.
+    """
+    grouped: dict[str, list[str]] = {}
+    for model, _provider in get_available_models().items():
+        if not include_deprecated and is_model_deprecated(model):
+            continue
+        supplier = MODEL_METADATA.get(model, {}).get("supplier", "Other")
+        grouped.setdefault(supplier, []).append(model)
+    return grouped
 
 
 def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
@@ -1295,6 +1462,13 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     # Get provider for this model
     provider_name = available_models[model_name]
 
+    # Registry keys for Vertex Claude models carry a "-vertex" suffix to keep
+    # them distinct from the direct-API keys, but the actual Vertex API model ID
+    # is the bare name. Strip the suffix before passing it through as the model.
+    api_model_name = model_name
+    if api_model_name.endswith("-vertex"):
+        api_model_name = api_model_name[: -len("-vertex")]
+
     # Extract system and user messages
     system_prompt = None
     user_prompt = None
@@ -1315,11 +1489,15 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     if not user_prompt:
         raise ValueError("No user message found in messages list")
 
-    # Create LLM manager for this provider
+    # Create LLM manager for this provider. Pass the explicit model ID so a
+    # provider that serves multiple models (e.g. "gemini-vertex" ->
+    # gemini-3.5-flash / gemini-3.1-pro) honors the exact model requested
+    # instead of falling back to that provider's default model.
     try:
         llm_manager = create_llm_manager(
             primary_provider=provider_name,
             fallback_providers=[],  # No fallbacks for explicit model calls
+            model=api_model_name,
         )
     except ValueError:
         # Configuration errors (e.g. missing VERTEX_PROJECT) — re-raise as-is

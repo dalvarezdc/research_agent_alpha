@@ -325,11 +325,11 @@ def test_claude_vertex_llm_generate_response_handles_object_usage_metadata(monke
 
 
 # ---------------------------------------------------------------------------
-# Fix I3: claude-opus IS_GCP redirect uses claude-opus-4-7, not claude-sonnet-4-6
+# Fix I3: claude-opus IS_GCP redirect uses the Opus flagship, not claude-sonnet
 # ---------------------------------------------------------------------------
 
 def test_is_gcp_redirects_claude_opus_to_correct_model(monkeypatch):
-    """When IS_GCP=true, claude-opus uses claude-opus-4-7 model on Vertex, not sonnet."""
+    """When IS_GCP=true, claude-opus uses the Opus flagship on Vertex, not sonnet."""
     monkeypatch.setenv("IS_GCP", "true")
     monkeypatch.setenv("VERTEX_PROJECT", "proj")
     monkeypatch.setenv("VERTEX_LOCATION", "us-east5")
@@ -341,6 +341,6 @@ def test_is_gcp_redirects_claude_opus_to_correct_model(monkeypatch):
         manager = create_llm_manager(primary_provider="claude-opus", fallback_providers=[])
 
     assert LLMProvider.CLAUDE_VERTEX_OPUS in manager.providers
-    # Verify the model passed to ChatAnthropicVertex was claude-opus-4-7, not claude-sonnet-4-6
+    # Verify the model passed to ChatAnthropicVertex was the Opus flagship, not sonnet
     call_kwargs = mock_client_cls.call_args.kwargs
-    assert call_kwargs["model"] == "claude-opus-4-7"
+    assert call_kwargs["model"] == "claude-opus-4-8"

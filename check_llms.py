@@ -17,72 +17,103 @@ def _load_env() -> None:
         return
     load_dotenv()
 
+
+# Provider-level presentation metadata. The actual model IDs and pricing are
+# pulled from the canonical registries (llm_integrations.get_available_models +
+# cost_tracker.PRICING) so this file can never drift from runtime behavior.
+#
+# Each entry maps a CLI provider key -> (display name, env var, representative
+# model ID). The representative model is the one create_llm_manager() actually
+# instantiates for that provider.
+_PROVIDER_PRESENTATION: list[dict[str, Any]] = [
+    {
+        "name": "Claude Sonnet",
+        "cli": "claude-sonnet",
+        "env_var": "ANTHROPIC_API_KEY",
+        "model": "claude-sonnet-4-6",
+    },
+    {
+        "name": "Claude Opus (current flagship)",
+        "cli": "claude-opus",
+        "env_var": "ANTHROPIC_API_KEY",
+        "model": "claude-opus-4-8",
+    },
+    {
+        "name": "OpenAI GPT-4o",
+        "cli": "openai",
+        "env_var": "OPENAI_API_KEY",
+        "model": "gpt-4o",
+    },
+    {
+        "name": "Grok 4.3 (current xAI flagship)",
+        "cli": "grok-4.3",
+        "env_var": "GROK_API_KEY",
+        "model": "grok-4.3",
+    },
+    {
+        "name": "Ollama (local)",
+        "cli": "ollama",
+        "env_var": None,
+        "model": "llama2:13b",
+    },
+    {
+        "name": "Gemini 3.5 Flash (Vertex AI, reasoning levels)",
+        "cli": "gemini-vertex",
+        "env_var": "VERTEX_PROJECT",
+        "model": "gemini-3.5-flash",
+    },
+]
+
+
+def _format_cost(model: str) -> str:
+    """Derive a human-readable cost string from the canonical PRICING table."""
+    try:
+        from cost_tracker import PRICING
+    except Exception:  # pragma: no cover - cost_tracker should always import
+        return "Pricing unavailable"
+
+    pricing = PRICING.get(model)
+    if pricing is None:
+        return "Free (runs locally)" if model.startswith("llama") else "Pricing unavailable"
+
+    return (
+        f"${pricing['input']:g} input / ${pricing['output']:g} output per 1M tokens"
+    )
+
+
 def get_llm_provider_definitions() -> list[dict[str, Any]]:
-    return [
-        {
-            "name": "Claude Sonnet 4.5",
-            "cli": "claude-sonnet",
-            "env_var": "ANTHROPIC_API_KEY",
-            "model": "claude-sonnet-4-5-20250929",
-            "cost": "$3 input / $15 output per 1M tokens",
-        },
-        {
-            "name": "Claude Opus 4.5",
-            "cli": "claude-opus",
-            "env_var": "ANTHROPIC_API_KEY",
-            "model": "claude-opus-4-5-20251101",
-            "cost": "$15 input / $75 output per 1M tokens",
-        },
-        {
-            "name": "OpenAI GPT-4",
-            "cli": "openai",
-            "env_var": "OPENAI_API_KEY",
-            "model": "gpt-4-turbo-preview",
-            "cost": "$3 input / $15 output per 1M tokens",
-        },
-        {
-            "name": "Grok 4.2 Fast",
-            "cli": "grok-4-2-fast",
-            "env_var": "GROK_API_KEY",
-            "model": "grok-4-2-fast-non-reasoning-latest",
-            "cost": "$0.10 input / $0.30 output per 1M tokens",
-        },
-        {
-            "name": "Grok 4.2 Reasoning",
-            "cli": "grok-4-2-reasoning",
-            "env_var": "GROK_API_KEY",
-            "model": "grok-4-2-fast-reasoning-latest",
-            "cost": "$0.10 input / $0.30 output per 1M tokens",
-        },
-        {
-            "name": "Grok 4.1 Fast",
-            "cli": "grok-4-1-fast",
-            "env_var": "GROK_API_KEY",
-            "model": "grok-4-1-fast-non-reasoning-latest",
-            "cost": "$0.20 input / $0.50 output per 1M tokens",
-        },
-        {
-            "name": "Grok 4.1 Reasoning",
-            "cli": "grok-4-1-reasoning",
-            "env_var": "GROK_API_KEY",
-            "model": "grok-4-1-fast-reasoning-latest",
-            "cost": "$0.20 input / $0.50 output per 1M tokens",
-        },
-        {
-            "name": "Grok 4.1 Code",
-            "cli": "grok-4-1-code",
-            "env_var": "GROK_API_KEY",
-            "model": "grok-code-fast",
-            "cost": "$0.20 input / $1.50 output per 1M tokens",
-        },
-        {
-            "name": "Ollama (local)",
-            "cli": "ollama",
-            "env_var": None,
-            "model": "llama2:13b (or other local models)",
-            "cost": "Free (runs locally)",
-        },
-    ]
+    """Build provider definitions from the canonical model + pricing registries.
+
+    The representative model IDs are validated against
+    ``llm_integrations.get_available_models()`` so any drift surfaces as a
+    ``(unknown model)`` marker rather than silently disagreeing with runtime.
+    """
+    try:
+        from llm_integrations import get_available_models
+
+        known_models = get_available_models()
+    except Exception:  # pragma: no cover
+        known_models = {}
+
+    definitions: list[dict[str, Any]] = []
+    for entry in _PROVIDER_PRESENTATION:
+        model = entry["model"]
+        # Ollama is local and intentionally absent from get_available_models cost-wise
+        model_label = model
+        if known_models and model not in known_models and not model.startswith("llama"):
+            model_label = f"{model} (unknown model)"
+
+        definitions.append(
+            {
+                "name": entry["name"],
+                "cli": entry["cli"],
+                "env_var": entry["env_var"],
+                "model": model_label,
+                "cost": _format_cost(model),
+            }
+        )
+
+    return definitions
 
 def get_llm_provider_status(load_env: bool = True) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if load_env:
