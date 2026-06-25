@@ -13,6 +13,8 @@ from enum import Enum
 import time
 from functools import wraps
 
+from observability import add_span_attributes
+
 import dspy
 from pydantic import BaseModel
 
@@ -21,27 +23,32 @@ def _get_tracer():
     """Lazy import to avoid circular dependency with observability module."""
     try:
         from observability import get_tracer
+
         return get_tracer()
     except ImportError:
         from opentelemetry import trace
+
         return trace.get_tracer("research-agent-alpha")
 
 
 @dataclass
 class TokenUsage:
     """Track token usage across pipeline"""
+
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
 
-    def add(self, other: 'TokenUsage'):
+    def add(self, other: "TokenUsage"):
         """Add another TokenUsage to this one"""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
         self.total_tokens += other.total_tokens
 
 
-def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0, backoff_factor: float = 2.0):
+def retry_with_backoff(
+    max_retries: int = 3, initial_delay: float = 1.0, backoff_factor: float = 2.0
+):
     """
     Decorator to retry a function with exponential backoff.
 
@@ -50,6 +57,7 @@ def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0, backoff
         initial_delay: Initial delay in seconds before first retry
         backoff_factor: Multiplier for delay after each retry
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -81,7 +89,9 @@ def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0, backoff
             raise last_exception
 
         return wrapper
+
     return decorator
+
 
 # Backwards compatible imports for LangChain
 try:
@@ -134,6 +144,7 @@ except ImportError:
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
+
     CLAUDE_SONNET = "claude-sonnet"
     CLAUDE_OPUS = "claude-opus"
     OPENAI = "openai"
@@ -153,6 +164,7 @@ class LLMProvider(Enum):
 @dataclass
 class LLMConfig:
     """Configuration for LLM providers"""
+
     provider: LLMProvider
     model: str
     api_key: Optional[str] = None
@@ -164,11 +176,14 @@ class LLMConfig:
 
 class MedicalQuerySignature(dspy.Signature):
     """DSPy signature for medical reasoning queries"""
+
     medical_input = dspy.InputField(desc="Medical procedure and context information")
     reasoning_stage = dspy.InputField(desc="Current stage of medical reasoning")
     context = dspy.InputField(desc="Additional context and previous reasoning steps")
-    
-    analysis = dspy.OutputField(desc="Detailed medical analysis for this reasoning stage")
+
+    analysis = dspy.OutputField(
+        desc="Detailed medical analysis for this reasoning stage"
+    )
     confidence = dspy.OutputField(desc="Confidence score (0.0-1.0) for the analysis")
     sources_needed = dspy.OutputField(desc="Additional sources or information needed")
 
@@ -177,12 +192,16 @@ class LLMInterface(ABC):
     """Abstract interface for LLM providers"""
 
     @abstractmethod
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+    def generate_response(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Tuple[str, TokenUsage]:
         """Generate response from LLM - returns (response, token_usage)"""
         pass
 
     @abstractmethod
-    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+    def medical_analysis(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
         """Specialized medical analysis method"""
         pass
 
@@ -194,28 +213,34 @@ class LLMInterface(ABC):
 
 class ClaudeLLM(LLMInterface):
     """Claude (Anthropic) LLM implementation"""
-    
+
     def __init__(self, config: LLMConfig):
         self.config = config
         self.logger = logging.getLogger(__name__)
-        
+
         if ChatAnthropic is None:
-            raise ImportError("ChatAnthropic not available. Install langchain-anthropic: pip install langchain-anthropic")
-        
+            raise ImportError(
+                "ChatAnthropic not available. Install langchain-anthropic: pip install langchain-anthropic"
+            )
+
         try:
             self.client = ChatAnthropic(
                 anthropic_api_key=config.api_key or os.getenv("ANTHROPIC_API_KEY"),
                 model=config.model,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
-                timeout=config.timeout
+                timeout=config.timeout,
             )
         except Exception as e:
-            self.logger.warning(f"Failed to initialize Claude client (fallback provider): {e}")
+            self.logger.warning(
+                f"Failed to initialize Claude client (fallback provider): {e}"
+            )
             self.client = None
 
     @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+    def generate_response(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Tuple[str, TokenUsage]:
         """Generate response using Claude"""
         if self.client is None:
             raise RuntimeError("Claude client not initialized")
@@ -224,6 +249,7 @@ class ClaudeLLM(LLMInterface):
             # Record model usage for cost tracking
             try:
                 from cost_tracker import record_model_usage
+
                 record_model_usage(self.config.model)
             except Exception:
                 pass  # Cost tracking optional
@@ -246,23 +272,43 @@ class ClaudeLLM(LLMInterface):
 
             # Extract token usage from response
             token_usage = TokenUsage()
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                token_usage.input_tokens = response.usage_metadata.get('input_tokens', 0)
-                token_usage.output_tokens = response.usage_metadata.get('output_tokens', 0)
-                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
-            elif hasattr(response, 'response_metadata') and response.response_metadata:
-                usage = response.response_metadata.get('usage', {})
-                token_usage.input_tokens = usage.get('input_tokens', 0)
-                token_usage.output_tokens = usage.get('output_tokens', 0)
-                token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                token_usage.input_tokens = response.usage_metadata.get(
+                    "input_tokens", 0
+                )
+                token_usage.output_tokens = response.usage_metadata.get(
+                    "output_tokens", 0
+                )
+                token_usage.total_tokens = (
+                    token_usage.input_tokens + token_usage.output_tokens
+                )
+            elif hasattr(response, "response_metadata") and response.response_metadata:
+                usage = response.response_metadata.get("usage", {})
+                token_usage.input_tokens = usage.get("input_tokens", 0)
+                token_usage.output_tokens = usage.get("output_tokens", 0)
+                token_usage.total_tokens = (
+                    token_usage.input_tokens + token_usage.output_tokens
+                )
+
+            # Phoenix observability: output + cost annotations
+            add_span_attributes(
+                {
+                    "llm.output": response.content or "",
+                    "llm.tokens.input": token_usage.input_tokens,
+                    "llm.tokens.output": token_usage.output_tokens,
+                    "llm.tokens.total": token_usage.total_tokens,
+                }
+            )
 
             return response.content, token_usage
 
         except Exception as e:
             self.logger.error(f"Claude API error: {str(e)}")
             raise
-    
-    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+
+    def medical_analysis(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
         """Specialized medical analysis using Claude"""
         system_prompt = """You are a medical reasoning AI that provides systematic analysis
         of medical procedures. Focus on evidence-based recommendations and clearly distinguish
@@ -285,7 +331,7 @@ class ClaudeLLM(LLMInterface):
             "analysis": response,
             "confidence": 0.8,  # Would extract from response
             "sources_needed": [],
-            "token_usage": token_usage
+            "token_usage": token_usage,
         }
 
     def is_available(self) -> bool:
@@ -301,28 +347,34 @@ class ClaudeLLM(LLMInterface):
 
 class OpenAILLM(LLMInterface):
     """OpenAI LLM implementation"""
-    
+
     def __init__(self, config: LLMConfig):
         self.config = config
         self.logger = logging.getLogger(__name__)
-        
+
         if ChatOpenAI is None:
-            raise ImportError("ChatOpenAI not available. Install langchain-openai: pip install langchain-openai")
-        
+            raise ImportError(
+                "ChatOpenAI not available. Install langchain-openai: pip install langchain-openai"
+            )
+
         try:
             self.client = ChatOpenAI(
                 openai_api_key=config.api_key or os.getenv("OPENAI_API_KEY"),
                 model=config.model,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
-                timeout=config.timeout
+                timeout=config.timeout,
             )
         except Exception as e:
-            self.logger.warning(f"Failed to initialize OpenAI client (fallback provider): {e}")
+            self.logger.warning(
+                f"Failed to initialize OpenAI client (fallback provider): {e}"
+            )
             self.client = None
 
     @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+    def generate_response(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Tuple[str, TokenUsage]:
         """Generate response using OpenAI"""
         if self.client is None:
             raise RuntimeError("OpenAI client not initialized")
@@ -331,6 +383,7 @@ class OpenAILLM(LLMInterface):
             # Record model usage for cost tracking
             try:
                 from cost_tracker import record_model_usage
+
                 record_model_usage(self.config.model)
             except Exception:
                 pass  # Cost tracking optional
@@ -353,15 +406,21 @@ class OpenAILLM(LLMInterface):
 
             # Extract token usage from response
             token_usage = TokenUsage()
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                token_usage.input_tokens = response.usage_metadata.get('prompt_tokens', 0)
-                token_usage.output_tokens = response.usage_metadata.get('completion_tokens', 0)
-                token_usage.total_tokens = response.usage_metadata.get('total_tokens', 0)
-            elif hasattr(response, 'response_metadata') and response.response_metadata:
-                usage = response.response_metadata.get('token_usage', {})
-                token_usage.input_tokens = usage.get('prompt_tokens', 0)
-                token_usage.output_tokens = usage.get('completion_tokens', 0)
-                token_usage.total_tokens = usage.get('total_tokens', 0)
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                token_usage.input_tokens = response.usage_metadata.get(
+                    "prompt_tokens", 0
+                )
+                token_usage.output_tokens = response.usage_metadata.get(
+                    "completion_tokens", 0
+                )
+                token_usage.total_tokens = response.usage_metadata.get(
+                    "total_tokens", 0
+                )
+            elif hasattr(response, "response_metadata") and response.response_metadata:
+                usage = response.response_metadata.get("token_usage", {})
+                token_usage.input_tokens = usage.get("prompt_tokens", 0)
+                token_usage.output_tokens = usage.get("completion_tokens", 0)
+                token_usage.total_tokens = usage.get("total_tokens", 0)
 
             return response.content, token_usage
 
@@ -369,7 +428,9 @@ class OpenAILLM(LLMInterface):
             self.logger.error(f"OpenAI API error: {str(e)}")
             raise
 
-    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+    def medical_analysis(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
         """Specialized medical analysis using OpenAI"""
         system_prompt = """You are a medical reasoning AI that provides systematic analysis
         of medical procedures with focus on organ-specific effects and evidence-based recommendations."""
@@ -388,7 +449,7 @@ class OpenAILLM(LLMInterface):
             "analysis": response,
             "confidence": 0.75,
             "sources_needed": [],
-            "token_usage": token_usage
+            "token_usage": token_usage,
         }
 
     def is_available(self) -> bool:
@@ -404,26 +465,32 @@ class OpenAILLM(LLMInterface):
 
 class OllamaLLM(LLMInterface):
     """Ollama local LLM implementation"""
-    
+
     def __init__(self, config: LLMConfig):
         self.config = config
         self.logger = logging.getLogger(__name__)
-        
+
         if Ollama is None:
-            raise ImportError("Ollama not available. Install langchain-community: pip install langchain-community")
-        
+            raise ImportError(
+                "Ollama not available. Install langchain-community: pip install langchain-community"
+            )
+
         try:
             self.client = Ollama(
                 model=config.model,
                 base_url=config.base_url or "http://localhost:11434",
-                temperature=config.temperature
+                temperature=config.temperature,
             )
         except Exception as e:
-            self.logger.warning(f"Failed to initialize Ollama client (fallback provider): {e}")
+            self.logger.warning(
+                f"Failed to initialize Ollama client (fallback provider): {e}"
+            )
             self.client = None
 
     @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+    def generate_response(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Tuple[str, TokenUsage]:
         """Generate response using Ollama"""
         if self.client is None:
             raise RuntimeError("Ollama client not initialized")
@@ -432,6 +499,7 @@ class OllamaLLM(LLMInterface):
             # Record model usage for cost tracking
             try:
                 from cost_tracker import record_model_usage
+
                 record_model_usage(self.config.model)
             except Exception:
                 pass  # Cost tracking optional
@@ -455,7 +523,9 @@ class OllamaLLM(LLMInterface):
             # Simple estimation: ~4 chars per token
             token_usage.input_tokens = len(full_prompt) // 4
             token_usage.output_tokens = len(response) // 4
-            token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+            token_usage.total_tokens = (
+                token_usage.input_tokens + token_usage.output_tokens
+            )
 
             return response, token_usage
 
@@ -463,7 +533,9 @@ class OllamaLLM(LLMInterface):
             self.logger.error(f"Ollama error: {str(e)}")
             raise
 
-    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+    def medical_analysis(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
         """Medical analysis using local Ollama model"""
         prompt = f"""
         Medical Analysis Task:
@@ -479,7 +551,7 @@ class OllamaLLM(LLMInterface):
             "analysis": response,
             "confidence": 0.7,  # Lower confidence for local models
             "sources_needed": [],
-            "token_usage": token_usage
+            "token_usage": token_usage,
         }
 
     def is_available(self) -> bool:
@@ -501,19 +573,25 @@ class XaiLLM(LLMInterface):
         self.logger = logging.getLogger(__name__)
 
         if XAIClient is None:
-            raise ImportError("XAIClient not available. Install xai-sdk: pip install xai-sdk")
+            raise ImportError(
+                "XAIClient not available. Install xai-sdk: pip install xai-sdk"
+            )
 
         try:
             self.client = XAIClient(
                 api_key=config.api_key or os.getenv("GROK_API_KEY"),
-                timeout=config.timeout
+                timeout=config.timeout,
             )
         except Exception as e:
-            self.logger.warning(f"Failed to initialize xAI client (fallback provider): {e}")
+            self.logger.warning(
+                f"Failed to initialize xAI client (fallback provider): {e}"
+            )
             self.client = None
 
     @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, TokenUsage]:
+    def generate_response(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Tuple[str, TokenUsage]:
         """Generate response using xAI Grok"""
         if self.client is None:
             raise RuntimeError("xAI client not initialized")
@@ -522,6 +600,7 @@ class XaiLLM(LLMInterface):
             # Record model usage for cost tracking
             try:
                 from cost_tracker import record_model_usage
+
                 record_model_usage(self.config.model)
             except Exception:
                 pass  # Cost tracking optional
@@ -530,7 +609,7 @@ class XaiLLM(LLMInterface):
             chat = self.client.chat.create(
                 model=self.config.model,
                 max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature
+                temperature=self.config.temperature,
             )
 
             # Build professional system prompt
@@ -552,26 +631,36 @@ class XaiLLM(LLMInterface):
 
             # Extract token usage from response
             token_usage = TokenUsage()
-            if hasattr(response, 'usage') and response.usage:
+            if hasattr(response, "usage") and response.usage:
                 # Try dictionary access first, then attribute access
                 if isinstance(response.usage, dict):
-                    token_usage.input_tokens = response.usage.get('prompt_tokens', 0)
-                    token_usage.output_tokens = response.usage.get('completion_tokens', 0)
-                    token_usage.total_tokens = response.usage.get('total_tokens', 0)
+                    token_usage.input_tokens = response.usage.get("prompt_tokens", 0)
+                    token_usage.output_tokens = response.usage.get(
+                        "completion_tokens", 0
+                    )
+                    token_usage.total_tokens = response.usage.get("total_tokens", 0)
                 else:
                     # Access as object attributes
-                    token_usage.input_tokens = getattr(response.usage, 'prompt_tokens', 0)
-                    token_usage.output_tokens = getattr(response.usage, 'completion_tokens', 0)
-                    token_usage.total_tokens = getattr(response.usage, 'total_tokens', 0)
+                    token_usage.input_tokens = getattr(
+                        response.usage, "prompt_tokens", 0
+                    )
+                    token_usage.output_tokens = getattr(
+                        response.usage, "completion_tokens", 0
+                    )
+                    token_usage.total_tokens = getattr(
+                        response.usage, "total_tokens", 0
+                    )
 
                 # Calculate total if not provided
                 if not token_usage.total_tokens:
-                    token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
+                    token_usage.total_tokens = (
+                        token_usage.input_tokens + token_usage.output_tokens
+                    )
 
             # Get the text content from response
-            if hasattr(response, 'message') and hasattr(response.message, 'content'):
+            if hasattr(response, "message") and hasattr(response.message, "content"):
                 content = response.message.content
-            elif hasattr(response, 'content'):
+            elif hasattr(response, "content"):
                 content = response.content
             else:
                 content = str(response)
@@ -582,7 +671,9 @@ class XaiLLM(LLMInterface):
             self.logger.error(f"xAI API error: {str(e)}")
             raise
 
-    def medical_analysis(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+    def medical_analysis(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
         """Specialized medical analysis using xAI Grok"""
         system_prompt = """You are a medical reasoning AI that provides systematic analysis
         of medical procedures with focus on evidence-based recommendations and detailed analysis."""
@@ -601,7 +692,7 @@ class XaiLLM(LLMInterface):
             "analysis": response,
             "confidence": 0.8,
             "sources_needed": [],
-            "token_usage": token_usage
+            "token_usage": token_usage,
         }
 
     def is_available(self) -> bool:
@@ -822,12 +913,15 @@ class LLMManager:
         self.token_usage = TokenUsage()  # Track total token usage
 
         self._initialize_providers()
-    
+
     def _initialize_providers(self):
         """Initialize all configured LLM providers"""
         for config in self.configs:
             try:
-                if config.provider in [LLMProvider.CLAUDE_SONNET, LLMProvider.CLAUDE_OPUS]:
+                if config.provider in [
+                    LLMProvider.CLAUDE_SONNET,
+                    LLMProvider.CLAUDE_OPUS,
+                ]:
                     self.providers[config.provider] = ClaudeLLM(config)
                 elif config.provider == LLMProvider.OPENAI:
                     self.providers[config.provider] = OpenAILLM(config)
@@ -852,8 +946,10 @@ class LLMManager:
                 # so the caller gets a clear message instead of a silent empty providers dict.
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to initialize {config.provider.value}: {str(e)}")
-    
+                self.logger.error(
+                    f"Failed to initialize {config.provider.value}: {str(e)}"
+                )
+
     def get_available_provider(self) -> Optional[LLMInterface]:
         """Get first available LLM provider (calls is_available() health check)."""
         for provider_type, provider in self.providers.items():
@@ -861,7 +957,7 @@ class LLMManager:
                 self.current_provider = provider_type
                 self.logger.info(f"Using {provider_type.value} provider")
                 return provider
-        
+
         self.logger.error("No LLM providers available")
         return None
 
@@ -879,8 +975,10 @@ class LLMManager:
         for provider in self.providers.values():
             return provider
         return None
-    
-    def medical_analysis_with_fallback(self, medical_input: Dict[str, Any], stage: str) -> Dict[str, Any]:
+
+    def medical_analysis_with_fallback(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
         """Perform medical analysis with automatic fallback"""
         for provider_type, provider in self.providers.items():
             try:
@@ -896,7 +994,9 @@ class LLMManager:
                     return result
 
             except Exception as e:
-                self.logger.warning(f"{provider_type.value} failed: {str(e)}, trying next provider")
+                self.logger.warning(
+                    f"{provider_type.value} failed: {str(e)}, trying next provider"
+                )
                 continue
 
         raise RuntimeError("All LLM providers failed")
@@ -908,7 +1008,7 @@ class LLMManager:
     def reset_token_usage(self):
         """Reset token usage counter"""
         self.token_usage = TokenUsage()
-    
+
     def setup_dspy_integration(self):
         """Setup DSPy with current LLM provider"""
         provider = self.get_available_provider()
@@ -916,7 +1016,10 @@ class LLMManager:
             raise RuntimeError("No LLM provider available for DSPy")
 
         # Configure DSPy with the available provider
-        if self.current_provider in [LLMProvider.CLAUDE_SONNET, LLMProvider.CLAUDE_OPUS]:
+        if self.current_provider in [
+            LLMProvider.CLAUDE_SONNET,
+            LLMProvider.CLAUDE_OPUS,
+        ]:
             # Configure DSPy with Claude/Anthropic
             api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
@@ -927,7 +1030,7 @@ class LLMManager:
                 model=self.configs[0].model,
                 api_key=api_key,
                 temperature=self.configs[0].temperature,
-                max_tokens=self.configs[0].max_tokens
+                max_tokens=self.configs[0].max_tokens,
             )
             dspy.settings.configure(lm=lm)
 
@@ -937,7 +1040,7 @@ class LLMManager:
                 model=self.configs[0].model,
                 api_key=api_key,
                 temperature=self.configs[0].temperature,
-                max_tokens=self.configs[0].max_tokens
+                max_tokens=self.configs[0].max_tokens,
             )
             dspy.settings.configure(lm=lm)
 
@@ -946,8 +1049,9 @@ class LLMManager:
 
 
 # Factory function for easy setup
-def create_llm_manager(primary_provider: str = "claude-sonnet",
-                      fallback_providers: List[str] = None) -> LLMManager:
+def create_llm_manager(
+    primary_provider: str = "claude-sonnet", fallback_providers: List[str] = None
+) -> LLMManager:
     """Create LLM manager with default configurations"""
 
     if fallback_providers is None:
@@ -969,42 +1073,42 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
                 for p in fallback_providers
             ]
         # Gemini is GCP-native; openai/grok keep their own paths
-
     configs = []
-    
+
     # Primary provider
     if primary_provider == "claude-sonnet":
-        configs.append(LLMConfig(
-            provider=LLMProvider.CLAUDE_SONNET,
-            model="claude-sonnet-4-6",
-            temperature=0.1
-        ))
+        configs.append(
+            LLMConfig(
+                provider=LLMProvider.CLAUDE_SONNET,
+                model="claude-sonnet-4-6",
+                temperature=0.1,
+            )
+        )
     elif primary_provider == "claude-opus":
-        configs.append(LLMConfig(
-            provider=LLMProvider.CLAUDE_OPUS,
-            model="claude-opus-4-7",
-            temperature=0.1
-        ))
+        configs.append(
+            LLMConfig(
+                provider=LLMProvider.CLAUDE_OPUS,
+                model="claude-opus-4-7",
+                temperature=0.1,
+            )
+        )
     elif primary_provider == "grok-4.3":
-        configs.append(LLMConfig(
-            provider=LLMProvider.GROK_43,
-            model="grok-4.3",
-            temperature=0.1
-        ))
+        configs.append(
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+        )
     # Legacy grok-4-1 provider keys — kept for backwards compat, map to grok-4.3
     elif primary_provider == "grok-4-1-fast":
-        configs.append(LLMConfig(
-            provider=LLMProvider.GROK_43,
-            model="grok-4.3",
-            temperature=0.1
-        ))
+        configs.append(
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+        )
     elif primary_provider == "grok-4-1-code":
-        configs.append(LLMConfig(
-            provider=LLMProvider.GROK_43,
-            model="grok-4.3",
-            temperature=0.1
-        ))
+        configs.append(
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+        )
     elif primary_provider == "grok-4-1-reasoning":
+        configs.append(
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+        )
         configs.append(LLMConfig(
             provider=LLMProvider.GROK_43,
             model="grok-4.3",
@@ -1032,50 +1136,59 @@ def create_llm_manager(primary_provider: str = "claude-sonnet",
     # Fallback providers
     for provider in fallback_providers:
         if provider == "openai":
-            configs.append(LLMConfig(
-                provider=LLMProvider.OPENAI,
-                model="gpt-4o",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(provider=LLMProvider.OPENAI, model="gpt-4o", temperature=0.1)
+            )
         elif provider == "ollama":
-            configs.append(LLMConfig(
-                provider=LLMProvider.OLLAMA,
-                model="llama2:13b",
-                base_url="http://localhost:11434",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.OLLAMA,
+                    model="llama2:13b",
+                    base_url="http://localhost:11434",
+                    temperature=0.1,
+                )
+            )
         elif provider == "claude-sonnet":
-            configs.append(LLMConfig(
-                provider=LLMProvider.CLAUDE_SONNET,
-                model="claude-sonnet-4-6",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.CLAUDE_SONNET,
+                    model="claude-sonnet-4-6",
+                    temperature=0.1,
+                )
+            )
         elif provider == "claude-opus":
-            configs.append(LLMConfig(
-                provider=LLMProvider.CLAUDE_OPUS,
-                model="claude-opus-4-7",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.CLAUDE_OPUS,
+                    model="claude-opus-4-7",
+                    temperature=0.1,
+                )
+            )
         elif provider == "grok-4.3":
-            configs.append(LLMConfig(
-                provider=LLMProvider.GROK_43,
-                model="grok-4.3",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                )
+            )
         # Legacy grok-4-1 fallback keys — map to grok-4.3
         elif provider == "grok-4-1-fast":
-            configs.append(LLMConfig(
-                provider=LLMProvider.GROK_43,
-                model="grok-4.3",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                )
+            )
         elif provider == "grok-4-1-code":
-            configs.append(LLMConfig(
-                provider=LLMProvider.GROK_43,
-                model="grok-4.3",
-                temperature=0.1
-            ))
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                )
+            )
         elif provider == "grok-4-1-reasoning":
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                )
+            )
             configs.append(LLMConfig(
                 provider=LLMProvider.GROK_43,
                 model="grok-4.3",
@@ -1114,7 +1227,7 @@ def get_available_models() -> dict[str, str]:
         # Claude models — current
         "claude-sonnet-4-6": "claude-sonnet",
         "claude-opus-4-7": "claude-opus",
-        "claude-haiku-4-5": "claude-sonnet",   # cheapest Claude, maps to sonnet provider
+        "claude-haiku-4-5": "claude-sonnet",  # cheapest Claude, maps to sonnet provider
         # Claude models — legacy (still usable, not yet deprecated)
         "claude-sonnet-4-5-20250929": "claude-sonnet",
         "claude-opus-4-5-20251101": "claude-opus",
@@ -1206,7 +1319,7 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     try:
         llm_manager = create_llm_manager(
             primary_provider=provider_name,
-            fallback_providers=[]  # No fallbacks for explicit model calls
+            fallback_providers=[],  # No fallbacks for explicit model calls
         )
     except ValueError:
         # Configuration errors (e.g. missing VERTEX_PROJECT) — re-raise as-is
@@ -1218,7 +1331,9 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     # Get the LLM provider interface directly (no is_available() health check ping)
     llm_provider = llm_manager.get_provider_direct()
     if not llm_provider:
-        raise RuntimeError(f"LLM provider {provider_name} not available or not initialized")
+        raise RuntimeError(
+            f"LLM provider {provider_name} not available or not initialized"
+        )
 
     # Call the LLM inside an OTEL span for traceability
     tracer = _get_tracer()
@@ -1228,13 +1343,14 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
         span.set_attribute("llm.input_messages", str(messages)[:2000])
         try:
             response_text, token_usage = llm_provider.generate_response(
-                prompt=user_prompt,
-                system_prompt=system_prompt
+                prompt=user_prompt, system_prompt=system_prompt
             )
             span.set_attribute("llm.output.value", response_text[:2000])
             if token_usage:
                 span.set_attribute("llm.token_count.prompt", token_usage.input_tokens)
-                span.set_attribute("llm.token_count.completion", token_usage.output_tokens)
+                span.set_attribute(
+                    "llm.token_count.completion", token_usage.output_tokens
+                )
                 span.set_attribute("llm.token_count.total", token_usage.total_tokens)
             return response_text
         except Exception as e:

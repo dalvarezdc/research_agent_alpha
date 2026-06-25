@@ -1,4 +1,5 @@
 """Tests for llm_integrations module."""
+
 from unittest.mock import MagicMock, patch
 
 from llm_integrations import TokenUsage
@@ -38,6 +39,7 @@ def test_get_provider_direct_returns_first_provider():
     mock_provider = MagicMock()
     # Simulate initialized providers dict
     from llm_integrations import LLMProvider
+
     manager.providers = {LLMProvider.OPENAI: mock_provider}
     manager.current_provider = None
 
@@ -78,13 +80,73 @@ def test_call_model_creates_otel_span():
     mock_tracer = MagicMock()
     mock_tracer.start_as_current_span.return_value = mock_span
 
-    with patch("llm_integrations.create_llm_manager", return_value=mock_manager), \
-         patch("llm_integrations._get_tracer", return_value=mock_tracer):
+    with (
+        patch("llm_integrations.create_llm_manager", return_value=mock_manager),
+        patch("llm_integrations._get_tracer", return_value=mock_tracer),
+    ):
         result = call_model(
             "gpt-4o",
-            [{"role": "system", "content": "route"}, {"role": "user", "content": "drug query"}],
+            [
+                {"role": "system", "content": "route"},
+                {"role": "user", "content": "drug query"},
+            ],
         )
 
     mock_tracer.start_as_current_span.assert_called_once_with("llm.call")
     mock_span.set_attribute.assert_any_call("llm.model_name", "gpt-4o")
     assert result == "routing: medication_agent"
+
+
+def test_call_model_span_uses_openinference_keys():
+    """call_model() must emit input.value, output.value, openinference.span.kind=LLM."""
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from unittest.mock import patch, MagicMock
+    import llm_integrations as li
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("test")
+
+    mock_provider = MagicMock()
+    mock_provider.generate_response.return_value = (
+        "the response",
+        MagicMock(input_tokens=10, output_tokens=20, total_tokens=30),
+    )
+
+    with (
+        patch.object(li, "_get_tracer", return_value=tracer),
+        patch.object(
+            li,
+            "create_llm_manager",
+            return_value=MagicMock(
+                get_provider_direct=MagicMock(return_value=mock_provider)
+            ),
+        ),
+    ):
+        result = li.call_model(
+            messages=[{"role": "user", "content": "hello"}],
+            model_name="grok-4.3",
+        )
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1, f"Expected 1 span, got {len(spans)}"
+    attrs = dict(spans[0].attributes)
+    assert attrs.get("openinference.span.kind") == "LLM", (
+        f"Got: {attrs.get('openinference.span.kind')}"
+    )
+    assert "input.value" in attrs, (
+        f"input.value missing from attrs: {list(attrs.keys())}"
+    )
+    assert "output.value" in attrs, (
+        f"output.value missing from attrs: {list(attrs.keys())}"
+    )
+    assert "llm.input_messages" not in attrs, (
+        "old key llm.input_messages must be removed"
+    )
+    assert "llm.output.value" not in attrs, "old key llm.output.value must be removed"
+    assert result == "the response"

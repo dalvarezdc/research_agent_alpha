@@ -10,44 +10,96 @@ from functools import wraps
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from observability import add_span_attributes
+
 
 # Model pricing (price per 1M tokens)
 PRICING = {
     # ── Claude models — current ───────────────────────────────────────────────
     # Provider aliases
-    "claude-sonnet": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "claude-opus":   {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
+    "claude-sonnet": {
+        "input": 3.00,
+        "output": 15.00,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+    },
+    "claude-opus": {
+        "input": 5.00,
+        "output": 25.00,
+        "cache_read": 0.50,
+        "cache_write": 6.25,
+    },
     # claude-sonnet-4-6
-    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    "claude-sonnet-4-6": {
+        "input": 3.00,
+        "output": 15.00,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+    },
     # claude-opus-4-7
-    "claude-opus-4-7": {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
+    "claude-opus-4-7": {
+        "input": 5.00,
+        "output": 25.00,
+        "cache_read": 0.50,
+        "cache_write": 6.25,
+    },
     # claude-haiku-4-5
-    "claude-haiku-4-5":              {"input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write": 1.25},
-    "claude-haiku-4-5-20251001":     {"input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write": 1.25},
+    "claude-haiku-4-5": {
+        "input": 1.00,
+        "output": 5.00,
+        "cache_read": 0.10,
+        "cache_write": 1.25,
+    },
+    "claude-haiku-4-5-20251001": {
+        "input": 1.00,
+        "output": 5.00,
+        "cache_read": 0.10,
+        "cache_write": 1.25,
+    },
     # ── Claude models — legacy (still active, not deprecated) ─────────────────
-    "claude-sonnet-4": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "claude-sonnet-4-5-20250929": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "claude-opus-4-5-20251101":   {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
-    "claude-haiku": {"input": 0.80, "output": 4.00, "cache_read": 0.08, "cache_write": 1.00},
+    "claude-sonnet-4": {
+        "input": 3.00,
+        "output": 15.00,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+    },
+    "claude-sonnet-4-5-20250929": {
+        "input": 3.00,
+        "output": 15.00,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+    },
+    "claude-opus-4-5-20251101": {
+        "input": 5.00,
+        "output": 25.00,
+        "cache_read": 0.50,
+        "cache_write": 6.25,
+    },
+    "claude-haiku": {
+        "input": 0.80,
+        "output": 4.00,
+        "cache_read": 0.08,
+        "cache_write": 1.00,
+    },
     # ── OpenAI models ─────────────────────────────────────────────────────────
-    "openai":           {"input": 2.50, "output": 10.00},
-    "gpt-4o":           {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini":      {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo":      {"input": 10.00, "output": 30.00},
+    "openai": {"input": 2.50, "output": 10.00},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
     "gpt-4-turbo-preview": {"input": 10.00, "output": 30.00},
     # ── xAI Grok models — current ─────────────────────────────────────────────
     # grok-4.3: $1.25/1M input, $2.50/1M output
     "grok-4.3": {"input": 1.25, "output": 2.50},
     # ── xAI Grok models — legacy (retiring May 15 2026) ──────────────────────
-    "grok-4-1-fast":     {"input": 0.20, "output": 0.50},
-    "grok-4-1-code":     {"input": 0.20, "output": 1.50},
-    "grok-4-1-reasoning":{"input": 0.20, "output": 0.50},
-    "grok-4-1-fast-reasoning-latest":    {"input": 0.20, "output": 0.50},
-    "grok-4-1-fast-non-reasoning-latest":{"input": 0.20, "output": 0.50},
-    "grok-4-fast-reasoning":             {"input": 0.20, "output": 0.50},
-    "grok-4-fast-non-reasoning":         {"input": 0.20, "output": 0.50},
-    "grok-code-fast":                    {"input": 0.20, "output": 1.50},
-    "grok-4-0709":                       {"input": 3.00, "output": 15.00},
+    "grok-4-1-fast": {"input": 0.20, "output": 0.50},
+    "grok-4-1-code": {"input": 0.20, "output": 1.50},
+    "grok-4-1-reasoning": {"input": 0.20, "output": 0.50},
+    "grok-4-1-fast-reasoning-latest": {"input": 0.20, "output": 0.50},
+    "grok-4-1-fast-non-reasoning-latest": {"input": 0.20, "output": 0.50},
+    "grok-4-fast-reasoning": {"input": 0.20, "output": 0.50},
+    "grok-4-fast-non-reasoning": {"input": 0.20, "output": 0.50},
+    "grok-code-fast": {"input": 0.20, "output": 1.50},
+    "grok-4-0709": {"input": 3.00, "output": 15.00},
     # Default
     "default": {"input": 3.00, "output": 15.00},
 }
@@ -103,6 +155,14 @@ class CostTracker:
         """Return summary of all tracked costs."""
         total_cost = sum(p["cost"] for p in self._phase_costs)
         total_duration = sum(p["duration"] for p in self._phase_costs)
+        # Phoenix observability: cost annotations on the active span
+        add_span_attributes(
+            {
+                "cost.total": total_cost,
+                "cost.duration": total_duration,
+                "cost.phases_count": len(self._phase_costs),
+            }
+        )
         return {
             "total_cost": total_cost,
             "total_duration": total_duration,
@@ -122,7 +182,11 @@ class CostTracker:
         print(f"Total Duration: {summary['total_duration']:.1f}s")
         print("\nPhases:")
         for p in summary["phases"]:
-            pct = (p["cost"] / summary["total_cost"] * 100) if summary["total_cost"] > 0 else 0
+            pct = (
+                (p["cost"] / summary["total_cost"] * 100)
+                if summary["total_cost"] > 0
+                else 0
+            )
             print(f"  {p['phase']}: ${p['cost']:.4f} ({pct:.1f}%)")
         print("=" * 60 + "\n")
 
@@ -137,6 +201,7 @@ class CostTracker:
         The decorated function must be a method on an object that has
         a `total_token_usage` attribute (TokenUsage instance).
         """
+
         def decorator(func):
             @wraps(func)
             def wrapper(agent_self, *args, **kwargs):
@@ -157,13 +222,20 @@ class CostTracker:
                 if tu is not None:
                     phase_input = getattr(tu, "input_tokens", 0) - start_input
                     phase_output = getattr(tu, "output_tokens", 0) - start_output
-                    phase_cache_read = getattr(tu, "cache_read_tokens", 0) - start_cache_read
-                    phase_cache_write = getattr(tu, "cache_write_tokens", 0) - start_cache_write
+                    phase_cache_read = (
+                        getattr(tu, "cache_read_tokens", 0) - start_cache_read
+                    )
+                    phase_cache_write = (
+                        getattr(tu, "cache_write_tokens", 0) - start_cache_write
+                    )
 
                     model = getattr(agent_self, "primary_llm", "claude-sonnet-4")
                     cost = calculate_cost(
-                        phase_input, phase_output, model,
-                        phase_cache_read, phase_cache_write,
+                        phase_input,
+                        phase_output,
+                        model,
+                        phase_cache_read,
+                        phase_cache_write,
                     )
                     models_used = (
                         list(set(self._current_phase_models))
@@ -171,21 +243,25 @@ class CostTracker:
                         else [model]
                     )
 
-                    self._phase_costs.append({
-                        "phase": phase_name,
-                        "cost": cost,
-                        "duration": duration,
-                        "input_tokens": phase_input,
-                        "output_tokens": phase_output,
-                        "models_used": models_used,
-                    })
+                    self._phase_costs.append(
+                        {
+                            "phase": phase_name,
+                            "cost": cost,
+                            "duration": duration,
+                            "input_tokens": phase_input,
+                            "output_tokens": phase_output,
+                            "models_used": models_used,
+                        }
+                    )
                     print(
                         f"  💰 {phase_name}: ${cost:.4f} ({duration:.1f}s)"
                         f" [{', '.join(models_used)}]"
                     )
 
                 return result
+
             return wrapper
+
         return decorator
 
 
