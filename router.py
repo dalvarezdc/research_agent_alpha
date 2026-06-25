@@ -16,6 +16,17 @@ from llm_integrations import LLMProvider, get_available_models, call_model
 from check_llms import print_llm_status
 from observability import setup_phoenix, get_tracer
 
+# Load environment variables: .env.dev first (dev-specific), then .env (base)
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    import pathlib as _pathlib
+
+    _repo_root = _pathlib.Path(__file__).parent
+    _load_dotenv(_repo_root / ".env.dev", override=False)  # dev-specific vars
+    _load_dotenv(_repo_root / ".env", override=False)       # base vars (don't overwrite)
+except ImportError:
+    pass  # python-dotenv not installed, rely on shell environment
+
 
 # Default model for routing — grok-4.3 is the current xAI flagship
 DEFAULT_ROUTING_MODEL = "grok-4.3"
@@ -28,6 +39,34 @@ class AgentSpec:
     name: str
     description: str
     routing_notes: Optional[str] = None
+
+
+# Define sample agents at the module level for clean importing
+sample_agents = [
+    AgentSpec(
+        id="medication_agent",
+        name="Medication Specialist",
+        description="Handles queries about medications, drugs, dosages, side effects, and prescriptions",
+        routing_notes="Use for pharmaceutical and medication-related questions"
+    ),
+    AgentSpec(
+        id="procedure_agent",
+        name="Medical Procedure Specialist",
+        description="Handles queries about medical procedures, surgeries, and treatments",
+        routing_notes="Use for procedural and interventional medical questions"
+    ),
+    AgentSpec(
+        id="diagnostic_agent",
+        name="Diagnostic Specialist",
+        description="Handles queries about symptoms, diagnoses, and medical conditions",
+        routing_notes="Use for diagnostic and condition-related questions"
+    ),
+    AgentSpec(
+        id="general_agent",
+        name="General Medical Assistant",
+        description="Handles general medical queries that don't fit other specialized categories"
+    )
+]
 
 
 def call_llm(messages: list[dict[str, str]], model: str = DEFAULT_ROUTING_MODEL) -> str:
@@ -204,32 +243,7 @@ def main():
             "Optional: set LANGCHAIN_PROJECT."
         )
 
-    # Define sample agents
-    sample_agents = [
-        AgentSpec(
-            id="medication_agent",
-            name="Medication Specialist",
-            description="Handles queries about medications, drugs, dosages, side effects, and prescriptions",
-            routing_notes="Use for pharmaceutical and medication-related questions"
-        ),
-        AgentSpec(
-            id="procedure_agent",
-            name="Medical Procedure Specialist",
-            description="Handles queries about medical procedures, surgeries, and treatments",
-            routing_notes="Use for procedural and interventional medical questions"
-        ),
-        AgentSpec(
-            id="diagnostic_agent",
-            name="Diagnostic Specialist",
-            description="Handles queries about symptoms, diagnoses, and medical conditions",
-            routing_notes="Use for diagnostic and condition-related questions"
-        ),
-        AgentSpec(
-            id="general_agent",
-            name="General Medical Assistant",
-            description="Handles general medical queries that don't fit other specialized categories"
-        )
-    ]
+    # Using module-level sample_agents
 
     # Get available models
     available_models = list(get_available_models().keys())
@@ -255,6 +269,17 @@ def main():
             print(f"Invalid choice. Using default: {DEFAULT_ROUTING_MODEL}")
             selected_model = DEFAULT_ROUTING_MODEL
     else:
+        selected_model = DEFAULT_ROUTING_MODEL
+
+    # Vertex models require VERTEX_PROJECT — catch misconfiguration at selection time
+    _vertex_providers = ("claude-vertex", "gemini-vertex", "claude-vertex-opus")
+    _selected_provider = get_available_models().get(selected_model, "")
+    if _selected_provider in _vertex_providers and not os.getenv("VERTEX_PROJECT"):
+        print(
+            f"\n⚠️  Model '{selected_model}' requires Vertex AI configuration.\n"
+            f"   Set VERTEX_PROJECT in your .env.dev file (and optionally VERTEX_LOCATION).\n"
+            f"   Falling back to default model: {DEFAULT_ROUTING_MODEL}\n"
+        )
         selected_model = DEFAULT_ROUTING_MODEL
 
     print(f"\nUsing model: {selected_model}")

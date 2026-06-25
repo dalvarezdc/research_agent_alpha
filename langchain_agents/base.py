@@ -109,6 +109,14 @@ class LangChainAgentBase:
         results = self.web_research.search(query)
         if not results:
             return ""
+        import logging as _logging
+        provider_used = results[0].provider
+        _logging.getLogger(__name__).info(
+            "Web research: %d results from '%s' for query: %s",
+            len(results),
+            provider_used,
+            query[:60],
+        )
         lines = []
         for idx, item in enumerate(results, 1):
             lines.append(
@@ -213,11 +221,21 @@ class LangChainAgentBase:
             pass
 
     def _parse_json(self, text: str) -> Optional[Any]:
+        # Attempt 1: direct parse
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
+        # Attempt 2: strip markdown code fence (```json ... ``` or ``` ... ```)
+        stripped = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+
+        # Attempt 3: extract first JSON object or array via regex
         match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
         if not match:
             return None
