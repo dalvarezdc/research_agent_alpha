@@ -3375,6 +3375,7 @@ name = "medical-reasoning-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "alembic" },
     { name = "anthropic" },
     { name = "arize-phoenix" },
     { name = "dspy-ai" },
@@ -3396,6 +3397,7 @@ dependencies = [
     { name = "pygments" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "sqlalchemy" },
     { name = "tavily-python" },
     { name = "weasyprint" },
     { name = "xai-sdk" },
@@ -3432,6 +3434,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.13.0" },
     { name = "anthropic", specifier = ">=0.18.0" },
     { name = "arize-phoenix", specifier = ">=15.0.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
@@ -3465,6 +3468,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.31.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "seaborn", marker = "extra == 'viz'", specifier = ">=0.12.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "tavily-python", specifier = ">=0.7.12" },
     { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.14" },
     { name = "weasyprint", specifier = ">=60.0" },

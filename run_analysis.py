@@ -79,6 +79,62 @@ class AgentOrchestrator:
             None
         )
 
+    def _persist_report_to_db(
+        self,
+        *,
+        agent_type: str,
+        subject_text: str,
+        files: Dict[str, str],
+        llm_provider: Optional[str] = None,
+        implementation: Optional[str] = None,
+        cost_summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Best-effort persistence of a completed run to the local database.
+
+        Called AFTER files are written. The database layer is additive and
+        optional: files are always the source of truth for local debugging, so
+        any failure here (DB disabled, missing deps, connection error) is logged
+        and swallowed — it must never break a run or block file output.
+        """
+        try:
+            from database import is_db_enabled
+        except Exception:  # pragma: no cover - database package unavailable
+            return
+
+        if not is_db_enabled():
+            return
+
+        try:
+            from database import (
+                ensure_initialized,
+                get_current_user,
+                persist_report,
+                session_scope,
+            )
+
+            ensure_initialized()
+            with session_scope() as session:
+                user = get_current_user(session)
+                if user is None:
+                    self_logger = getattr(self, "logger", None)
+                    if self_logger:
+                        self_logger.debug(
+                            "No current user resolved; skipping DB persistence."
+                        )
+                    return
+                persist_report(
+                    session=session,
+                    agent_type=agent_type,
+                    subject_text=subject_text,
+                    files=files or {},
+                    user=user,
+                    llm_provider=llm_provider,
+                    implementation=implementation,
+                    cost_summary=cost_summary,
+                )
+        except Exception as exc:  # noqa: BLE001 - best-effort, never fatal
+            print(f"⚠️  Report saved to disk; DB persistence skipped: {exc}")
+
     @staticmethod
     def _get_agent_cost_summary(agent: Any) -> Dict[str, Any]:
         """Return cost summary from the agent's per-instance tracker if available,
@@ -332,11 +388,21 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
+        cost_summary = self._get_agent_cost_summary(agent)
         files = self._save_procedure_analysis(
             result,
             procedure,
             audit_events=getattr(agent, "audit_events", None),
-            cost_summary=self._get_agent_cost_summary(agent),
+            cost_summary=cost_summary,
+        )
+
+        self._persist_report_to_db(
+            agent_type="procedure",
+            subject_text=procedure,
+            files=files,
+            llm_provider=llm_provider,
+            implementation=implementation,
+            cost_summary=cost_summary,
         )
 
         return result, files
@@ -402,11 +468,21 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
+        cost_summary = self._get_agent_cost_summary(agent)
         files = self._save_medication_analysis(
             result,
             medication,
             audit_events=getattr(agent, "audit_events", None),
-            cost_summary=self._get_agent_cost_summary(agent),
+            cost_summary=cost_summary,
+        )
+
+        self._persist_report_to_db(
+            agent_type="medication",
+            subject_text=medication,
+            files=files,
+            llm_provider=llm_provider,
+            implementation=implementation,
+            cost_summary=cost_summary,
         )
 
         return result, files
@@ -475,11 +551,21 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
+        cost_summary = self._get_agent_cost_summary(agent)
         files = self._save_fact_check_analysis(
             session,
             subject,
             audit_events=getattr(agent, "audit_events", None),
-            cost_summary=self._get_agent_cost_summary(agent),
+            cost_summary=cost_summary,
+        )
+
+        self._persist_report_to_db(
+            agent_type="factcheck",
+            subject_text=subject,
+            files=files,
+            llm_provider=llm_provider,
+            implementation=implementation,
+            cost_summary=cost_summary,
         )
 
         return session, files
@@ -531,6 +617,13 @@ class AgentOrchestrator:
         # Save outputs
         print("💾 Saving outputs...")
         files = self._save_diagnostic_analysis(result, query)
+
+        self._persist_report_to_db(
+            agent_type="diagnostic",
+            subject_text=query,
+            files=files,
+            llm_provider=llm_provider,
+        )
 
         return result, files
 
