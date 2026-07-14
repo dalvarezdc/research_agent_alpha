@@ -133,6 +133,11 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
             "You are a medical expert identifying organs affected by a procedure. "
             "Return ONLY valid JSON."
         )
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Identify organ systems affected by this procedure.
 
@@ -141,19 +146,24 @@ Details: {details}
 Objectives: {objectives}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return JSON matching this schema:
 {schema}
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="organ_identification",
             procedure=medical_input.procedure,
             details=medical_input.details,
             objectives=", ".join(medical_input.objectives),
             web_context=self.web_context or "None",
             schema=_OrganList.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         parsed = self._parse_json(response)
         organs: List[str] = []
@@ -183,6 +193,11 @@ Return JSON matching this schema:
             "You are a medical expert producing structured organ-specific analysis. "
             "Return ONLY valid JSON."
         )
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Analyze organ-specific impact for the procedure below.
 
@@ -191,19 +206,24 @@ Details: {details}
 Organs: {organs}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return a JSON list of objects that match this schema:
 {schema}
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="organ_analysis",
             procedure=medical_input.procedure,
             details=medical_input.details,
             organs=", ".join(organs),
             web_context=self.web_context or "None",
             schema=_OrganAnalysisModel.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         parsed = self._parse_json(response)
         analyses: List[OrganAnalysis] = []
@@ -259,6 +279,11 @@ Return a JSON list of objects that match this schema:
         system_prompt = (
             "You are a medical analyst summarizing findings. Return ONLY valid JSON."
         )
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Summarize the overall procedure analysis.
 
@@ -267,19 +292,24 @@ Details: {details}
 Organs analyzed: {organs}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return JSON matching this schema:
 {schema}
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="procedure_summary",
             procedure=medical_input.procedure,
             details=medical_input.details,
             organs=", ".join([o.organ_name for o in organs]),
             web_context=self.web_context or "None",
             schema=_ProcedureSummary.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         parsed = self._parse_json(response)
 

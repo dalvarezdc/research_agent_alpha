@@ -51,6 +51,7 @@ class LangChainAgentBase:
         self.enable_web_research = config.enable_web_research
         self.web_research = None
         self.web_context: str | None = None
+        self.document_context: str | None = None
 
         if self.enable_reference_validation:
             try:

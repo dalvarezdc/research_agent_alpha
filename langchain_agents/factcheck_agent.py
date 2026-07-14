@@ -170,6 +170,11 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         system_prompt = (
             "You are an independent medical researcher. Return ONLY valid JSON."
         )
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Analyze the health subject below.
 
@@ -177,7 +182,7 @@ Subject: {subject}
 Context: {context}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return JSON with:
 - official_narrative
 - counter_narrative
@@ -187,14 +192,19 @@ Return JSON with:
 Schema:
 {schema}
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="factcheck_phase_1",
             subject=subject,
             context=context or "General investigation",
             web_context=self.web_context or "None",
             schema=_Phase1Model.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         model = self._parse_phase_model(response, _Phase1Model, subject)
         return PhaseResult(
@@ -213,6 +223,11 @@ Schema:
         self, subject: str, phase1_content: Dict[str, Any], angle: str
     ) -> PhaseResult:
         system_prompt = "You are a medical research auditor. Return ONLY valid JSON."
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Evaluate evidence for the subject.
 
@@ -222,7 +237,7 @@ Official narrative: {official}
 Counter-narrative: {counter}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return JSON with:
 - industry_funded_studies
 - independent_research
@@ -234,9 +249,7 @@ Return JSON with:
 Schema:
 {schema}
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="factcheck_phase_2",
             subject=subject,
             angle=angle,
@@ -244,6 +257,13 @@ Schema:
             counter=phase1_content.get("counter_narrative", ""),
             web_context=self.web_context or "None",
             schema=_Phase2Model.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         model = self._parse_phase_model(response, _Phase2Model, subject)
         return PhaseResult(
@@ -264,6 +284,11 @@ Schema:
         self, subject: str, phase1_content: Dict[str, Any], phase2_content: Dict[str, Any]
     ) -> PhaseResult:
         system_prompt = "You are a medical synthesizer. Return ONLY valid JSON."
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Synthesize findings into a concise summary.
 
@@ -272,7 +297,7 @@ Phase 1 summary: {phase1}
 Phase 2 summary: {phase2}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return JSON with:
 - biological_truth
 - industry_bias
@@ -282,15 +307,20 @@ Return JSON with:
 Schema:
 {schema}
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="factcheck_phase_3",
             subject=subject,
             phase1=phase1_content,
             phase2=phase2_content,
             web_context=self.web_context or "None",
             schema=_Phase3Model.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         model = self._parse_phase_model(response, _Phase3Model, subject)
         return PhaseResult(
@@ -340,11 +370,17 @@ Schema:
         }
 
         system_prompt = _SYSTEM_PROMPTS.get(perspective, _SYSTEM_PROMPTS["mainstream"])
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = (
             "Analyze {subject} from the {perspective} perspective.\n\n"
             "Synthesis context:\n{synthesis}\n\n"
             "Web research context:\n{web_context}\n\n"
-            "Return JSON with this exact schema:\n{schema}\n\n"
+            + _doc_ctx_block
+            + "Return JSON with this exact schema:\n{schema}\n\n"
             "Requirements:\n"
             "- findings: 3-5 paragraphs covering evidence, mechanisms, and context\n"
             "- recommendations: 3-5 concrete, actionable items\n"
@@ -353,15 +389,20 @@ Schema:
         )
 
         try:
-            response = self._call_llm(
-                system_prompt,
-                user_prompt,
+            _call_kwargs: dict = dict(
                 audit_step=f"factcheck_phase4_{perspective}",
                 subject=subject,
                 perspective=perspective,
                 synthesis=synthesis,
                 web_context=self.web_context or "None",
                 schema=_PerspectiveOutput.model_json_schema(),
+            )
+            if self.document_context:
+                _call_kwargs["document_context"] = self.document_context
+            response = self._call_llm(
+                system_prompt,
+                user_prompt,
+                **_call_kwargs,
             )
             parsed = self._parse_json(response)
             if isinstance(parsed, dict):
@@ -537,11 +578,17 @@ Schema:
             f"Do NOT include a References section — that will be added separately."
         )
 
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = (
             "Simplify this medical content for a non-medical reader.\n\n"
             "Content to simplify:\n{body}\n\n"
             "Web research context:\n{web_context}\n\n"
-            "Structure the output as:\n"
+            + _doc_ctx_block
+            + "Structure the output as:\n"
             "# Simplified Guide: [topic from content]\n\n"
             "## Key Findings\n"
             "## Practical Recommendations\n"
@@ -551,12 +598,17 @@ Schema:
             "Do NOT include a References section."
         )
 
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="factcheck_phase_5",
             body=body,
             web_context=self.web_context or "None",
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
 
         return PhaseResult(

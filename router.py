@@ -38,6 +38,9 @@ except ImportError:
 # Default model for routing — grok-4.3 is the current xAI flagship
 DEFAULT_ROUTING_MODEL = "grok-4.3"
 
+# Maximum characters of document context passed to agents (prevents context overflow)
+MAX_DOCUMENT_CONTEXT_CHARS = 100_000
+
 
 @dataclass
 class AgentSpec:
@@ -180,6 +183,7 @@ def main():
     import sys
     # Import the existing AgentOrchestrator that saves files
     from run_analysis import AgentOrchestrator
+    from document_parser import parse_document, ParseStatus
 
     parser = argparse.ArgumentParser(description="Medical Multi-Agent Router (REPL)")
     parser.add_argument(
@@ -329,9 +333,12 @@ def main():
     print("  - '/model <number>' to change model")
     print("  - '/impl <original|langchain>' to change implementation")
     print("  - '/web <on|off>' to toggle web research (on by default)")
+    print("  - '/file <path>' to attach a document as context (PDF/Word/txt/md/rtf)")
+    print("  - '/file' to show attachment status, '/file clear' to remove")
     print("  - 'quit' or 'exit' to stop\n")
 
     last_files = None  # Track last generated files
+    attached_document_context: str | None = None  # sticky; cleared only by /file clear
 
     while True:
         try:
@@ -387,6 +394,67 @@ def main():
                     print("Usage: /web on|off\n")
                 continue
 
+            if query == "/file clear":
+                attached_document_context = None
+                print("→ Document context cleared.\n")
+                continue
+
+            if query == "/file":
+                if attached_document_context:
+                    print(f"→ Document attached: {len(attached_document_context):,} chars. Use '/file clear' to remove it.\n")
+                else:
+                    print("→ No document attached. Use '/file <path>' to attach one.\n")
+                continue
+
+            if query.startswith("/file "):
+                file_path = query[len("/file "):].strip()
+                if not file_path:
+                    print("→ Usage: /file <path>\n")
+                    continue
+                try:
+                    result = parse_document(file_path)
+                except FileNotFoundError:
+                    print(f"→ File not found: {file_path}\n")
+                    continue
+
+                if not result.ok:
+                    print(f"→ Could not parse '{file_path}':")
+                    for w in result.warnings:
+                        print(f"   ⚠ {w}")
+                    print()
+                    continue
+
+                # Truncation with overflow notification
+                original_len = len(result.markdown)
+                if original_len > MAX_DOCUMENT_CONTEXT_CHARS:
+                    dropped = original_len - MAX_DOCUMENT_CONTEXT_CHARS
+                    pct = dropped / original_len * 100
+                    print(
+                        f"⚠️  Document is {original_len:,} chars — exceeds the "
+                        f"{MAX_DOCUMENT_CONTEXT_CHARS:,}-char context limit.\n"
+                        f"   Truncated to {MAX_DOCUMENT_CONTEXT_CHARS:,} chars "
+                        f"(dropped {dropped:,} chars, ~{pct:.1f}% of the document).\n"
+                        f"   Only the first {MAX_DOCUMENT_CONTEXT_CHARS:,} chars will be used as context."
+                    )
+                    attached_document_context = result.markdown[:MAX_DOCUMENT_CONTEXT_CHARS]
+                else:
+                    attached_document_context = result.markdown
+
+                # Build confirmation line with available metadata
+                fmt = result.metadata.file_format
+                pages = result.metadata.page_count
+                page_str = f", {pages} page{'s' if pages != 1 else ''}" if pages else ""
+                char_count = len(attached_document_context)
+
+                # PARTIAL warning
+                if result.status is ParseStatus.PARTIAL:
+                    for w in result.warnings:
+                        print(f"   ⚠ {w}")
+
+                fname = os.path.basename(file_path)
+                print(f"✓ Attached {fname} ({fmt}{page_str}, {char_count:,} chars). Stays attached until '/file clear'.\n")
+                continue
+
             # Route and execute inside a tracing span
             tracer = get_tracer()
             with tracer.start_as_current_span("router.session") as session_span:
@@ -394,6 +462,7 @@ def main():
                 session_span.set_attribute("model", selected_model)
                 session_span.set_attribute("implementation", implementation)
                 session_span.set_attribute("web_search_enabled", web_search_enabled)
+                session_span.set_attribute("document_context_attached", attached_document_context is not None)
 
                 # Route the query
                 print(f"→ Routing query...")
@@ -421,6 +490,7 @@ def main():
                             timeout=300,
                             implementation=implementation,
                             enable_web_research=web_search_enabled,
+                            document_context=attached_document_context or "",
                         )
                     elif selected_agent_id == "procedure_agent":
                         result, files = orchestrator.run_procedure_analyzer(
@@ -430,6 +500,7 @@ def main():
                             timeout=300,
                             implementation=implementation,
                             enable_web_research=web_search_enabled,
+                            document_context=attached_document_context or "",
                         )
                     elif selected_agent_id == "diagnostic_agent":
                         result, files = orchestrator.run_diagnostic_analyzer(
@@ -437,6 +508,7 @@ def main():
                             llm_provider=llm_provider,
                             timeout=300,
                             interactive=False,  # non-interactive in router mode
+                            document_context=attached_document_context or "",
                         )
                     elif selected_agent_id == "general_agent":
                         result, files = orchestrator.run_fact_checker(
@@ -446,6 +518,7 @@ def main():
                             timeout=300,
                             implementation=implementation,
                             enable_web_research=web_search_enabled,
+                            document_context=attached_document_context or "",
                         )
 
                     last_files = files

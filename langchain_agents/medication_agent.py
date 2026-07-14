@@ -111,6 +111,11 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
             "You are a clinical pharmacist producing structured medication analysis. "
             "Return ONLY valid JSON."
         )
+        _doc_ctx_block = (
+            "Document context (from an attached file):\n{document_context}\n"
+            if self.document_context
+            else ""
+        )
         user_prompt = """
 Analyze the medication below and return a comprehensive structured report.
 
@@ -119,7 +124,7 @@ Indication: {indication}
 Other medications: {other_meds}
 Web research context:
 {web_context}
-
+""" + _doc_ctx_block + """
 Return JSON matching this schema:
 {schema}
 """
@@ -147,15 +152,20 @@ Grok-specific requirements:
 - Ensure contraindications and warning signs are populated with realistic clinical content.
 - Use evidence qualifiers (e.g., strong/moderate/limited) instead of leaving empty.
 """
-        response = self._call_llm(
-            system_prompt,
-            user_prompt,
+        _call_kwargs: dict = dict(
             audit_step="medication_analysis",
             medication=medication_input.medication_name,
             indication=medication_input.indication or "N/A",
             other_meds=", ".join(medication_input.patient_medications) or "None",
             web_context=self.web_context or "None",
             schema=_MedicationOutputModel.model_json_schema(),
+        )
+        if self.document_context:
+            _call_kwargs["document_context"] = self.document_context
+        response = self._call_llm(
+            system_prompt,
+            user_prompt,
+            **_call_kwargs,
         )
         parsed = self._parse_json(response)
 

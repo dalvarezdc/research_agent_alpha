@@ -176,6 +176,9 @@ This is automatic for all agents using `_call_llm()`.
 # Interactive router (default: LangChain, grok-4.3, web search ON)
 uv run python router.py
 
+# Attach a document as context for subsequent queries
+# then inside the REPL: /file /path/to/report.pdf
+
 # Disable web research
 uv run python router.py --no-web-search
 

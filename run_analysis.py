@@ -319,6 +319,7 @@ class AgentOrchestrator:
         timeout: int = 300,
         implementation: str = "original",
         enable_web_research: bool = False,
+        document_context: str = "",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Procedure Analyzer"""
         print("=" * 80)
@@ -361,6 +362,8 @@ class AgentOrchestrator:
         print()
 
         # Run analysis
+        agent.document_context = document_context.strip() or None
+
         result = agent.analyze_medical_procedure(medical_input)
 
         print()
@@ -416,6 +419,7 @@ class AgentOrchestrator:
         timeout: int = 300,
         implementation: str = "original",
         enable_web_research: bool = False,
+        document_context: str = "",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medication Analyzer"""
         print("=" * 80)
@@ -455,6 +459,7 @@ class AgentOrchestrator:
         print()
 
         # Run analysis
+        agent.document_context = document_context.strip() or None
         result = agent.analyze_medication(medical_input)
 
         print()
@@ -495,6 +500,7 @@ class AgentOrchestrator:
         timeout: int = 300,
         implementation: str = "original",
         enable_web_research: bool = False,
+        document_context: str = "",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Fact Checker"""
         print("=" * 80)
@@ -530,7 +536,14 @@ class AgentOrchestrator:
         print()
 
         # Run analysis
-        session = agent.start_analysis(subject, context)
+        if hasattr(agent, "document_context"):
+            # LangChain agents expose document_context; DSPy agent does not
+            agent.document_context = document_context.strip() or None
+            session = agent.start_analysis(subject, context)
+        else:
+            # Original DSPy agent: fold document_context into clarifying_info
+            combined_context = "\n\n".join(filter(None, [document_context, context]))
+            session = agent.start_analysis(subject, combined_context)
 
         print()
         print("=" * 80)
@@ -576,6 +589,7 @@ class AgentOrchestrator:
         llm_provider: str = "claude",
         timeout: int = 300,
         interactive: bool = True,
+        document_context: str = "",
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Diagnostic Analyzer"""
         print("=" * 80)
@@ -598,7 +612,12 @@ class AgentOrchestrator:
         print()
 
         # Run analysis
-        result = agent.run_diagnostic_pipeline(query)
+        full_query = (
+            f"Document context:\n{document_context}\n\nQuestion: {query}"
+            if document_context.strip()
+            else query
+        )
+        result = agent.run_diagnostic_pipeline(full_query)
 
         print()
         print("=" * 80)

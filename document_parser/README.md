@@ -114,7 +114,66 @@ uv run python -m pytest tests/test_document_parser.py -v
 Fixtures are generated in-test (docx via python-docx, tiny hand-built PDFs with
 no system-library dependency, text/rtf inline).
 
+## Using it from the router
+
+Start the router and use `/file` to attach a document as context for your queries:
+
+```
+uv run python router.py
+
+Enter query: /file /path/to/bloodwork.pdf
+✓ Attached bloodwork.pdf (pdf, 3 pages, 4,210 chars). Stays attached until '/file clear'.
+
+Enter query: Are these results concerning for thyroid issues?
+→ Routing query...
+→ Routed to: diagnostic_agent (Diagnostic Specialist)
+→ Executing Diagnostic Specialist...
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/file <path>` | Parse a document and attach it as context for your queries |
+| `/file` | Show current attachment status and size |
+| `/file clear` | Drop the attached document |
+
+### Behavior
+
+- **Sticky:** The document stays attached across all queries until you run `/file clear`. Use it to provide patient records, lab results, or clinical notes as background for multiple related questions.
+- **Optional:** The system works identically without a document. Attaching one adds context; removing it restores default behavior.
+- **Truncation:** Documents over 100,000 characters are truncated. You will see a notification showing the original size, how much was dropped, and the percentage. Only the first 100,000 characters are used.
+- **Partial documents:** If some pages could not be extracted (e.g. scanned/image-only pages in a PDF), the document is still attached with a warning for the affected pages.
+- **Failed parsing:** If the document cannot be parsed (unsupported format, missing optional dependency, corrupt file), it is not attached and the reason is shown.
+
+### Supported formats
+
+| Format | Extension | Requirement |
+|--------|-----------|-------------|
+| PDF | `.pdf` | core (installed by default) |
+| Word | `.docx` | core |
+| Markdown | `.md`, `.markdown` | core |
+| Plain text | `.txt` | core |
+| Rich text | `.rtf` | optional: `uv sync --extra parsing-extras` |
+| Legacy Word | `.doc` | optional: `uv sync --extra parsing-extras` |
+
+### Example: patient lab report
+
+```
+Enter query: /file /home/user/labs/thyroid_panel_2026.pdf
+✓ Attached thyroid_panel_2026.pdf (pdf, 2 pages, 1,840 chars). Stays attached until '/file clear'.
+
+Enter query: What does an elevated TSH with normal T4 suggest?
+→ Routed to: diagnostic_agent ...
+
+Enter query: Are there any medication interactions I should be aware of for hypothyroidism treatment?
+→ Routed to: medication_agent ...
+
+Enter query: /file clear
+→ Document context cleared.
+```
+
 ## Out of scope (future specs)
 
-OCR / vision extraction · `PatientData` population · agent-context injection ·
-document Q&A · layout-aware/multi-column fidelity.
+OCR / vision extraction · `PatientData` population · document Q&A ·
+layout-aware/multi-column fidelity.

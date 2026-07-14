@@ -154,9 +154,9 @@ recoverable issues). Entry points: Python API (`parse_document`), CLI
 (`python -m document_parser`), and REST (`POST /parse`). This is the foundational
 "medical-parsing" service the `database/README.md` referenced.
 
-**Follow-up specs that consume it (not yet started):**
+**Follow-up specs that consume it:**
+- ✅ Inject parsed document markdown into agent runs as context (delivered — router `/file` command).
 - Populate the `patient_data` table via structured extraction from parsed markdown.
-- Inject parsed document markdown into agent runs as context.
 - Document Q&A / analysis over uploaded files.
 - OCR / vision backend for scanned/image-only PDFs (drop-in backend).
 
