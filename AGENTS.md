@@ -19,6 +19,11 @@ cost_tracker.py              # Per-phase cost tracking (class-based CostTracker)
 pdf_generator.py             # Markdown → PDF via WeasyPrint
 web_research/search.py       # Tavily / SerpAPI / DuckDuckGo client
 
+document_parser/             # File → Markdown service (PDF priority; docx/txt/md/rtf/doc)
+  service.py                 # parse_document() dispatcher + backend registry
+  backends/                  # one backend per format (pdf, docx, text, rtf, doc)
+  __main__.py                # CLI: python -m document_parser <file>
+
 medical_procedure_analyzer/  # Procedure agent (organ-focused reasoning)
   medical_reasoning_agent.py
   medication_analyzer.py

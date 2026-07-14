@@ -8,13 +8,15 @@ import sys
 import uuid
 import json
 import logging
+import tempfile
 import threading
 import traceback
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, status
+from fastapi import FastAPI, BackgroundTasks, File, HTTPException, UploadFile, status
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -33,6 +35,10 @@ except ImportError:
 from router import route_agent, sample_agents, DEFAULT_ROUTING_MODEL
 from run_analysis import AgentOrchestrator
 from llm_integrations import get_available_models
+from document_parser import parse_document
+
+# Maximum upload size for document parsing (bytes). Default 25 MB; override via env.
+MAX_PARSE_UPLOAD_BYTES = int(os.getenv("MAX_PARSE_UPLOAD_BYTES", str(25 * 1024 * 1024)))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -367,6 +373,57 @@ def get_job_status_endpoint(job_id: str):
         )
 
     return job
+
+
+@app.post("/parse")
+async def parse_document_endpoint(file: UploadFile = File(...)):
+    """Parse an uploaded document (PDF/Word/text/rtf) into markdown.
+
+    Accepts a multipart file upload and returns the converted markdown along
+    with status, warnings, and metadata. The parser is best-effort: an
+    unparseable file returns a 200 with ``status: "failed"`` and warnings
+    rather than an HTTP error, so callers get a consistent result shape.
+    """
+    contents = await file.read()
+    if len(contents) > MAX_PARSE_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"File exceeds maximum size of {MAX_PARSE_UPLOAD_BYTES} bytes."
+            ),
+        )
+
+    # Preserve the original extension so the parser can pick the right backend.
+    suffix = Path(file.filename or "").suffix
+    tmp_path: Optional[str] = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+
+        result = parse_document(tmp_path)
+    except Exception as e:  # noqa: BLE001 - surface as HTTP 500 with detail
+        logger.error(f"Error during document parsing: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Document parsing failure: {e}",
+        )
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    return {
+        "filename": file.filename,
+        "status": result.status.value,
+        "markdown": result.markdown,
+        "warnings": [str(w) for w in result.warnings],
+        "metadata": {
+            "file_format": result.metadata.file_format,
+            "backend": result.metadata.backend,
+            "page_count": result.metadata.page_count,
+            "char_count": result.metadata.char_count,
+        },
+    }
 
 
 def main():

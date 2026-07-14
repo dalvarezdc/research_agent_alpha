@@ -144,6 +144,24 @@ The most complex component in the reference validation system (APA parsing, Cros
 
 ---
 
+## 🟢 Recently delivered
+
+### Document parser service (`document_parser/`)
+File → Markdown conversion service. **PDF priority** (pdfplumber + pypdf
+fallback, tables → GFM); also `.docx`, `.txt`/`.md` (core) and `.rtf`/`.doc`
+(optional `parsing-extras`). Best-effort `ParseResult` (never raises for
+recoverable issues). Entry points: Python API (`parse_document`), CLI
+(`python -m document_parser`), and REST (`POST /parse`). This is the foundational
+"medical-parsing" service the `database/README.md` referenced.
+
+**Follow-up specs that consume it (not yet started):**
+- Populate the `patient_data` table via structured extraction from parsed markdown.
+- Inject parsed document markdown into agent runs as context.
+- Document Q&A / analysis over uploaded files.
+- OCR / vision backend for scanned/image-only PDFs (drop-in backend).
+
+---
+
 ## 🟤 Planned features not yet started
 
 ### Short term (1–2 months)

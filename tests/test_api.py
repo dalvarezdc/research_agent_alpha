@@ -143,3 +143,54 @@ def test_analyze_async_job_flow(mock_execute):
     # 3. Test missing job check
     missing_response = client.get("/jobs/non-existent-job-uuid-1234")
     assert missing_response.status_code == 404
+
+
+# ── /parse document upload endpoint ──────────────────────────────────────────
+
+
+def test_parse_endpoint_txt():
+    """Upload a plain-text file and get markdown back."""
+    response = client.post(
+        "/parse",
+        files={"file": ("note.txt", b"Para one\n\nPara two", "text/plain")},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "Para one" in data["markdown"]
+    assert data["metadata"]["file_format"] == "txt"
+    assert data["metadata"]["backend"] == "text"
+
+
+def test_parse_endpoint_md_passthrough():
+    response = client.post(
+        "/parse",
+        files={"file": ("doc.md", b"# Title\n\nBody", "text/markdown")},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["markdown"] == "# Title\n\nBody"
+
+
+def test_parse_endpoint_unsupported_format_returns_failed_status():
+    """Unsupported files return 200 with status 'failed' (best-effort shape)."""
+    response = client.post(
+        "/parse",
+        files={"file": ("data.xyz", b"whatever", "application/octet-stream")},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert any("Unsupported format" in w for w in data["warnings"])
+
+
+def test_parse_endpoint_rejects_oversize_upload(monkeypatch):
+    import api
+
+    monkeypatch.setattr(api, "MAX_PARSE_UPLOAD_BYTES", 5)
+    response = client.post(
+        "/parse",
+        files={"file": ("big.txt", b"way too large payload", "text/plain")},
+    )
+    assert response.status_code == 413
