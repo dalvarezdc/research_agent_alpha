@@ -215,3 +215,9 @@ outputs/older_results/
 .beads/
 ignore/
 outputs/
+
+# Project-specific: local persistence database (runtime state, never commit)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm

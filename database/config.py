@@ -103,10 +103,6 @@ def reset_engine_cache() -> None:
     Used by tests (and when switching DATABASE_URL at runtime) so a new URL
     takes effect cleanly.
     """
-    try:
-        engine = get_engine.__wrapped__  # type: ignore[attr-defined]
-    except AttributeError:  # pragma: no cover - defensive
-        engine = None
     # Dispose the currently cached engine if one exists.
     if get_engine.cache_info().currsize:  # type: ignore[attr-defined]
         existing: Optional[Engine] = get_engine()

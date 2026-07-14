@@ -190,3 +190,150 @@ def test_default_database_url_is_local_sqlite(monkeypatch):
     url = database.get_database_url()
     assert url.startswith("sqlite:///")
     assert url.endswith("app.db")
+
+
+# ── Cost extraction (_extract_total_cost) ────────────────────────────────────
+# Locks down the cost-tracking contract: guards against silent drift between
+# cost_tracker.get_summary() and what persist_report writes to Report.total_cost.
+
+
+def test_extract_total_cost_from_realistic_cost_summary():
+    """The real cost_tracker.get_summary() shape must yield total_cost."""
+    from database.repository import _extract_total_cost
+
+    # Mirrors CostTracker.get_summary() (cost_tracker.py) exactly.
+    summary = {
+        "total_cost": 1.2345,
+        "total_duration": 42.0,
+        "phases": [
+            {"phase": "Phase 1", "cost": 0.5, "duration": 20.0},
+            {"phase": "Phase 2", "cost": 0.7345, "duration": 22.0},
+        ],
+        "most_expensive": [
+            {"phase": "Phase 2", "cost": 0.7345, "duration": 22.0},
+        ],
+    }
+    assert _extract_total_cost(summary) == pytest.approx(1.2345)
+
+
+@pytest.mark.parametrize(
+    "summary,expected",
+    [
+        ({"total_cost": 3.5}, 3.5),          # primary key
+        ({"total": 2.0}, 2.0),               # fallback: total
+        ({"cost_usd": 1.5}, 1.5),            # fallback: cost_usd
+        ({"grand_total": 9.9}, 9.9),         # fallback: grand_total
+        ({"total_cost": 7}, 7.0),            # int is coerced to float
+        ({"total_cost": True}, 1.0),         # bool is an int subclass (edge)
+    ],
+)
+def test_extract_total_cost_key_variants(summary, expected):
+    from database.repository import _extract_total_cost
+
+    result = _extract_total_cost(summary)
+    assert result == pytest.approx(expected)
+    assert isinstance(result, float)
+
+
+def test_extract_total_cost_prefers_primary_key_over_fallbacks():
+    """total_cost wins even when fallback keys are also present."""
+    from database.repository import _extract_total_cost
+
+    summary = {"total_cost": 1.0, "total": 99.0, "grand_total": 77.0}
+    assert _extract_total_cost(summary) == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        None,                       # not a dict
+        "not-a-dict",               # not a dict
+        123,                        # not a dict
+        {},                         # empty dict
+        {"phases": [], "note": 1},  # no recognized cost key
+        {"total_cost": "1.23"},     # value present but non-numeric (string)
+        {"total_cost": None},       # value present but None
+    ],
+)
+def test_extract_total_cost_returns_none_when_unavailable(summary):
+    from database.repository import _extract_total_cost
+
+    assert _extract_total_cost(summary) is None
+
+
+def test_persist_report_with_no_cost_summary_leaves_total_cost_none(db):
+    """End-to-end: a run with no usable cost summary stores NULL total_cost."""
+    with db.session_scope() as session:
+        user = db.get_current_user(session)
+        report = db.persist_report(
+            session=session,
+            agent_type="diagnostic",
+            subject_text="fatigue",
+            files={"analysis": "/tmp/dx.json"},
+            user=user,
+            cost_summary=None,
+        )
+        report_id = report.id
+
+    with db.session_scope() as session:
+        report = db.get_report(session, report_id)
+        assert report is not None
+        assert report.total_cost is None
+
+
+# ── Developer username accessor ──────────────────────────────────────────────
+
+
+def test_get_developer_username_matches_seed_constant():
+    from database.seed import DEVELOPER_USERNAME
+    from database.users import get_developer_username
+
+    assert get_developer_username() == DEVELOPER_USERNAME
+    assert get_developer_username() == "developer"
+
+
+# ── persist_report / list edge behaviors ─────────────────────────────────────
+
+
+def test_persist_report_skips_empty_file_paths(db):
+    """Files with empty/blank paths must not create ReportFile rows."""
+    with db.session_scope() as session:
+        user = db.get_current_user(session)
+        report = db.persist_report(
+            session=session,
+            agent_type="medication",
+            subject_text="Metformin",
+            files={"summary": "/tmp/ok.md", "pdf": "", "audit": None},
+            user=user,
+        )
+        report_id = report.id
+
+    with db.session_scope() as session:
+        report = db.get_report(session, report_id)
+        # Only the non-empty "summary" entry becomes a row.
+        assert {f.file_type for f in report.files} == {"summary"}
+
+
+def test_list_reports_by_subject_name_unknown_returns_empty(db):
+    """Querying an unseen subject returns an empty list, not an error."""
+    with db.session_scope() as session:
+        assert db.list_reports_by_subject_name(session, "never-analyzed") == []
+
+
+def test_list_subjects_returns_created_subjects(db):
+    """list_subjects returns subjects created via persist_report."""
+    with db.session_scope() as session:
+        user = db.get_current_user(session)
+        for name in ("Vitamin D", "Magnesium"):
+            db.persist_report(
+                session=session,
+                agent_type="factcheck",
+                subject_text=name,
+                files={"summary": f"/tmp/{name}.md"},
+                user=user,
+            )
+
+    with db.session_scope() as session:
+        subjects = db.list_subjects(session)
+        names = {s.name for s in subjects}
+        assert {"vitamin d", "magnesium"} <= names
