@@ -150,7 +150,9 @@ class LLMProvider(Enum):
     CLAUDE_OPUS = "claude-opus"
     OPENAI = "openai"
     OLLAMA = "ollama"
-    # Grok 4.3 — current flagship (replaces all grok-4-1-* models, retiring May 15 2026)
+    # Grok 4.5 — current flagship
+    GROK_45 = "grok-4.5"
+    # Grok 4.3 — previous flagship (still callable)
     GROK_43 = "grok-4.3"
     # Legacy grok-4-1 entries kept for backwards compatibility until retirement
     GROK_41_FAST = "grok-4-1-fast"
@@ -1057,6 +1059,7 @@ class LLMManager:
                 elif config.provider == LLMProvider.OLLAMA:
                     self.providers[config.provider] = OllamaLLM(config)
                 elif config.provider in [
+                    LLMProvider.GROK_45,
                     LLMProvider.GROK_43,
                     LLMProvider.GROK_41_FAST,
                     LLMProvider.GROK_41_CODE,
@@ -1250,18 +1253,22 @@ def create_llm_manager(
         configs.append(
             LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
         )
-    # Legacy grok-4-1 provider keys — kept for backwards compat, map to grok-4.3
+    elif primary_provider == "grok-4.5":
+        configs.append(
+            LLMConfig(provider=LLMProvider.GROK_45, model="grok-4.5", temperature=0.1)
+        )
+    # Legacy grok-4-1 provider keys — kept for backwards compat, map to grok-4.5
     elif primary_provider == "grok-4-1-fast":
         configs.append(
-            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.5", temperature=0.1)
         )
     elif primary_provider == "grok-4-1-code":
         configs.append(
-            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.5", temperature=0.1)
         )
     elif primary_provider == "grok-4-1-reasoning":
         configs.append(
-            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1)
+            LLMConfig(provider=LLMProvider.GROK_43, model="grok-4.5", temperature=0.1)
         )
     elif primary_provider == "claude-vertex":
         configs.append(LLMConfig(
@@ -1327,23 +1334,29 @@ def create_llm_manager(
                     provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
                 )
             )
-        # Legacy grok-4-1 fallback keys — map to grok-4.3
+        elif provider == "grok-4.5":
+            configs.append(
+                LLMConfig(
+                    provider=LLMProvider.GROK_45, model="grok-4.5", temperature=0.1
+                )
+            )
+        # Legacy grok-4-1 fallback keys — map to grok-4.5
         elif provider == "grok-4-1-fast":
             configs.append(
                 LLMConfig(
-                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                    provider=LLMProvider.GROK_43, model="grok-4.5", temperature=0.1
                 )
             )
         elif provider == "grok-4-1-code":
             configs.append(
                 LLMConfig(
-                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                    provider=LLMProvider.GROK_43, model="grok-4.5", temperature=0.1
                 )
             )
         elif provider == "grok-4-1-reasoning":
             configs.append(
                 LLMConfig(
-                    provider=LLMProvider.GROK_43, model="grok-4.3", temperature=0.1
+                    provider=LLMProvider.GROK_43, model="grok-4.5", temperature=0.1
                 )
             )
         elif provider == "claude-vertex":
@@ -1386,8 +1399,9 @@ def get_available_models() -> dict[str, str]:
         "claude-sonnet-4-5-20250929": "claude-sonnet",
         "claude-opus-4-5-20251101": "claude-opus",
         # ── xAI (Grok) — current ──────────────────────────────────────────────
-        "grok-4.3": "grok-4.3",
-        # Grok — legacy (retiring May 15 2026, map to grok-4.3 provider)
+        "grok-4.5": "grok-4.5",           # current flagship (default)
+        "grok-4.3": "grok-4.3",           # previous flagship
+        # Grok — legacy (retiring May 15 2026, map to grok-4.5 provider)
         "grok-4-1-fast-non-reasoning-latest": "grok-4-1-fast",
         "grok-4-1-fast-reasoning-latest": "grok-4-1-reasoning",
         "grok-code-fast": "grok-4-1-code",
@@ -1425,6 +1439,7 @@ MODEL_METADATA: dict[str, dict[str, str]] = {
     "claude-sonnet-4-5-20250929": {"supplier": "Anthropic", "release_date": "2025-09-29"},
     "claude-opus-4-5-20251101": {"supplier": "Anthropic", "release_date": "2025-11-01"},
     # ── xAI (Grok) ────────────────────────────────────────────────────────────
+    "grok-4.5": {"supplier": "xAI", "release_date": "2026-07-01"},
     "grok-4.3": {"supplier": "xAI", "release_date": "2026-01-15"},
     "grok-4-1-fast-non-reasoning-latest": {"supplier": "xAI", "release_date": "2025-11-01"},
     "grok-4-1-fast-reasoning-latest": {"supplier": "xAI", "release_date": "2025-11-01"},

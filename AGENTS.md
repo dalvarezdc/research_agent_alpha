@@ -248,6 +248,7 @@ uv run python -m pytest tests/test_langchain_agents.py -v
 |---|---|---|
 | `claude-sonnet` | `claude-sonnet-4-6` | $3 / $15 |
 | `claude-opus` | `claude-opus-4-8` | $5 / $25 |
+| `grok-4.5` | `grok-4.5` | $3 / $15 |
 | `grok-4.3` | `grok-4.3` | $1.25 / $2.50 |
 | `gemini-vertex` | `gemini-3.6-flash` **(default)** | ~$1.50 / $9 |
 | `gemini-vertex` | `gemini-3.5-flash` | ~$1.50 / $9 |
@@ -256,10 +257,10 @@ uv run python -m pytest tests/test_langchain_agents.py -v
 | `openai` | `gpt-4o` | $2.50 / $10 |
 | `ollama` | `llama2:13b` | local |
 
-Default routing model: `grok-4.3` (set in `router.py:DEFAULT_ROUTING_MODEL`).
+Default routing model: `grok-4.5` (set in `router.py:DEFAULT_ROUTING_MODEL`).
 
 > ⚠️ Old Grok models (`grok-4-1-fast-*`, `grok-code-fast`) retire **May 15 2026**.
-> They are mapped to `grok-4.3` in `create_llm_manager()` for backwards compat.
+> They are mapped to `grok-4.5` in `create_llm_manager()` for backwards compat.
 
 **Gemini / Vertex AI setup** — Gemini 3.x models are served exclusively on the
 Vertex **global endpoint** and require REST transport. Set the following in your

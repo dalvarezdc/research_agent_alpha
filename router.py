@@ -40,8 +40,8 @@ except ImportError:
     pass  # python-dotenv not installed, rely on shell environment
 
 
-# Default model for routing — grok-4.3 is the current xAI flagship
-DEFAULT_ROUTING_MODEL = "grok-4.3"
+# Default model for routing — grok-4.5 is the current xAI flagship
+DEFAULT_ROUTING_MODEL = "grok-4.5"
 
 # Maximum characters of document context passed to agents (prevents context overflow)
 MAX_DOCUMENT_CONTEXT_CHARS = 100_000
@@ -330,7 +330,7 @@ def main():
 
     # Map model to provider name for orchestrator
     available_models_dict = get_available_models()
-    llm_provider = available_models_dict.get(selected_model, "grok-4.3")
+    llm_provider = available_models_dict.get(selected_model, "grok-4.5")
 
     print("\nCommands:")
     print("  - Type a query to route and execute it")
@@ -372,7 +372,7 @@ def main():
                     if 0 <= model_idx < len(available_models):
                         selected_model = available_models[model_idx]
                         # Update llm_provider for new model
-                        llm_provider = available_models_dict.get(selected_model, "grok-4.3")
+                        llm_provider = available_models_dict.get(selected_model, "grok-4.5")
                         print(f"→ Switched to model: {selected_model} (provider: {llm_provider})\n")
                     else:
                         print(f"Invalid model number. Use 1-{len(available_models)}\n")
