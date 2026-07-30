@@ -59,6 +59,10 @@ class _PerspectiveOutput(BaseModel):
     recommendations: List[str] = Field(default_factory=list)
     key_insight: str = ""
     citations: List[str] = Field(default_factory=list)
+    # Precise quantitative evidence (effect sizes, CIs, p-values, sample sizes).
+    # Kept separate so it can be surfaced verbatim in the practitioner Statistical
+    # Appendix instead of being stripped when simplifying for a general audience.
+    statistical_details: List[str] = Field(default_factory=list)
 
 
 class _Phase4PerspectivesModel(BaseModel):
@@ -143,13 +147,26 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
         else:
             body, refs_block = assembled, ""
 
-        self.current_session.practitioner_report = assembled
-
-        # Phase 5: simplify only the body, using the chosen lens for framing
-        phase5 = self._phase5_simplify_output(body, lens=lens)
+        # Phase 5: build layered (Conclusions → Reasoning → Statistical Appendix)
+        # documents. Pass structured upstream content so nothing is silently lost.
+        phase5 = self._phase5_simplify_output(
+            body,
+            lens=lens,
+            phase2_content=phase2.content,
+            perspectives=phase4.content.get("perspectives"),
+        )
         self.current_session.phase_results.append(phase5)
 
-        # Reattach the references verbatim — they are never touched by Phase 5
+        # Practitioner report: layered doc (incl. Statistical Appendix) if produced,
+        # else fall back to the full assembled Phase 4 report.
+        practitioner_body = phase5.content.get("practitioner_layered") or body
+        practitioner_report = practitioner_body
+        if refs_block:
+            practitioner_report = practitioner_report + ref_separator + refs_block
+        self.current_session.practitioner_report = practitioner_report
+
+        # Patient report: plain-language layers. Reattach references verbatim —
+        # they are never touched by Phase 5.
         simplified = phase5.content.get("simplified_output", body)
         if refs_block:
             simplified = simplified + ref_separator + refs_block
@@ -382,10 +399,16 @@ Schema:
             + _doc_ctx_block
             + "Return JSON with this exact schema:\n{schema}\n\n"
             "Requirements:\n"
-            "- findings: 3-5 paragraphs covering evidence, mechanisms, and context\n"
+            "- findings: 3-5 paragraphs (<= ~350 words total) covering evidence, "
+            "mechanisms, and context\n"
             "- recommendations: 3-5 concrete, actionable items\n"
             "- key_insight: single sentence capturing the most important takeaway\n"
             "- citations: 5-10 APA 7 references, each MUST include a DOI, PMID, or direct URL\n"
+            "- statistical_details: list the precise quantitative evidence behind the "
+            "findings (effect sizes, relative/absolute risk, odds ratios, confidence "
+            "intervals, p-values, sample sizes, NNT/NNH). One concise entry per item, "
+            "each ending with its citation marker or DOI/PMID. Empty list only if truly "
+            "no quantitative evidence exists.\n"
         )
 
         try:
@@ -518,64 +541,111 @@ Schema:
             subject=subject,
             lens_label=lens_label,
             mainstream_insight=mainstream.key_insight,
-            mainstream_findings=mainstream.findings[:500],
+            mainstream_findings=mainstream.findings,
             mainstream_recs="\n".join(f"- {r}" for r in mainstream.recommendations),
             naturist_insight=naturist.key_insight,
-            naturist_findings=naturist.findings[:500],
+            naturist_findings=naturist.findings,
             naturist_recs="\n".join(f"- {r}" for r in naturist.recommendations),
             biohacker_insight=biohacker.key_insight,
-            biohacker_findings=biohacker.findings[:500],
+            biohacker_findings=biohacker.findings,
             biohacker_recs="\n".join(f"- {r}" for r in biohacker.recommendations),
             all_citations="\n".join(c["raw_citation"] for c in unique_refs),
         )
 
+        # Carry the structured perspective outputs forward so Phase 5 can build a
+        # layered, lossless report (conclusions -> reasoning -> statistical appendix)
+        # instead of re-summarizing an already-summarized markdown blob.
+        perspectives_payload = {
+            name: {
+                "findings": p.findings,
+                "recommendations": list(p.recommendations),
+                "key_insight": p.key_insight,
+                "statistical_details": list(p.statistical_details),
+            }
+            for name, p in (
+                ("mainstream", mainstream),
+                ("naturist", naturist),
+                ("biohacker", biohacker),
+            )
+        }
+
         return PhaseResult(
             phase=AnalysisPhase.COMPLEX_OUTPUT,
             timestamp=datetime.now(),
-            content={"output": assembled, "output_type": lens.value},
+            content={
+                "output": assembled,
+                "output_type": lens.value,
+                "perspectives": perspectives_payload,
+            },
             references=unique_refs,
         )
+
+    # Lens-specific framing reused across the patient-facing layer.
+    _LENS_FRAMING = {
+        "M": (
+            "clinical, evidence-graded tone. Use 'your doctor recommends' framing. "
+            "Emphasize the strength of the evidence behind each recommendation."
+        ),
+        "N": (
+            "warm, nature-first tone. Use 'your body evolved to...' framing. "
+            "Emphasize ancestral wisdom and natural approaches."
+        ),
+        "B": (
+            "optimization mindset tone. Use 'here is your protocol' framing. "
+            "Emphasize measurable outcomes, n=1 experimentation, and cutting-edge insights."
+        ),
+        "A": (
+            "balanced, neutral tone. Cover all perspectives equally. "
+            "Let the reader decide which approach suits them."
+        ),
+    }
 
     @track_cost("Phase 5: Simplified Output (LangChain)")
     def _phase5_simplify_output(
         self,
         body: str,
         lens: "PerspectiveLens" = None,
+        phase2_content: Optional[Dict[str, Any]] = None,
+        perspectives: Optional[Dict[str, Any]] = None,
     ) -> PhaseResult:
         """
-        Simplify the body text for a general audience using the chosen lens for framing.
-        References are NOT passed in — they are re-attached verbatim by start_analysis.
+        Build a LAYERED, lossless report from the Phase 4 body plus structured
+        upstream content, using progressive disclosure:
+
+            Layer 1 — Conclusions   (plain language; what readers value; first)
+            Layer 2 — The Reasoning (the logic behind the conclusions)
+            Layer 3 — Statistical Appendix (precise numbers; optional; last)
+
+        Two documents are produced and returned in ``content``:
+          * ``simplified_output``     — patient-facing: Layers 1-2 in plain language.
+          * ``practitioner_layered``  — Layers 1-2 + the full Statistical Appendix.
+
+        The Statistical Appendix is assembled DETERMINISTICALLY in Python from
+        Phase 2 evidence and each perspective's ``statistical_details`` so precise
+        numbers can never be silently dropped or hallucinated by the LLM. The LLM
+        is used only to phrase the plain-language Conclusions/Reasoning layers.
+
+        References are NOT passed in — they are re-attached verbatim by
+        ``start_analysis`` after this method returns.
         """
         if lens is None:
             lens = PerspectiveLens.BALANCED
+        framing = self._LENS_FRAMING.get(lens.value, self._LENS_FRAMING["A"])
 
-        _LENS_FRAMING = {
-            "M": (
-                "clinical, evidence-graded tone. Use 'your doctor recommends' framing. "
-                "Emphasize the strength of the evidence behind each recommendation."
-            ),
-            "N": (
-                "warm, nature-first tone. Use 'your body evolved to...' framing. "
-                "Emphasize ancestral wisdom and natural approaches."
-            ),
-            "B": (
-                "optimization mindset tone. Use 'here is your protocol' framing. "
-                "Emphasize measurable outcomes, n=1 experimentation, and cutting-edge insights."
-            ),
-            "A": (
-                "balanced, neutral tone. Cover all perspectives equally. "
-                "Let the reader decide which approach suits them."
-            ),
-        }
-        framing = _LENS_FRAMING.get(lens.value, _LENS_FRAMING["A"])
-
+        # ── Layers 1-2: plain-language conclusions + reasoning (LLM) ──────────
         system_prompt = (
-            f"You are a medical writer simplifying content for a general audience. "
-            f"Use a {framing} "
-            f"Write at a 6th grade reading level. Use short sentences and common words. "
-            f"Replace statistical notation (RR, OR, CI, p-values) with plain language. "
-            f"Keep essential biomarkers (HbA1c, LDL, etc.) but explain them simply in parentheses. "
-            f"Do NOT include a References section — that will be added separately."
+            f"You are a medical writer producing a layered report for a general "
+            f"audience. Use a {framing} "
+            f"Write at a 6th grade reading level with short sentences and common words. "
+            f"State conclusions FIRST, then explain the reasoning behind them so the "
+            f"reader can understand the logic. "
+            f"When you mention a statistic, describe it in plain language (e.g. "
+            f"'about a third lower risk') AND keep any inline citation markers like "
+            f"[1], [2] exactly as they appear so claims stay traceable. "
+            f"Do NOT invent facts and do NOT drop any recommendation or key point "
+            f"present in the content. "
+            f"Do NOT include a References section — that is added separately. "
+            f"Do NOT write a Statistical Appendix — that is added separately."
         )
 
         _doc_ctx_block = (
@@ -584,18 +654,20 @@ Schema:
             else ""
         )
         user_prompt = (
-            "Simplify this medical content for a non-medical reader.\n\n"
-            "Content to simplify:\n{body}\n\n"
+            "Rewrite this medical content as a layered guide for a non-medical reader.\n\n"
+            "Content:\n{body}\n\n"
             "Web research context:\n{web_context}\n\n"
             + _doc_ctx_block
-            + "Structure the output as:\n"
-            "# Simplified Guide: [topic from content]\n\n"
-            "## Key Findings\n"
-            "## Practical Recommendations\n"
-            "## What to Watch Out For\n"
-            "## Tests or Markers to Track (if applicable)\n"
-            "## Supplements or Medications Mentioned (if applicable)\n\n"
-            "Do NOT include a References section."
+            + "Structure the output with EXACTLY these two layers, in this order:\n\n"
+            "# [topic from content]\n\n"
+            "## ✅ Conclusions\n"
+            "[The bottom line first: what the reader should take away, plus the top "
+            "practical recommendations. Plain language.]\n\n"
+            "## 🧠 The Reasoning\n"
+            "[Explain the logic behind the conclusions: what each perspective found, "
+            "where they agree or disagree, the grey zones and uncertainties, and what "
+            "to watch out for. Keep inline citation markers.]\n\n"
+            "Do NOT include a References section or a Statistical Appendix."
         )
 
         _call_kwargs: dict = dict(
@@ -605,17 +677,86 @@ Schema:
         )
         if self.document_context:
             _call_kwargs["document_context"] = self.document_context
-        response = self._call_llm(
+        plain_layers = self._call_llm(
             system_prompt,
             user_prompt,
             **_call_kwargs,
         )
 
+        # ── Layer 3: statistical appendix (deterministic, lossless) ──────────
+        appendix = self._build_statistical_appendix(phase2_content, perspectives)
+
+        # Compose patient (Layers 1-2) and practitioner (Layers 1-3) variants via
+        # the shared base helper.
+        patient_output, practitioner_output = self._build_layered_report(
+            conclusions_and_reasoning=plain_layers,
+            appendix=appendix,
+        )
+
+        # ── Verification guard: warn on any silently dropped key content ─────
+        must_survive = [
+            (p or {}).get("key_insight", "")
+            for p in (perspectives or {}).values()
+        ]
+        self._verify_no_silent_loss(
+            practitioner_output,
+            [m for m in must_survive if m],
+            audit_step="factcheck_phase5_loss_check",
+        )
+
         return PhaseResult(
             phase=AnalysisPhase.SIMPLIFIED_OUTPUT,
             timestamp=datetime.now(),
-            content={"simplified_output": response},
+            content={
+                "simplified_output": patient_output,
+                "practitioner_layered": practitioner_output,
+            },
         )
+
+    def _build_statistical_appendix(
+        self,
+        phase2_content: Optional[Dict[str, Any]],
+        perspectives: Optional[Dict[str, Any]],
+    ) -> str:
+        """
+        Assemble the fact-checker Statistical Appendix (Layer 3) by grouping the
+        structured upstream data into labelled sections and delegating to the
+        shared deterministic builder in ``LangChainAgentBase``. Returns "" if
+        there is nothing quantitative to show.
+        """
+        _labels = {
+            "mainstream": "🏥 Mainstream Medicine",
+            "naturist": "🌿 Naturist / Evolutionary",
+            "biohacker": "🚀 Biohacker / Optimization",
+        }
+        sections: Dict[str, List[str]] = {}
+
+        # Per-perspective quantitative evidence.
+        for name in ("mainstream", "naturist", "biohacker"):
+            details = ((perspectives or {}).get(name) or {}).get(
+                "statistical_details"
+            ) or []
+            details = [str(d).strip() for d in details if str(d).strip()]
+            if details:
+                sections[_labels[name]] = details
+
+        # Phase 2 evidence-quality fields (methodology, funding, recency).
+        _p2_fields = [
+            ("methodology_quality", "Methodology quality"),
+            ("industry_funded_studies", "Industry-funded studies"),
+            ("independent_research", "Independent research"),
+            ("time_weighted_evidence", "Recency-weighted evidence"),
+            ("anecdotal_signals", "Anecdotal signals"),
+        ]
+        p2_lines: List[str] = []
+        for key, label in _p2_fields:
+            value = str((phase2_content or {}).get(key, "") or "").strip()
+            if value:
+                p2_lines.append(f"**{label}:** {value}")
+        if p2_lines:
+            sections["Evidence Quality & Grading"] = p2_lines
+
+        return super()._build_statistical_appendix(sections)
 
     def _parse_phase_model(
         self, response: str, model_cls: type[BaseModel], subject: str

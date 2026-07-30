@@ -242,19 +242,27 @@ class AgentOrchestrator:
         all_references = []
         seen_refs = set()
 
-        for phase_result in session.phase_results:
-            if hasattr(phase_result, "references") and phase_result.references:
-                for ref in phase_result.references:
-                    if isinstance(ref, dict):
-                        unique_key = (
-                            ref.get("doi")
-                            or ref.get("pmid")
-                            or ref.get("raw_citation", "")[:100].lower()
-                        )
+        def _consume(refs: Any) -> None:
+            if not refs:
+                return
+            for ref in refs:
+                if isinstance(ref, dict):
+                    unique_key = (
+                        ref.get("doi")
+                        or ref.get("pmid")
+                        or ref.get("raw_citation", "")[:100].lower()
+                    )
+                    if unique_key and unique_key not in seen_refs:
+                        seen_refs.add(unique_key)
+                        all_references.append(ref)
 
-                        if unique_key and unique_key not in seen_refs:
-                            seen_refs.add(unique_key)
-                            all_references.append(ref)
+        # Fact-checker sessions expose references per phase; procedure / medication /
+        # diagnostic outputs expose a single flat ``references`` list.
+        phase_results = getattr(session, "phase_results", None)
+        if phase_results:
+            for phase_result in phase_results:
+                _consume(getattr(phase_result, "references", None))
+        _consume(getattr(session, "references", None))
 
         kept = []
         removed = []
@@ -694,6 +702,34 @@ class AgentOrchestrator:
         if convert_markdown_to_pdf_safe(md_path, pdf_path):
             files["pdf_report"] = pdf_path
 
+        # Layered patient + practitioner reports (Conclusions → Reasoning →
+        # Statistical Appendix), when the agent produced them.
+        references = result.get("references") or []
+        refs_block = ""
+        if references:
+            refs_block = "\n\n---\n\n## 📚 References\n\n" + "\n".join(
+                f"{i}. {c}" for i, c in enumerate(references, 1) if c
+            ) + "\n"
+
+        for key, suffix, label in (
+            ("patient_report", "patient_report", "Patient report"),
+            ("practitioner_report", "practitioner_report", "Practitioner report"),
+        ):
+            content = result.get(key)
+            if not content:
+                continue
+            path = os.path.join(
+                self.output_dir, f"{safe_query}_{suffix}_{timestamp}.md"
+            )
+            body = content + refs_block
+            body = self._append_hardcoded_disclaimer(body)
+            with open(path, "w") as f:
+                f.write(body)
+            files[key] = path
+            pdf = path.replace(".md", ".pdf")
+            if convert_markdown_to_pdf_safe(path, pdf):
+                files[f"{key}_pdf"] = pdf
+
         return files
         # Update timeout if agent's LLM manager exists
         if hasattr(agent, "llm_manager") and agent.llm_manager:
@@ -848,8 +884,11 @@ class AgentOrchestrator:
             practitioner_file = (
                 f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
             )
+            practitioner_with_refs = self._append_references_section(
+                result.practitioner_report, result
+            )
             practitioner_complete = self._append_hardcoded_disclaimer(
-                result.practitioner_report
+                practitioner_with_refs
             )
             with open(practitioner_file, "w") as f:
                 f.write(practitioner_complete)
@@ -861,6 +900,25 @@ class AgentOrchestrator:
             if practitioner_pdf:
                 print(f"✓ Practitioner PDF: {os.path.basename(practitioner_pdf)}")
                 files["practitioner_pdf"] = practitioner_pdf
+
+        # 3.6. Patient report (plain-language layered report; markdown + PDF)
+        if getattr(result, "patient_report", None):
+            patient_file = (
+                f"{self.output_dir}/{base_name}_patient_report_{timestamp}.md"
+            )
+            patient_with_refs = self._append_references_section(
+                result.patient_report, result
+            )
+            patient_complete = self._append_hardcoded_disclaimer(patient_with_refs)
+            with open(patient_file, "w") as f:
+                f.write(patient_complete)
+            print(f"✓ Patient report: {os.path.basename(patient_file)}")
+            files["patient_report"] = patient_file
+
+            patient_pdf = convert_markdown_to_pdf_safe(patient_file)
+            if patient_pdf:
+                print(f"✓ Patient PDF: {os.path.basename(patient_pdf)}")
+                files["patient_report_pdf"] = patient_pdf
 
         # 4. Summary report (with disclaimer)
         summary_file = f"{self.output_dir}/{base_name}_summary_report_{timestamp}.md"
@@ -1112,8 +1170,11 @@ class AgentOrchestrator:
             practitioner_file = (
                 f"{self.output_dir}/{base_name}_practitioner_report_{timestamp}.md"
             )
+            practitioner_with_refs = self._append_references_section(
+                result.practitioner_report, result
+            )
             practitioner_complete = self._append_hardcoded_disclaimer(
-                result.practitioner_report
+                practitioner_with_refs
             )
             with open(practitioner_file, "w") as f:
                 f.write(practitioner_complete)
@@ -1125,6 +1186,25 @@ class AgentOrchestrator:
             if practitioner_pdf:
                 print(f"✓ Practitioner PDF: {os.path.basename(practitioner_pdf)}")
                 files["practitioner_pdf"] = practitioner_pdf
+
+        # 2.6. Patient report (plain-language layered report; markdown + PDF)
+        if getattr(result, "patient_report", None):
+            patient_file = (
+                f"{self.output_dir}/{base_name}_patient_report_{timestamp}.md"
+            )
+            patient_with_refs = self._append_references_section(
+                result.patient_report, result
+            )
+            patient_complete = self._append_hardcoded_disclaimer(patient_with_refs)
+            with open(patient_file, "w") as f:
+                f.write(patient_complete)
+            print(f"✓ Patient report: {os.path.basename(patient_file)}")
+            files["patient_report"] = patient_file
+
+            patient_pdf = convert_markdown_to_pdf_safe(patient_file)
+            if patient_pdf:
+                print(f"✓ Patient PDF: {os.path.basename(patient_pdf)}")
+                files["patient_report_pdf"] = patient_pdf
 
         # 3. Summary report (Markdown with disclaimer)
         summary_file = (
@@ -1457,14 +1537,14 @@ See the detailed output file for the complete analysis.
 ---
 
 ## 🧬 Mechanism of Action
-{result.mechanism_of_action[:300] + "..." if len(result.mechanism_of_action) > 300 else result.mechanism_of_action}
+{result.mechanism_of_action}
 
 ---
 
 ## ⚗️ Pharmacokinetics Summary
-- **Absorption:** {result.absorption[:100] + "..." if len(result.absorption) > 100 else result.absorption}
-- **Metabolism:** {result.metabolism[:100] + "..." if len(result.metabolism) > 100 else result.metabolism}
-- **Elimination:** {result.elimination[:100] + "..." if len(result.elimination) > 100 else result.elimination}
+- **Absorption:** {result.absorption}
+- **Metabolism:** {result.metabolism}
+- **Elimination:** {result.elimination}
 - **Half-Life:** {result.half_life}
 
 ---
@@ -1481,11 +1561,9 @@ See the detailed output file for the complete analysis.
 
         if result.contraindications:
             summary += f"### Contraindications ({len(result.contraindications)} identified)\n\n"
-            for contra in result.contraindications[:3]:  # Show top 3
+            for contra in result.contraindications:
                 if isinstance(contra, dict):
-                    summary += f"- **{contra.get('condition', 'N/A')}** ({contra.get('severity', 'N/A')})\n"
-            if len(result.contraindications) > 3:
-                summary += f"- _(and {len(result.contraindications) - 3} more - see detailed report)_\n"
+                    summary += f"- **{contra.get('condition', 'not established')}** ({contra.get('severity', 'not established')})\n"
             summary += "\n"
 
         summary += f"""---
@@ -1504,20 +1582,20 @@ See the detailed output file for the complete analysis.
 
             if severe:
                 summary += f"### 🔴 SEVERE Drug Interactions ({len(severe)})\n\n"
-                for interaction in severe[:3]:
+                for interaction in severe:
                     summary += f"- **{interaction.interacting_agent}**\n"
-                    summary += f"  - Effect: {interaction.clinical_effect[:100]}...\n"
-                    summary += f"  - Management: {interaction.management[:100]}...\n\n"
+                    summary += f"  - Effect: {interaction.clinical_effect}\n"
+                    summary += f"  - Management: {interaction.management}\n\n"
 
             if moderate:
                 summary += f"### 🟡 Moderate Drug Interactions ({len(moderate)})\n\n"
-                for interaction in moderate[:3]:
-                    summary += f"- **{interaction.interacting_agent}**: {interaction.clinical_effect[:80]}...\n"
+                for interaction in moderate:
+                    summary += f"- **{interaction.interacting_agent}**: {interaction.clinical_effect}\n"
 
         if result.food_interactions:
             summary += f"\n### Food Interactions ({len(result.food_interactions)})\n\n"
-            for interaction in result.food_interactions[:3]:
-                summary += f"- **{interaction.interacting_agent}**: {interaction.management[:100]}...\n"
+            for interaction in result.food_interactions:
+                summary += f"- **{interaction.interacting_agent}**: {interaction.management}\n"
 
         summary += """
 ---
@@ -1529,7 +1607,7 @@ See the detailed output file for the complete analysis.
 """
 
         if result.evidence_based_recommendations:
-            for i, rec in enumerate(result.evidence_based_recommendations[:5], 1):
+            for i, rec in enumerate(result.evidence_based_recommendations, 1):
                 if isinstance(rec, dict):
                     action = self._clean_text(
                         rec.get("intervention")
@@ -1538,31 +1616,31 @@ See the detailed output file for the complete analysis.
                     if action:
                         summary += f"{i}. **{action}**\n"
                         if rationale:
-                            summary += f"   - {rationale[:150]}...\n"
+                            summary += f"   - {rationale}\n"
                         summary += "\n"
 
         if result.what_not_to_do:
             summary += "### ❌ What NOT TO DO:\n\n"
-            for i, rec in enumerate(result.what_not_to_do[:3], 1):
+            for i, rec in enumerate(result.what_not_to_do, 1):
                 if isinstance(rec, dict):
                     action = self._clean_text(rec.get("action"))
                     rationale = self._clean_text(rec.get("rationale"))
                     if action:
                         summary += f"{i}. **{action}**\n"
                         if rationale:
-                            summary += f"   - {rationale[:150]}...\n"
+                            summary += f"   - {rationale}\n"
                         summary += "\n"
 
         if result.debunked_claims:
             summary += "### 🧯 Debunked Claims:\n\n"
-            for i, claim in enumerate(result.debunked_claims[:3], 1):
+            for i, claim in enumerate(result.debunked_claims, 1):
                 if isinstance(claim, dict):
                     statement = self._clean_text(claim.get("claim"))
                     reason = self._clean_text(claim.get("reason_debunked"))
                     if statement:
                         summary += f"{i}. **{statement}**\n"
                         if reason:
-                            summary += f"   - {reason[:150]}...\n"
+                            summary += f"   - {reason}\n"
                         summary += "\n"
 
         summary += """

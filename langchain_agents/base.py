@@ -245,3 +245,174 @@ class LangChainAgentBase:
             return json.loads(match.group(1))
         except json.JSONDecodeError:
             return None
+
+    # ── Shared layered-report helpers ─────────────────────────────────────────
+    # Progressive-disclosure report construction reused across all agents:
+    #   Layer 1  Conclusions           (what readers value; first)
+    #   Layer 2  Reasoning             (the logic behind the conclusions)
+    #   Layer 3  Statistical Appendix  (precise numbers / grading; last, optional)
+    # The appendix is assembled DETERMINISTICALLY so numbers are never dropped or
+    # hallucinated. The patient variant omits Layer 3; the practitioner variant
+    # includes it.
+
+    def _build_statistical_appendix(
+        self, sections: dict[str, list[str]]
+    ) -> str:
+        """
+        Assemble a Statistical Appendix (Layer 3) deterministically from labelled
+        groups of quantitative entries. No LLM involved.
+
+        Args:
+            sections: ordered mapping of ``section heading`` -> list of entry
+                strings (effect sizes, CIs, p-values, evidence grading, etc.).
+
+        Returns:
+            Markdown for the appendix, or "" if there is nothing quantitative.
+        """
+        rendered: list[str] = []
+        for heading, entries in sections.items():
+            clean = [str(e).strip() for e in (entries or []) if str(e).strip()]
+            if not clean:
+                continue
+            lines = "\n".join(f"- {e}" for e in clean)
+            rendered.append(f"### {heading}\n{lines}")
+
+        if not rendered:
+            return ""
+
+        header = (
+            "## 📊 Statistical Appendix\n"
+            "_For readers who want the precise numbers. Effect sizes, confidence "
+            "intervals, p-values and evidence grading behind the conclusions above._\n"
+        )
+        return header + "\n\n" + "\n\n".join(rendered)
+
+    def _build_layered_report(
+        self,
+        *,
+        conclusions_and_reasoning: str,
+        appendix: str,
+    ) -> Tuple[str, str]:
+        """
+        Compose patient and practitioner variants of a layered report.
+
+        Args:
+            conclusions_and_reasoning: markdown for Layers 1-2 (already ordered
+                Conclusions -> Reasoning), typically produced by
+                ``_layer_plain_language`` or a deterministic builder.
+            appendix: Layer 3 markdown from ``_build_statistical_appendix`` (may
+                be "").
+
+        Returns:
+            ``(patient_output, practitioner_output)``. The patient variant omits
+            the Statistical Appendix but points readers to the practitioner
+            report when an appendix exists; the practitioner variant appends it.
+        """
+        patient = conclusions_and_reasoning
+        practitioner = conclusions_and_reasoning
+        if appendix:
+            patient = (
+                conclusions_and_reasoning
+                + "\n\n---\n\n"
+                + "_The precise statistics and evidence grading behind these "
+                "conclusions are available in the detailed practitioner report._\n"
+            )
+            practitioner = conclusions_and_reasoning + "\n\n" + appendix
+        return patient, practitioner
+
+    def _verify_no_silent_loss(
+        self,
+        output: str,
+        must_survive: list[str],
+        *,
+        audit_step: str = "layering_loss_check",
+        fragment_words: int = 6,
+    ) -> list[str]:
+        """
+        Best-effort check that each string in ``must_survive`` appears in
+        ``output``. Missing items are logged and recorded as an audit event, but
+        never raise — resilience over strictness.
+
+        A leading word-fragment is used for the match so light paraphrasing does
+        not trigger false positives.
+
+        Returns the list of human-readable descriptions of missing items.
+        """
+        import logging
+
+        def _norm(text: str) -> str:
+            return " ".join(str(text).lower().split())
+
+        haystack = _norm(output)
+        missing: list[str] = []
+        for item in must_survive:
+            norm_item = _norm(item)
+            if not norm_item:
+                continue
+            fragment = " ".join(norm_item.split()[:fragment_words])
+            if fragment and fragment not in haystack:
+                missing.append(str(item)[:80])
+
+        if missing:
+            logging.getLogger(__name__).warning(
+                "Layering may have dropped %d key item(s): %s",
+                len(missing),
+                "; ".join(missing),
+            )
+            if getattr(self, "enable_audit", False):
+                self.audit_events.append(
+                    {
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "step": audit_step,
+                        "missing_items": missing,
+                    }
+                )
+        return missing
+
+    def _layer_plain_language(
+        self,
+        body: str,
+        *,
+        framing: str,
+        audit_step: str = "layered_plain_language",
+        extra_context: str = "",
+    ) -> str:
+        """
+        One LLM call that rewrites content into plain-language Layers 1-2
+        (Conclusions -> Reasoning), preserving inline ``[n]`` citation markers.
+        Does NOT emit references or a statistical appendix (added separately).
+        """
+        system_prompt = (
+            f"You are a medical writer producing a layered report for a general "
+            f"audience. Use a {framing} "
+            f"Write at a 6th grade reading level with short sentences and common words. "
+            f"State conclusions FIRST, then explain the reasoning behind them so the "
+            f"reader can understand the logic. "
+            f"When you mention a statistic, describe it in plain language AND keep any "
+            f"inline citation markers like [1], [2] exactly as they appear so claims "
+            f"stay traceable. "
+            f"Do NOT invent facts and do NOT drop any recommendation or key point "
+            f"present in the content. "
+            f"Do NOT include a References section — that is added separately. "
+            f"Do NOT write a Statistical Appendix — that is added separately."
+        )
+        _extra_block = (
+            "Additional context:\n{extra_context}\n\n" if extra_context else ""
+        )
+        user_prompt = (
+            "Rewrite this medical content as a layered guide for a non-medical reader.\n\n"
+            "Content:\n{body}\n\n"
+            + _extra_block
+            + "Structure the output with EXACTLY these two layers, in this order:\n\n"
+            "# [topic from content]\n\n"
+            "## ✅ Conclusions\n"
+            "[The bottom line first: what the reader should take away, plus the top "
+            "practical recommendations. Plain language.]\n\n"
+            "## 🧠 The Reasoning\n"
+            "[Explain the logic behind the conclusions. Keep inline citation markers.]\n\n"
+            "Do NOT include a References section or a Statistical Appendix."
+        )
+        _kwargs: dict[str, Any] = dict(audit_step=audit_step, body=body)
+        if extra_context:
+            _kwargs["extra_context"] = extra_context
+        return self._call_llm(system_prompt, user_prompt, **_kwargs)

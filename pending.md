@@ -12,9 +12,11 @@
 which uses `MedicalDiagnosticAgent` (Bayesian + LLM pipeline in `medical_diagnostic_analyzer/`).
 The CLI also accepts `uv run python run_analysis.py diagnostic --subject "..."`.
 
-**Remaining gap:** `MedicalDiagnosticAgent` does not use `CostTracker`, does not collect
-`PhaseResult.references`, and is not wired to the LangChain stack. These are incremental
-improvements, not blockers.
+**Remaining gap:** ~~`MedicalDiagnosticAgent` does not use `CostTracker`, does not collect
+references, and is not wired to the LangChain stack.~~ ✅ Fixed — `MedicalDiagnosticAgent`
+now extends `LangChainAgentBase` (cost tracking via `@track_cost`, audit logging,
+`_parse_json`, web research), collects `references`, and emits layered patient +
+practitioner reports with a deterministic Bayesian-probability Statistical Appendix.
 
 ---
 
@@ -28,13 +30,14 @@ improvements, not blockers.
 
 ---
 
-### 3. Procedure and medication agents collect zero references
-**Location:** `langchain_agents/procedure_agent.py`, `langchain_agents/medication_agent.py`  
-**Effort:** 1–2 days
+### ~~3. Procedure and medication agents collect zero references~~ ✅ Fixed
+**Location:** `langchain_agents/procedure_agent.py`, `langchain_agents/medication_agent.py`
 
-The fact-checker pipeline collects citations in every `PhaseResult.references` list. Both the procedure and medication agents return empty reference lists. The report's `## 📚 References` section is always a hardcoded placeholder note for procedure output and absent for medication output.
-
-**Fix:** Add citation extraction to Phase 3 (procedure summary) and to the medication analysis call, storing APA-formatted strings in `PhaseResult.references`.
+Both agents now request APA-7 citations (with DOI/PMID/URL) in their structured
+LLM calls, store them on `output.references`, and the orchestrator routes them
+through `_collect_validated_references()` / `_append_references_section()` (which
+now also handles objects exposing a flat `.references` list, not just
+`phase_results`). Applies to the diagnostic agent as well.
 
 ---
 
@@ -145,6 +148,48 @@ The most complex component in the reference validation system (APA parsing, Cros
 ---
 
 ## 🟢 Recently delivered
+
+### Cross-agent layered reporting, references & diagnostic migration
+Extended the fact-checker's layered/lossless approach to every agent:
+
+- **Shared helpers in `LangChainAgentBase`** (`_build_statistical_appendix`,
+  `_build_layered_report`, `_verify_no_silent_loss`, `_layer_plain_language`) —
+  progressive disclosure: Layer 1 Conclusions → Layer 2 Reasoning → Layer 3
+  Statistical Appendix (deterministic, so numbers are never dropped/hallucinated).
+  The fact-checker was refactored to consume them.
+- **Procedure & medication agents** now emit layered patient + practitioner
+  reports (one plain-language LLM call + deterministic appendix). Critical safety
+  content (medication black-box warnings, serious adverse effects) lives in the
+  appendix verbatim. Removed the lossy `[:300]`/`[:100]`/"top 3" truncations in
+  the orchestrator's medication summary generator. Fixed `indication or "N/A"`.
+- **References** collected by procedure / medication / diagnostic agents and
+  routed through the orchestrator URL-validation path (see item 3).
+- **Diagnostic agent migrated** onto `LangChainAgentBase` (see item 1): cost
+  tracking, audit, robust JSON parsing, references, and a deterministic Bayesian
+  Statistical Appendix so exact posteriors are guaranteed in the report.
+
+### Layered, lossless fact-checker Phase 5 (`langchain_agents/factcheck_agent.py`)
+Phase 5 no longer performs a lossy free-form simplification that stripped
+statistical rigor and forced a rigid 5-section template. It now produces a
+**layered, progressive-disclosure** report from the structured upstream data:
+Layer 1 Conclusions → Layer 2 Reasoning → Layer 3 Statistical Appendix.
+
+- **Patient report** (`session.final_output`): Layers 1–2 in plain language.
+- **Practitioner report** (`session.practitioner_report`): Layers 1–2 + the
+  full Statistical Appendix (effect sizes, CIs, p-values, evidence grading).
+- The Statistical Appendix is assembled **deterministically in Python** from each
+  perspective's new `_PerspectiveOutput.statistical_details` field plus Phase 2
+  evidence fields — precise numbers are never dropped or hallucinated.
+- The Phase 4 assembler no longer truncates perspective findings to `[:500]`;
+  length is bounded at generation (~350 words per perspective) instead.
+- A verification guard logs and audits any perspective `key_insight` that fails to
+  survive into the practitioner layer.
+- Inline `[n]` citation markers are preserved so claims stay traceable; the
+  reference list is still re-attached verbatim by `start_analysis`.
+
+**Possible follow-ups:** apply the same layering to the procedure/medication
+agents; measure Flesch-Kincaid on the patient layer (ties into the existing
+"Automatic reading level enforcement" item).
 
 ### Document parser service (`document_parser/`)
 File → Markdown conversion service. **PDF priority** (pdfplumber + pypdf

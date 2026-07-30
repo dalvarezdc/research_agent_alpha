@@ -43,6 +43,7 @@ class _ProcedureSummary(BaseModel):
     confidence_score: float
     general_recommendations: List[str] = Field(default_factory=list)
     research_gaps: List[str] = Field(default_factory=list)
+    references: List[str] = Field(default_factory=list)
 
 
 class LangChainMedicalReasoningAgent(LangChainAgentBase):
@@ -87,9 +88,16 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
             research_gaps=summary.research_gaps,
             confidence_score=summary.confidence_score,
             reasoning_trace=self.reasoning_trace,
+            references=[
+                {"raw_citation": c.strip()}
+                for c in summary.references
+                if c and c.strip()
+            ],
         )
 
-        output.practitioner_report = self._generate_practitioner_report(output)
+        # Build layered patient + practitioner reports (Conclusions → Reasoning →
+        # Statistical Appendix) using the shared base helpers.
+        self._build_layered_procedure_reports(output)
 
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
@@ -98,6 +106,57 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
         self.cost_tracker._phase_costs = _module_summary()["phases"][:]
         self.cost_tracker.print_summary()
         return output
+
+    @track_cost("Procedure Layered Report (LangChain)")
+    def _build_layered_procedure_reports(self, output: MedicalOutput) -> None:
+        """
+        Populate ``output.patient_report`` and ``output.practitioner_report`` with
+        layered documents (Conclusions → Reasoning → Statistical Appendix).
+
+        The deterministic organ-by-organ detail becomes the source for the
+        plain-language Conclusions+Reasoning layers (one LLM call); the Statistical
+        Appendix (per-organ evidence grading + risk level + confidence) is
+        assembled deterministically so nothing is dropped.
+        """
+        detail_source = self._generate_practitioner_report(output)
+
+        framing = (
+            "clinical, evidence-graded tone. Explain the procedure's risks and "
+            "what to do about them in plain words."
+        )
+        plain_layers = self._layer_plain_language(detail_source, framing=framing,
+                                                  audit_step="procedure_layering")
+
+        # Statistical Appendix (deterministic): per-organ evidence grading.
+        appendix_sections: dict[str, list[str]] = {}
+        organ_lines = []
+        for organ in output.organs_analyzed:
+            organ_lines.append(
+                f"{organ.organ_name.title()}: risk {organ.risk_level}, "
+                f"evidence quality {organ.evidence_quality}, "
+                f"{'directly affected' if organ.affected_by_procedure else 'not directly affected'}"
+            )
+        if organ_lines:
+            appendix_sections["Per-Organ Evidence & Risk Grading"] = organ_lines
+        appendix_sections["Overall Grading"] = [
+            f"Analysis confidence: {output.confidence_score:.2f}/1.00",
+        ]
+
+        appendix = self._build_statistical_appendix(appendix_sections)
+
+        patient, practitioner = self._build_layered_report(
+            conclusions_and_reasoning=plain_layers,
+            appendix=appendix,
+        )
+
+        # Verification guard: general recommendations must survive.
+        self._verify_no_silent_loss(
+            practitioner, list(output.general_recommendations),
+            audit_step="procedure_layering_loss_check",
+        )
+
+        output.patient_report = patient
+        output.practitioner_report = practitioner
 
     def _validate_input(self, medical_input: MedicalInput) -> None:
         try:
@@ -295,6 +354,9 @@ Web research context:
 """ + _doc_ctx_block + """
 Return JSON matching this schema:
 {schema}
+
+For "references": provide 3-8 APA 7 citations supporting the analysis, each
+MUST include a DOI, PMID, or direct URL.
 """
         _call_kwargs: dict = dict(
             audit_step="procedure_summary",

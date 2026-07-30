@@ -74,6 +74,8 @@ class MedicalOutput:
     confidence_score: float
     reasoning_trace: List[ReasoningStep]
     practitioner_report: Optional[str] = None  # Detailed markdown report for medical practitioners
+    patient_report: Optional[str] = None  # Plain-language layered report (Conclusions + Reasoning)
+    references: List[Dict[str, str]] = field(default_factory=list)  # Collected citations
     validation_report: Optional[Any] = None  # Reference validation report
 
 

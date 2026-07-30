@@ -59,6 +59,36 @@ pending.md                   # Known gaps and planned work
 | `diagnostic_agent` | `MedicalDiagnosticAgent` | Bayesian + LLM symptom-to-condition pipeline |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
 
+All four agents extend `LangChainAgentBase` and share cost tracking, audit
+logging, `_parse_json`, web research, and the **layered-report helpers** below.
+
+---
+
+## Layered reporting (shared across all agents)
+
+`LangChainAgentBase` provides progressive-disclosure report construction reused
+by every agent, so nothing from the analysis is silently discarded:
+
+- **Layer 1 — Conclusions** (what readers value; first)
+- **Layer 2 — Reasoning** (the logic behind the conclusions)
+- **Layer 3 — Statistical Appendix** (precise numbers / evidence grading; last, optional)
+
+Helpers (`langchain_agents/base.py`):
+- `_layer_plain_language(body, framing=...)` — one LLM call producing plain-language
+  Layers 1-2, preserving inline `[n]` citation markers.
+- `_build_statistical_appendix(sections)` — assembles Layer 3 **deterministically**
+  from labelled quantitative groups (numbers are never dropped/hallucinated).
+- `_build_layered_report(conclusions_and_reasoning=..., appendix=...)` — returns
+  `(patient, practitioner)`; the patient variant omits Layer 3 and points to the
+  practitioner report; the practitioner variant appends it.
+- `_verify_no_silent_loss(output, must_survive)` — logs + audits any key item that
+  fails to survive into the layered output.
+
+Each agent emits a **patient report** (Layers 1-2) and a **practitioner report**
+(Layers 1-3). Critical safety content (e.g. medication black-box warnings,
+diagnostic Bayesian posteriors) is placed in the deterministic appendix so it is
+guaranteed present regardless of LLM phrasing.
+
 ---
 
 ## Fact-checker pipeline (current, LangChain implementation)
@@ -77,14 +107,28 @@ start_analysis(subject)
 │            M = Mainstream  N = Naturist  B = Biohacker  A = Balanced (default)
 │
 ├── Phase 4  Three Parallel Perspective Agents  (ThreadPoolExecutor max_workers=3)
-│   ├── Mainstream LLM call  → _PerspectiveOutput {findings, recs, key_insight, citations}
+│   ├── Mainstream LLM call  → _PerspectiveOutput {findings, recs, key_insight,
+│   │                            citations, statistical_details}
 │   ├── Naturist   LLM call  → _PerspectiveOutput
 │   └── Biohacker  LLM call  → _PerspectiveOutput
 │   + Assembler LLM call → merged markdown with "Your Focus" summary at top
 │   Total: 4 LLM calls in Phase 4
+│   NOTE: perspective findings are passed to the assembler in FULL (no [:500]
+│         truncation); length is bounded at generation instead. The structured
+│         perspectives are also stored in PhaseResult.content["perspectives"] so
+│         Phase 5 can build a lossless layered report.
 │
-└── Phase 5  Simplification
-    Body only passed in (references split out upstream)
+└── Phase 5  Layered Assembly (progressive disclosure — nothing is discarded)
+    Body + structured Phase 2 / Phase 4 content passed in (references split upstream)
+    Produces TWO documents via one LLM call + deterministic appendix:
+      • simplified_output    → patient report:  Layer 1 Conclusions → Layer 2 Reasoning
+      • practitioner_layered → practitioner:    Layers 1-2 + Layer 3 Statistical Appendix
+    Layer ordering: Conclusions (what users value) → Reasoning (the logic) →
+      Statistical Appendix (effect sizes / CIs / p-values / evidence grading; last).
+    The Statistical Appendix is built DETERMINISTICALLY in Python from
+      statistical_details + Phase 2 fields, so numbers are never dropped/hallucinated.
+    A verification guard logs (and audits) any perspective key_insight that fails
+      to survive into the practitioner layer.
     Lens-aware framing (clinical / nature-first / optimization / balanced)
     References re-attached verbatim after Phase 5 output
 ```
@@ -250,11 +294,15 @@ All files written to `outputs/` with `{subject}_{type}_{timestamp}` naming.
 
 | Agent | Files produced |
 |-------|---------------|
-| Procedure | `reasoning_trace.json`, `analysis_result.json`, `practitioner_report.md+pdf`, `summary_report.md+pdf`, `cost_report.json` |
-| Medication | `medication_analysis.json`, `practitioner_report.md+pdf`, `medication_summary.md+pdf`, `medication_detailed.md+pdf`, `cost_report.json` |
-| Fact-checker | `session.json`, `practitioner_report.md+pdf`, `patient_report.md+pdf`, `summary.md+pdf`, `cost_report.json` |
+| Procedure | `reasoning_trace.json`, `analysis_result.json`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `summary_report.md+pdf`, `cost_report.json` |
+| Medication | `medication_analysis.json`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `medication_summary.md+pdf`, `medication_detailed.md+pdf`, `cost_report.json` |
+| Fact-checker | `session.json`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `summary.md+pdf`, `cost_report.json` |
+| Diagnostic | `diagnostic.json`, `diagnostic_report.md+pdf`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `cost_report` (in session) |
 
-All agents optionally produce `audit.json` when `agent.audit_events` is present.
+All agents produce **layered** patient (Layers 1-2) and practitioner (Layers 1-3)
+reports via the shared helpers. All agents optionally produce `audit.json` when
+`agent.audit_events` is present. Procedure / medication / diagnostic now collect
+`references` and route them through the orchestrator URL-validation path.
 
 ---
 

@@ -59,6 +59,7 @@ class _MedicationOutputModel(BaseModel):
     warning_signs: List[Dict[str, str]] = Field(default_factory=list)
     evidence_quality: str = "moderate"
     analysis_confidence: float = 0.75
+    references: List[str] = Field(default_factory=list)
 
 
 class LangChainMedicationAnalyzer(LangChainAgentBase):
@@ -95,6 +96,10 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
         output = self._to_dataclass(output_model)
         output.reasoning_trace = self.reasoning_trace
 
+        # Build layered patient + practitioner reports (Conclusions → Reasoning →
+        # Statistical Appendix) using the shared base helpers.
+        self._build_layered_medication_reports(output)
+
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
 
@@ -102,6 +107,104 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
         self.cost_tracker._phase_costs = _module_summary()["phases"][:]
         self.cost_tracker.print_summary()
         return output
+
+    @track_cost("Medication Layered Report (LangChain)")
+    def _build_layered_medication_reports(self, output: MedicationOutput) -> None:
+        """
+        Populate ``output.patient_report`` and ``output.practitioner_report`` with
+        layered documents (Conclusions → Reasoning → Statistical Appendix).
+
+        The plain-language Conclusions+Reasoning layers are produced by one LLM
+        call; the Statistical Appendix (evidence grading, per-interaction evidence
+        levels, confidence) is assembled deterministically so numbers are never
+        dropped.
+        """
+        # Deterministic source content passed to the plain-language layering call.
+        def _fmt_recs(items: list) -> str:
+            out = []
+            for it in items:
+                if isinstance(it, dict):
+                    label = it.get("intervention") or it.get("action") or it.get("claim") or ""
+                    detail = it.get("rationale") or it.get("reason_debunked") or it.get("risks") or ""
+                    out.append(f"- {label}. {detail}".strip())
+                else:
+                    out.append(f"- {it}")
+            return "\n".join(out)
+
+        source = (
+            f"Medication: {output.medication_name} ({output.drug_class})\n"
+            f"Mechanism of action: {output.mechanism_of_action}\n"
+            f"Key indications: {', '.join(output.approved_indications) or 'not established'}\n"
+            f"Black box warnings: {', '.join(output.black_box_warnings) or 'none'}\n"
+            f"Standard dosing: {output.standard_dosing or 'not established'}\n"
+            f"Pharmacokinetics: absorption {output.absorption}; metabolism "
+            f"{output.metabolism}; elimination {output.elimination}; half-life {output.half_life}\n"
+            f"Serious adverse effects: {', '.join(output.serious_adverse_effects) or 'not established'}\n"
+            f"Common adverse effects: {', '.join(output.common_adverse_effects) or 'not established'}\n"
+            f"What to do:\n{_fmt_recs(output.evidence_based_recommendations)}\n"
+            f"What not to do:\n{_fmt_recs(output.what_not_to_do)}\n"
+            f"Debunked claims:\n{_fmt_recs(output.debunked_claims)}\n"
+            f"Monitoring: {', '.join(output.monitoring_requirements) or 'not established'}\n"
+        )
+
+        framing = (
+            "clinical, evidence-graded tone. Emphasize safety and what the patient "
+            "should do, in plain words."
+        )
+        plain_layers = self._layer_plain_language(source, framing=framing,
+                                                  audit_step="medication_layering")
+
+        # Statistical Appendix (deterministic). Critical safety info is included
+        # here verbatim so it is guaranteed present regardless of LLM phrasing.
+        appendix_sections: dict[str, list[str]] = {}
+        if output.black_box_warnings:
+            appendix_sections["⚠️ Black Box Warnings"] = list(output.black_box_warnings)
+        if output.serious_adverse_effects:
+            appendix_sections["Serious Adverse Effects"] = list(output.serious_adverse_effects)
+        interaction_lines = []
+        for label, items in (
+            ("Drug interactions", output.drug_interactions),
+            ("Food interactions", output.food_interactions),
+        ):
+            for inter in items:
+                sev = getattr(getattr(inter, "severity", None), "value", "") or ""
+                ev = getattr(inter, "evidence_level", "") or ""
+                agent_name = getattr(inter, "interacting_agent", "") or ""
+                effect = getattr(inter, "clinical_effect", "") or ""
+                entry = f"{label}: {agent_name} — {effect}"
+                if sev:
+                    entry += f" (severity: {sev})"
+                if ev:
+                    entry += f" [evidence: {ev}]"
+                interaction_lines.append(entry)
+        if interaction_lines:
+            appendix_sections["Interaction Evidence"] = interaction_lines
+
+        grading = [
+            f"Overall evidence quality: {output.evidence_quality}",
+            f"Analysis confidence: {output.analysis_confidence:.2f}/1.00",
+        ]
+        if output.dose_adjustments:
+            for k, v in output.dose_adjustments.items():
+                grading.append(f"Dose adjustment ({k}): {v}")
+        appendix_sections["Evidence Quality & Grading"] = grading
+
+        appendix = self._build_statistical_appendix(appendix_sections)
+
+        patient, practitioner = self._build_layered_report(
+            conclusions_and_reasoning=plain_layers,
+            appendix=appendix,
+        )
+
+        # Verification guard: black box warnings and serious adverse effects must
+        # survive into the practitioner layer.
+        must_survive = list(output.black_box_warnings) + list(output.serious_adverse_effects)
+        self._verify_no_silent_loss(
+            practitioner, must_survive, audit_step="medication_layering_loss_check"
+        )
+
+        output.patient_report = patient
+        output.practitioner_report = practitioner
 
     @track_cost("Medication Analysis (LangChain)")
     def _generate_medication_output(
@@ -142,6 +245,8 @@ Recommendations guidance:
 Requirements:
 - Do not leave "intervention" or "action" blank. Use a short imperative sentence.
 - Avoid "N/A". If unknown, write "not established" with a brief rationale.
+- "references": provide 3-8 APA 7 citations supporting the analysis, each MUST
+  include a DOI, PMID, or direct URL.
 """
         if self._is_grok():
             user_prompt += """
@@ -155,7 +260,7 @@ Grok-specific requirements:
         _call_kwargs: dict = dict(
             audit_step="medication_analysis",
             medication=medication_input.medication_name,
-            indication=medication_input.indication or "N/A",
+            indication=medication_input.indication or "not specified",
             other_meds=", ".join(medication_input.patient_medications) or "None",
             web_context=self.web_context or "None",
             schema=_MedicationOutputModel.model_json_schema(),
@@ -230,6 +335,11 @@ Grok-specific requirements:
             evidence_quality=model.evidence_quality,
             analysis_confidence=model.analysis_confidence,
             reasoning_trace=self.reasoning_trace,
+            references=[
+                {"raw_citation": c.strip()}
+                for c in model.references
+                if c and c.strip()
+            ],
         )
 
     def _interaction_from_model(self, model: _InteractionModel) -> Interaction:
