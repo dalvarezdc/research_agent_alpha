@@ -14,14 +14,20 @@ from typing import Any, Dict, Optional, Tuple, List
 # Optional diagnostics
 from check_llms import print_llm_status
 
-# Load environment variables: .env.dev first (dev overrides), then .env (base)
+# Load environment variables. Base ``.env`` provides the canonical values; the
+# optional ``.env.dev`` overlays dev-specific overrides — but ONLY for keys whose
+# value is non-empty, so an empty placeholder in ``.env.dev`` (e.g.
+# ``VERTEX_PROJECT=``) never shadows a real value from ``.env``.
 try:
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv, dotenv_values
+    import os as _os
     import pathlib as _pathlib
 
     _repo_root = _pathlib.Path(__file__).parent
-    load_dotenv(_repo_root / ".env.dev", override=False)  # dev-specific vars (e.g. IS_GCP)
-    load_dotenv(_repo_root / ".env", override=False)       # base vars
+    load_dotenv(_repo_root / ".env", override=False)  # base vars
+    for _k, _v in dotenv_values(_repo_root / ".env.dev").items():
+        if _v is not None and str(_v).strip() != "":
+            _os.environ[_k] = _v  # dev override, non-empty only
 except ImportError:
     pass  # dotenv not installed, rely on shell environment
 

@@ -247,8 +247,12 @@ uv run python -m pytest tests/test_langchain_agents.py -v
 | Provider key | Model | Pricing ($/1M tokens in/out) |
 |---|---|---|
 | `claude-sonnet` | `claude-sonnet-4-6` | $3 / $15 |
-| `claude-opus` | `claude-opus-4-7` | $5 / $25 |
+| `claude-opus` | `claude-opus-4-8` | $5 / $25 |
 | `grok-4.3` | `grok-4.3` | $1.25 / $2.50 |
+| `gemini-vertex` | `gemini-3.6-flash` **(default)** | ~$1.50 / $9 |
+| `gemini-vertex` | `gemini-3.5-flash` | ~$1.50 / $9 |
+| `gemini-vertex` | `gemini-2.5-pro` | ~$2 / $12 |
+| `claude-vertex` | `claude-sonnet-4-6` (via Vertex) | $3 / $15 |
 | `openai` | `gpt-4o` | $2.50 / $10 |
 | `ollama` | `llama2:13b` | local |
 
@@ -256,6 +260,18 @@ Default routing model: `grok-4.3` (set in `router.py:DEFAULT_ROUTING_MODEL`).
 
 > ⚠️ Old Grok models (`grok-4-1-fast-*`, `grok-code-fast`) retire **May 15 2026**.
 > They are mapped to `grok-4.3` in `create_llm_manager()` for backwards compat.
+
+**Gemini / Vertex AI setup** — Gemini 3.x models are served exclusively on the
+Vertex **global endpoint** and require REST transport. Set the following in your
+`.env`:
+```
+VERTEX_PROJECT=your-gcp-project-id
+GLOBAL_SERVICE=true
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/adc.json  # or use gcloud ADC
+```
+`GLOBAL_SERVICE=true` makes both `GeminiVertexLLM` and `ClaudeVertexLLM` target
+`location=global`, `api_endpoint=aiplatform.googleapis.com`, `api_transport=rest`.
+Without it the regional endpoint is used (required for older Gemini 1.x models).
 
 ---
 

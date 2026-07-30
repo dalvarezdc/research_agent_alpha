@@ -377,6 +377,17 @@ class ClaudeLLM(LLMInterface):
 class OpenAILLM(LLMInterface):
     """OpenAI LLM implementation"""
 
+    # Maximum completion tokens per OpenAI model. The shared LLMConfig default
+    # (32k) exceeds what some models accept (e.g. gpt-4o caps at 16,384), which
+    # otherwise causes a 400 "max_tokens is too large" error on every call.
+    _MODEL_MAX_COMPLETION_TOKENS = {
+        "gpt-4o": 16_384,
+        "gpt-4o-mini": 16_384,
+        "gpt-4-turbo": 4_096,
+        "gpt-4-turbo-preview": 4_096,
+        "gpt-3.5-turbo": 4_096,
+    }
+
     def __init__(self, config: LLMConfig):
         self.config = config
         self.logger = logging.getLogger(__name__)
@@ -386,12 +397,24 @@ class OpenAILLM(LLMInterface):
                 "ChatOpenAI not available. Install langchain-openai: pip install langchain-openai"
             )
 
+        # Clamp max_tokens to the model's completion-token ceiling if known.
+        ceiling = self._MODEL_MAX_COMPLETION_TOKENS.get(config.model)
+        effective_max_tokens = config.max_tokens
+        if ceiling is not None and effective_max_tokens > ceiling:
+            self.logger.info(
+                "Clamping max_tokens for %s from %d to model ceiling %d",
+                config.model,
+                effective_max_tokens,
+                ceiling,
+            )
+            effective_max_tokens = ceiling
+
         try:
             self.client = ChatOpenAI(
                 openai_api_key=config.api_key or os.getenv("OPENAI_API_KEY"),
                 model=config.model,
                 temperature=config.temperature,
-                max_tokens=config.max_tokens,
+                max_tokens=effective_max_tokens,
                 timeout=config.timeout,
             )
         except Exception as e:
@@ -754,16 +777,24 @@ class ClaudeVertexLLM(LLMInterface):
                 "VERTEX_PROJECT env var is required for ClaudeVertexLLM. "
                 "Set it to your GCP project ID (e.g. 'my-gcp-project-123')."
             )
-        location = os.getenv("VERTEX_LOCATION", "us-east5")
+
+        # Global-endpoint mode: mirrors GeminiVertexLLM behaviour.
+        _global = os.getenv("GLOBAL_SERVICE", "").lower() in ("true", "1", "yes")
+        location = "global" if _global else os.getenv("VERTEX_LOCATION", "us-east5")
+
+        client_kwargs: Dict[str, Any] = dict(
+            model=config.model,
+            project=project,
+            location=location,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+        )
+        # ChatAnthropicVertex does not expose api_transport but we leave the
+        # location set to "global" when GLOBAL_SERVICE is true so callers can
+        # use Claude 3.x models served on the global Vertex endpoint.
 
         try:
-            self.client = ChatAnthropicVertex(
-                model=config.model,
-                project=project,
-                location=location,
-                temperature=config.temperature,
-                max_tokens=config.max_tokens,
-            )
+            self.client = ChatAnthropicVertex(**client_kwargs)
         except Exception as e:
             self.logger.warning(f"Failed to initialize ClaudeVertex client: {e}")
             self.client = None
@@ -831,7 +862,40 @@ class ClaudeVertexLLM(LLMInterface):
 
 
 class GeminiVertexLLM(LLMInterface):
-    """Gemini on Google Cloud Vertex AI (uses ADC / service account)."""
+    """Gemini on Google Cloud Vertex AI (uses ADC / service account).
+
+    Global endpoint:
+        Set ``GLOBAL_SERVICE=true`` in your environment to route requests through
+        the Vertex AI global endpoint (``aiplatform.googleapis.com``) with REST
+        transport.  This is required for Gemini 3.x models (gemini-3.5-flash,
+        gemini-3.6-flash, etc.) which are not served by regional endpoints.
+        When false/absent, the legacy regional endpoint is used (us-central1
+        default, or whatever ``VERTEX_LOCATION`` specifies).
+    """
+
+    @staticmethod
+    def _extract_text(content: Any) -> str:
+        """Normalise Gemini response content to a plain string.
+
+        Gemini 3.x thinking models return a list of content parts::
+
+            [{'type': 'text', 'text': 'OK', 'thought_signature': '...'}, ...]
+
+        This helper concatenates every part whose ``type`` is ``'text'``,
+        ignoring reasoning/thought parts, and returns a plain string.  If
+        ``content`` is already a string it is returned unchanged.
+        """
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = [
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("type") == "text"
+            ]
+            return "".join(parts)
+        # Fallback: coerce whatever we got
+        return str(content) if content is not None else ""
 
     def __init__(self, config: LLMConfig):
         self.config = config
@@ -849,7 +913,13 @@ class GeminiVertexLLM(LLMInterface):
                 "VERTEX_PROJECT env var is required for GeminiVertexLLM. "
                 "Set it to your GCP project ID (e.g. 'my-gcp-project-123')."
             )
-        location = os.getenv("VERTEX_LOCATION", "us-central1")
+
+        # Global-endpoint mode: required for Gemini 3.x models.
+        _global = os.getenv("GLOBAL_SERVICE", "").lower() in ("true", "1", "yes")
+        if _global:
+            location = "global"
+        else:
+            location = os.getenv("VERTEX_LOCATION", "us-central1")
 
         # Resolve reasoning effort -> thinking_budget (Gemini 3.x supports thinking).
         thinking_budget = config.thinking_budget()
@@ -860,6 +930,11 @@ class GeminiVertexLLM(LLMInterface):
             temperature=config.temperature,
             max_output_tokens=config.max_tokens,
         )
+        if _global:
+            # REST transport is required for the global endpoint; gRPC hangs.
+            client_kwargs["api_endpoint"] = "aiplatform.googleapis.com"
+            client_kwargs["api_transport"] = "rest"
+
         if thinking_budget is not None:
             # ChatVertexAI accepts thinking_budget natively and nests it into
             # the request's thinking_config. -1 = dynamic, 0 = disabled.
@@ -931,7 +1006,11 @@ class GeminiVertexLLM(LLMInterface):
                     )
                 token_usage.total_tokens = token_usage.input_tokens + token_usage.output_tokens
 
-            return response.content, token_usage
+            # Gemini 3.x thinking models return content as a list of parts rather
+            # than a plain string.  Normalise to str so all downstream consumers
+            # (JSON parser, layered report builder, etc.) work unchanged.
+            text = self._extract_text(response.content)
+            return text, token_usage
 
         except Exception as e:
             self.logger.error(f"GeminiVertex API error: {e}")
@@ -1199,7 +1278,7 @@ def create_llm_manager(
     elif primary_provider == "gemini-vertex":
         configs.append(LLMConfig(
             provider=LLMProvider.GEMINI_VERTEX,
-            model="gemini-3.5-flash",
+            model="gemini-3.6-flash",
             temperature=0.1,
             reasoning_effort=DEFAULT_REASONING_EFFORT,
         ))
@@ -1282,7 +1361,7 @@ def create_llm_manager(
         elif provider == "gemini-vertex":
             configs.append(LLMConfig(
                 provider=LLMProvider.GEMINI_VERTEX,
-                model="gemini-3.5-flash",
+                model="gemini-3.6-flash",
                 temperature=0.1,
                 reasoning_effort=DEFAULT_REASONING_EFFORT,
             ))
@@ -1320,9 +1399,10 @@ def get_available_models() -> dict[str, str]:
         "gpt-3.5-turbo": "openai",
         # ── Local models ──────────────────────────────────────────────────────
         "llama2:13b": "ollama",
-        # ── Google Vertex AI — current ────────────────────────────────────────
-        "gemini-3.5-flash": "gemini-vertex",   # current Flash, supports reasoning levels
-        "gemini-3.1-pro": "gemini-vertex",     # current Pro
+        # ── Google Vertex AI — current (global endpoint, GLOBAL_SERVICE=true) ──
+        "gemini-3.6-flash": "gemini-vertex",   # default — fastest current Flash
+        "gemini-3.5-flash": "gemini-vertex",   # stable Flash
+        "gemini-2.5-pro": "gemini-vertex",     # current Pro (confirmed on global endpoint)
         # Google Vertex AI — legacy (>1yr old, hidden from menu)
         "gemini-1.5-pro": "gemini-vertex",
         # ── Claude on Vertex AI ───────────────────────────────────────────────
@@ -1357,9 +1437,10 @@ MODEL_METADATA: dict[str, dict[str, str]] = {
     "gpt-3.5-turbo": {"supplier": "OpenAI", "release_date": "2023-03-01"},
     # ── Meta (local via Ollama) ───────────────────────────────────────────────
     "llama2:13b": {"supplier": "Meta (local)", "release_date": "2023-07-18"},
-    # ── Google (Vertex AI) ────────────────────────────────────────────────────
+    # ── Google (Vertex AI, global endpoint) ──────────────────────────────────
+    "gemini-3.6-flash": {"supplier": "Google", "release_date": "2026-06-01"},
     "gemini-3.5-flash": {"supplier": "Google", "release_date": "2026-04-01"},
-    "gemini-3.1-pro": {"supplier": "Google", "release_date": "2026-03-15"},
+    "gemini-2.5-pro": {"supplier": "Google", "release_date": "2026-01-01"},
     "gemini-1.5-pro": {"supplier": "Google", "release_date": "2024-02-15"},
     # Claude served via Google Vertex AI
     "claude-opus-4-8-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-05-01"},
@@ -1491,8 +1572,8 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
 
     # Create LLM manager for this provider. Pass the explicit model ID so a
     # provider that serves multiple models (e.g. "gemini-vertex" ->
-    # gemini-3.5-flash / gemini-3.1-pro) honors the exact model requested
-    # instead of falling back to that provider's default model.
+    # gemini-3.6-flash / gemini-3.5-flash / gemini-2.5-pro) honors the exact
+    # model requested instead of falling back to that provider's default model.
     try:
         llm_manager = create_llm_manager(
             primary_provider=provider_name,

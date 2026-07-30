@@ -107,12 +107,14 @@ PRICING = {
     "grok-4-fast-non-reasoning": {"input": 0.20, "output": 0.50},
     "grok-code-fast": {"input": 0.20, "output": 1.50},
     "grok-4-0709": {"input": 3.00, "output": 15.00},
-    # ── Google Gemini (Vertex AI) ─────────────────────────────────────────────
-    # gemini-3.5-flash: $1.50/1M input, $9.00/1M output (Global tier, flat;
+    # ── Google Gemini (Vertex AI, global endpoint) ───────────────────────────
+    # gemini-3.6-flash: $1.50/1M input, $9.00/1M output (Global tier, flat;
     #   cached input $0.15). Output price includes reasoning/thinking tokens.
+    "gemini-3.6-flash": {"input": 1.50, "output": 9.00, "cache_read": 0.15},
+    # gemini-3.5-flash: same pricing tier as 3.6-flash
     "gemini-3.5-flash": {"input": 1.50, "output": 9.00, "cache_read": 0.15},
-    # gemini-3.1-pro: $2.00/1M input (<=200k), $12.00/1M output (Global tier)
-    "gemini-3.1-pro": {"input": 2.00, "output": 12.00, "cache_read": 0.20},
+    # gemini-2.5-pro: $2.00/1M input (<=200k), $12.00/1M output (Global tier)
+    "gemini-2.5-pro": {"input": 2.00, "output": 12.00, "cache_read": 0.20},
     # gemini-1.5-pro (legacy): $1.25/1M input, $5.00/1M output (<= 128k tokens)
     "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
     # Default
