@@ -3,9 +3,9 @@
 This file consolidates the essential rules, patterns, and agent architecture for
 anyone (human or AI assistant) working on this repository.
 
-> **Supersedes:** `README_FOR_LLM_DEVELOPMENT.md`, `README_IMPROVEMENTS.md`,
-> `REFERENCE_VALIDATION_INTEGRATION.md` (those files are kept for historical
-> reference but this file is the authoritative current source).
+> **Supersedes:** the former `README_FOR_LLM_DEVELOPMENT.md`,
+> `README_IMPROVEMENTS.md`, and `REFERENCE_VALIDATION_INTEGRATION.md` (now
+> removed). This file is the authoritative current source.
 
 ---
 
@@ -323,12 +323,11 @@ reports via the shared helpers. All agents optionally produce `audit.json` when
 
 ---
 
-## Deprecated / archived docs
+## Authoritative docs
 
-| File | Why kept | Do not use for |
-|------|----------|---------------|
-| `README_FOR_LLM_DEVELOPMENT.md` | Historical patterns reference | Current model IDs, CLI flags, architecture |
-| `README_IMPROVEMENTS.md` | Historical roadmap | Current status of features (many are wrong) |
-| `REFERENCE_VALIDATION_INTEGRATION.md` | Reference validation API docs | Integration status (validation_report is not read by orchestrator) |
+The former `README_FOR_LLM_DEVELOPMENT.md`, `README_IMPROVEMENTS.md`, and
+`REFERENCE_VALIDATION_INTEGRATION.md` have been **removed** — their content was
+outdated (wrong model IDs, stale roadmap, incorrect integration status).
 
-Use `pending.md` for current gaps and this file (`AGENTS.md`) for current patterns.
+Use `README.md` for user-facing usage, `pending.md` for current gaps, and this
+file (`AGENTS.md`) for current architecture and development patterns.
