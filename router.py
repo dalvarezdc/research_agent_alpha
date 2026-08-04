@@ -23,20 +23,25 @@ from llm_integrations import (
 from check_llms import print_llm_status
 from observability import setup_phoenix, get_tracer
 
-# Load environment variables: .env.dev first (dev-specific), then .env (base)
+# Load environment variables. Base ``.env`` provides canonical values; optional
+# ``.env.dev`` overlays dev overrides, but ONLY for non-empty values so an empty
+# placeholder in ``.env.dev`` never shadows a real value from ``.env``.
 try:
-    from dotenv import load_dotenv as _load_dotenv
+    from dotenv import load_dotenv as _load_dotenv, dotenv_values as _dotenv_values
+    import os as _os
     import pathlib as _pathlib
 
     _repo_root = _pathlib.Path(__file__).parent
-    _load_dotenv(_repo_root / ".env.dev", override=False)  # dev-specific vars
-    _load_dotenv(_repo_root / ".env", override=False)       # base vars (don't overwrite)
+    _load_dotenv(_repo_root / ".env", override=False)  # base vars
+    for _k, _v in _dotenv_values(_repo_root / ".env.dev").items():
+        if _v is not None and str(_v).strip() != "":
+            _os.environ[_k] = _v  # dev override, non-empty only
 except ImportError:
     pass  # python-dotenv not installed, rely on shell environment
 
 
-# Default model for routing — grok-4.3 is the current xAI flagship
-DEFAULT_ROUTING_MODEL = "grok-4.3"
+# Default model for routing — grok-4.5 is the current xAI flagship
+DEFAULT_ROUTING_MODEL = "grok-4.5"
 
 # Maximum characters of document context passed to agents (prevents context overflow)
 MAX_DOCUMENT_CONTEXT_CHARS = 100_000
@@ -325,7 +330,7 @@ def main():
 
     # Map model to provider name for orchestrator
     available_models_dict = get_available_models()
-    llm_provider = available_models_dict.get(selected_model, "grok-4.3")
+    llm_provider = available_models_dict.get(selected_model, "grok-4.5")
 
     print("\nCommands:")
     print("  - Type a query to route and execute it")
@@ -367,7 +372,7 @@ def main():
                     if 0 <= model_idx < len(available_models):
                         selected_model = available_models[model_idx]
                         # Update llm_provider for new model
-                        llm_provider = available_models_dict.get(selected_model, "grok-4.3")
+                        llm_provider = available_models_dict.get(selected_model, "grok-4.5")
                         print(f"→ Switched to model: {selected_model} (provider: {llm_provider})\n")
                     else:
                         print(f"Invalid model number. Use 1-{len(available_models)}\n")

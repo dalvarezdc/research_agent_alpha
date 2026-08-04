@@ -452,7 +452,7 @@ When adding new validators or features:
 1. Follow existing patterns in `core/base_validator.py`
 2. Add tests in `tests/`
 3. Update this README
-4. Follow repository coding standards in `README_FOR_LLM_DEVELOPMENT.md`
+4. Follow repository coding standards in `AGENTS.md`
 
 ## License
 

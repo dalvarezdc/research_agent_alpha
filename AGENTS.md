@@ -3,9 +3,9 @@
 This file consolidates the essential rules, patterns, and agent architecture for
 anyone (human or AI assistant) working on this repository.
 
-> **Supersedes:** `README_FOR_LLM_DEVELOPMENT.md`, `README_IMPROVEMENTS.md`,
-> `REFERENCE_VALIDATION_INTEGRATION.md` (those files are kept for historical
-> reference but this file is the authoritative current source).
+> **Supersedes:** the former `README_FOR_LLM_DEVELOPMENT.md`,
+> `README_IMPROVEMENTS.md`, and `REFERENCE_VALIDATION_INTEGRATION.md` (now
+> removed). This file is the authoritative current source.
 
 ---
 
@@ -59,6 +59,36 @@ pending.md                   # Known gaps and planned work
 | `diagnostic_agent` | `MedicalDiagnosticAgent` | Bayesian + LLM symptom-to-condition pipeline |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
 
+All four agents extend `LangChainAgentBase` and share cost tracking, audit
+logging, `_parse_json`, web research, and the **layered-report helpers** below.
+
+---
+
+## Layered reporting (shared across all agents)
+
+`LangChainAgentBase` provides progressive-disclosure report construction reused
+by every agent, so nothing from the analysis is silently discarded:
+
+- **Layer 1 — Conclusions** (what readers value; first)
+- **Layer 2 — Reasoning** (the logic behind the conclusions)
+- **Layer 3 — Statistical Appendix** (precise numbers / evidence grading; last, optional)
+
+Helpers (`langchain_agents/base.py`):
+- `_layer_plain_language(body, framing=...)` — one LLM call producing plain-language
+  Layers 1-2, preserving inline `[n]` citation markers.
+- `_build_statistical_appendix(sections)` — assembles Layer 3 **deterministically**
+  from labelled quantitative groups (numbers are never dropped/hallucinated).
+- `_build_layered_report(conclusions_and_reasoning=..., appendix=...)` — returns
+  `(patient, practitioner)`; the patient variant omits Layer 3 and points to the
+  practitioner report; the practitioner variant appends it.
+- `_verify_no_silent_loss(output, must_survive)` — logs + audits any key item that
+  fails to survive into the layered output.
+
+Each agent emits a **patient report** (Layers 1-2) and a **practitioner report**
+(Layers 1-3). Critical safety content (e.g. medication black-box warnings,
+diagnostic Bayesian posteriors) is placed in the deterministic appendix so it is
+guaranteed present regardless of LLM phrasing.
+
 ---
 
 ## Fact-checker pipeline (current, LangChain implementation)
@@ -77,14 +107,28 @@ start_analysis(subject)
 │            M = Mainstream  N = Naturist  B = Biohacker  A = Balanced (default)
 │
 ├── Phase 4  Three Parallel Perspective Agents  (ThreadPoolExecutor max_workers=3)
-│   ├── Mainstream LLM call  → _PerspectiveOutput {findings, recs, key_insight, citations}
+│   ├── Mainstream LLM call  → _PerspectiveOutput {findings, recs, key_insight,
+│   │                            citations, statistical_details}
 │   ├── Naturist   LLM call  → _PerspectiveOutput
 │   └── Biohacker  LLM call  → _PerspectiveOutput
 │   + Assembler LLM call → merged markdown with "Your Focus" summary at top
 │   Total: 4 LLM calls in Phase 4
+│   NOTE: perspective findings are passed to the assembler in FULL (no [:500]
+│         truncation); length is bounded at generation instead. The structured
+│         perspectives are also stored in PhaseResult.content["perspectives"] so
+│         Phase 5 can build a lossless layered report.
 │
-└── Phase 5  Simplification
-    Body only passed in (references split out upstream)
+└── Phase 5  Layered Assembly (progressive disclosure — nothing is discarded)
+    Body + structured Phase 2 / Phase 4 content passed in (references split upstream)
+    Produces TWO documents via one LLM call + deterministic appendix:
+      • simplified_output    → patient report:  Layer 1 Conclusions → Layer 2 Reasoning
+      • practitioner_layered → practitioner:    Layers 1-2 + Layer 3 Statistical Appendix
+    Layer ordering: Conclusions (what users value) → Reasoning (the logic) →
+      Statistical Appendix (effect sizes / CIs / p-values / evidence grading; last).
+    The Statistical Appendix is built DETERMINISTICALLY in Python from
+      statistical_details + Phase 2 fields, so numbers are never dropped/hallucinated.
+    A verification guard logs (and audits) any perspective key_insight that fails
+      to survive into the practitioner layer.
     Lens-aware framing (clinical / nature-first / optimization / balanced)
     References re-attached verbatim after Phase 5 output
 ```
@@ -203,15 +247,32 @@ uv run python -m pytest tests/test_langchain_agents.py -v
 | Provider key | Model | Pricing ($/1M tokens in/out) |
 |---|---|---|
 | `claude-sonnet` | `claude-sonnet-4-6` | $3 / $15 |
-| `claude-opus` | `claude-opus-4-7` | $5 / $25 |
+| `claude-opus` | `claude-opus-4-8` | $5 / $25 |
+| `grok-4.5` | `grok-4.5` | $3 / $15 |
 | `grok-4.3` | `grok-4.3` | $1.25 / $2.50 |
+| `gemini-vertex` | `gemini-3.6-flash` **(default)** | ~$1.50 / $9 |
+| `gemini-vertex` | `gemini-3.5-flash` | ~$1.50 / $9 |
+| `gemini-vertex` | `gemini-2.5-pro` | ~$2 / $12 |
+| `claude-vertex` | `claude-sonnet-4-6` (via Vertex) | $3 / $15 |
 | `openai` | `gpt-4o` | $2.50 / $10 |
 | `ollama` | `llama2:13b` | local |
 
-Default routing model: `grok-4.3` (set in `router.py:DEFAULT_ROUTING_MODEL`).
+Default routing model: `grok-4.5` (set in `router.py:DEFAULT_ROUTING_MODEL`).
 
 > ⚠️ Old Grok models (`grok-4-1-fast-*`, `grok-code-fast`) retire **May 15 2026**.
-> They are mapped to `grok-4.3` in `create_llm_manager()` for backwards compat.
+> They are mapped to `grok-4.5` in `create_llm_manager()` for backwards compat.
+
+**Gemini / Vertex AI setup** — Gemini 3.x models are served exclusively on the
+Vertex **global endpoint** and require REST transport. Set the following in your
+`.env`:
+```
+VERTEX_PROJECT=your-gcp-project-id
+GLOBAL_SERVICE=true
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/adc.json  # or use gcloud ADC
+```
+`GLOBAL_SERVICE=true` makes both `GeminiVertexLLM` and `ClaudeVertexLLM` target
+`location=global`, `api_endpoint=aiplatform.googleapis.com`, `api_transport=rest`.
+Without it the regional endpoint is used (required for older Gemini 1.x models).
 
 ---
 
@@ -250,20 +311,23 @@ All files written to `outputs/` with `{subject}_{type}_{timestamp}` naming.
 
 | Agent | Files produced |
 |-------|---------------|
-| Procedure | `reasoning_trace.json`, `analysis_result.json`, `practitioner_report.md+pdf`, `summary_report.md+pdf`, `cost_report.json` |
-| Medication | `medication_analysis.json`, `practitioner_report.md+pdf`, `medication_summary.md+pdf`, `medication_detailed.md+pdf`, `cost_report.json` |
-| Fact-checker | `session.json`, `practitioner_report.md+pdf`, `patient_report.md+pdf`, `summary.md+pdf`, `cost_report.json` |
+| Procedure | `reasoning_trace.json`, `analysis_result.json`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `summary_report.md+pdf`, `cost_report.json` |
+| Medication | `medication_analysis.json`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `medication_summary.md+pdf`, `medication_detailed.md+pdf`, `cost_report.json` |
+| Fact-checker | `session.json`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `summary.md+pdf`, `cost_report.json` |
+| Diagnostic | `diagnostic.json`, `diagnostic_report.md+pdf`, `practitioner_report.md+pdf` (layered), `patient_report.md+pdf` (layered), `cost_report` (in session) |
 
-All agents optionally produce `audit.json` when `agent.audit_events` is present.
+All agents produce **layered** patient (Layers 1-2) and practitioner (Layers 1-3)
+reports via the shared helpers. All agents optionally produce `audit.json` when
+`agent.audit_events` is present. Procedure / medication / diagnostic now collect
+`references` and route them through the orchestrator URL-validation path.
 
 ---
 
-## Deprecated / archived docs
+## Authoritative docs
 
-| File | Why kept | Do not use for |
-|------|----------|---------------|
-| `README_FOR_LLM_DEVELOPMENT.md` | Historical patterns reference | Current model IDs, CLI flags, architecture |
-| `README_IMPROVEMENTS.md` | Historical roadmap | Current status of features (many are wrong) |
-| `REFERENCE_VALIDATION_INTEGRATION.md` | Reference validation API docs | Integration status (validation_report is not read by orchestrator) |
+The former `README_FOR_LLM_DEVELOPMENT.md`, `README_IMPROVEMENTS.md`, and
+`REFERENCE_VALIDATION_INTEGRATION.md` have been **removed** — their content was
+outdated (wrong model IDs, stale roadmap, incorrect integration status).
 
-Use `pending.md` for current gaps and this file (`AGENTS.md`) for current patterns.
+Use `README.md` for user-facing usage, `pending.md` for current gaps, and this
+file (`AGENTS.md`) for current architecture and development patterns.

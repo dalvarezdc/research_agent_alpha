@@ -45,7 +45,7 @@ def test_models_endpoint():
     assert response.status_code == 200
     models = response.json()
     assert "grok-4.3" in models
-    assert "gpt-4o" in models
+    assert "claude-sonnet-4-6" in models
 
 
 @patch("api.route_agent")

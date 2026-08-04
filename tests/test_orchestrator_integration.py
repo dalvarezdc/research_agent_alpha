@@ -60,11 +60,10 @@ def check_api_keys():
 
     # Select model based on available API keys
     if has_grok:
-        return "grok-4-1-fast-non-reasoning-latest"
-    elif has_openai:
-        return "gpt-4o-mini"
+        return "grok-4.5"
     elif has_anthropic:
-        return "claude-sonnet-4-5-20250929"
+        return "claude-sonnet-4-6"
+    return "grok-4.5"
 
 
 def test_routing_only():
@@ -124,7 +123,7 @@ def test_full_execution():
     from llm_integrations import get_available_models
 
     available_models_dict = get_available_models()
-    llm_provider = available_models_dict.get(model, "grok-4-1-fast")
+    llm_provider = available_models_dict.get(model, "grok-4.5")
 
     test_query = "paracetamol"
 

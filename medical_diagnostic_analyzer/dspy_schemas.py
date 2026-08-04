@@ -19,3 +19,4 @@ class DiagnosticReport(BaseModel):
     recommended_next_steps: List[str] = Field(description="Clinical next steps (e.g. see GP, go to ER)")
     suggested_agent: str = Field(description="The next agent to route to: 'medication_agent' or 'procedure_agent'")
     routing_rationale: str = Field(description="Why this specific agent is recommended for follow-up")
+    references: List[str] = Field(default_factory=list, description="APA 7 citations (with DOI/PMID/URL) supporting the reasoning")

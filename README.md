@@ -10,24 +10,28 @@ in real clinical data.
 ## Table of Contents
 
 1. [What it does](#what-it-does)
-2. [Installation](#installation)
-3. [Quick start](#quick-start)
-4. [Interactive router](#interactive-router)
+2. [Architecture](#architecture)
+   - [System architecture](#system-architecture)
+   - [Agent pipeline](#agent-pipeline)
+   - [Fact-checker pipeline](#fact-checker-pipeline)
+3. [Installation](#installation)
+4. [Quick start](#quick-start)
+5. [Interactive router](#interactive-router)
    - [Starting a session](#starting-a-session)
    - [Attaching a document](#attaching-a-document)
    - [Router commands](#router-commands)
-5. [Direct CLI](#direct-cli)
+6. [Direct CLI](#direct-cli)
    - [Procedure analyzer](#procedure-analyzer)
    - [Medication analyzer](#medication-analyzer)
    - [Fact checker](#fact-checker)
    - [Diagnostic analyzer](#diagnostic-analyzer)
-6. [REST API](#rest-api)
-7. [Document parsing](#document-parsing)
-8. [Output files](#output-files)
-9. [Configuration](#configuration)
-10. [Python API](#python-api)
-11. [Observability](#observability)
-12. [Troubleshooting](#troubleshooting)
+7. [REST API](#rest-api)
+8. [Document parsing](#document-parsing)
+9. [Output files](#output-files)
+10. [Configuration](#configuration)
+11. [Python API](#python-api)
+12. [Observability](#observability)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -47,15 +51,178 @@ can also drive any agent directly from the CLI or REST API.
 
 ---
 
+## Architecture
+
+Three views of the system, from the outside in. Diagram 1 shows the whole
+platform with the agent reasoning treated as a black box; Diagrams 2 and 3 open
+that box up — first the generic per-agent flow, then the fact-checker's concrete
+five-phase pipeline.
+
+Conventions: **solid arrows** are the primary data flow; **dotted arrows** are
+cross-cutting concerns (tracing, cost accounting, injected web context, static
+file serving, best-effort persistence).
+
+### System architecture
+
+Every entry point converges on the `AgentOrchestrator`, which drives one agent
+and a set of shared services, then writes artifacts to `outputs/` and (best
+effort) to the database.
+
+```mermaid
+flowchart TB
+    subgraph Clients["Entry points"]
+        CLI["Direct CLI<br/>run_analysis.py"]
+        RT["Interactive router<br/>router.py"]
+        API["REST API - api.py (FastAPI)<br/>/route /analyze /analyze/async /parse /jobs<br/>async job store: in-memory jobs dict"]
+    end
+
+    DP["📄 document_parser<br/>PDF·docx·txt·md·rtf·doc → markdown"]
+    Clients -->|optional file| DP
+
+    RT --> ROUTE
+    API --> ROUTE
+    CLI -->|explicit agent| ORCH
+    DP -->|document context| ORCH
+
+    ROUTE{"Router LLM<br/>route_agent()"} -->|selected agent id| ORCH
+
+    ORCH["AgentOrchestrator<br/>run_analysis.py"] --> AGENT
+
+    subgraph Services["Shared services"]
+        WEB["🌐 Web research<br/>Tavily → SerpAPI → DuckDuckGo"]
+        COST["💰 CostTracker<br/>per-phase tokens and cost"]
+        TRACE["🔭 Observability<br/>Phoenix + OpenTelemetry<br/>(LangSmith optional alternate)"]
+    end
+
+    AGENT["🧠 Agent LLM pipeline<br/>(black box — see Diagrams 2 and 3)"]
+    WEB -.->|web context| AGENT
+    AGENT -.-> COST
+    AGENT -.-> TRACE
+    ROUTE -.-> TRACE
+
+    AGENT --> REFVAL["🔗 Reference validation<br/>CitationURLCorrespondenceValidator"]
+    REFVAL <--> RVC["🗄️ SQLite cache<br/>cache/reference_validation.db (30-day TTL)"]
+
+    REFVAL --> DISC["Hardcoded medical disclaimer"]
+    DISC --> FILES["📁 outputs/<br/>patient·practitioner·summary .md/.pdf<br/>result/session .json · cost_report.json · audit.json"]
+
+    ORCH -.->|_persist_report_to_db - best-effort, gated| DB
+    FILES --> DB[("🗃️ SQLAlchemy DB - SQLite / Postgres<br/>users·subjects·reports·report_files·patient_data<br/>Alembic migrations")]
+
+    FILES -.->|/outputs static mount| API
+```
+
+Notes:
+
+- **DB persistence is best-effort and gated** by `DB_PERSISTENCE_ENABLED`. A
+  failure logs a warning and never blocks a run — `outputs/` is the source of truth.
+- **Phoenix tracing fails silently** if the port is unavailable. LangSmith is an
+  optional alternate enabled via `LANGCHAIN_TRACING_V2`.
+- **Web research is a priority chain**: Tavily → SerpAPI → DuckDuckGo (the free
+  fallback needs no key).
+- **Async jobs** are stored in an in-memory, thread-safe dict in the API — poll
+  `/jobs/{id}` for status. Generated files are served back via the `/outputs`
+  static mount.
+
+### Agent pipeline
+
+The generic flow inside the black box, shared by all four agents. Reasoning
+phases are agent-specific (Diagram 3 shows one concrete example); the prompt →
+LLM → validate → references → layered-report tail is common.
+
+```mermaid
+flowchart TD
+    IN["Subject + context<br/>+ web context + document context"] --> BUILD["Build prompt<br/>system + user templates"]
+    BUILD --> OVR["_apply_provider_overrides()<br/>(Grok-specific injection)"]
+    OVR --> CALL["_call_llm() → provider adapter<br/>Claude · OpenAI · Grok · Gemini/Vertex · Ollama"]
+    CALL --> PARSE["_parse_json()"]
+    PARSE --> VALID["Pydantic model_validate()<br/>(fallback to empty model)"]
+    VALID --> PHASES{"Agent-specific phases<br/>procedure · medication · diagnostic · fact-check"}
+    PHASES -->|references per phase| REFS["PhaseResult.references"]
+    PHASES --> LAYER["Layered report helpers<br/>_build_layered_report()"]
+    LAYER --> L1["Layer 1 — Conclusions"]
+    LAYER --> L2["Layer 2 — Reasoning"]
+    LAYER --> L3["Layer 3 — Statistical Appendix<br/>(deterministic)"]
+    CALL -.->|"@track_cost"| COST["💰 CostTracker"]
+```
+
+Every agent produces a **patient report** (Layers 1-2) and a **practitioner
+report** (Layers 1-3). Critical safety content is placed in the deterministic
+Layer 3 appendix so it is guaranteed present regardless of LLM phrasing.
+
+### Fact-checker pipeline
+
+The richest concrete pipeline: five phases with interactive gates, three
+parallel perspective agents, and a lossless layered assembly.
+
+```mermaid
+flowchart TD
+    S["start_analysis(subject)"] --> WC["Build web context"]
+    WC --> P1
+
+    P1["Phase 1 — Conflict Scan<br/>official vs counter-narrative + refs"] --> U1{"User: Official / Independent / Both"}
+    U1 --> P2["Phase 2 — Evidence Audit<br/>funding bias · methodology · recency"]
+    P2 --> U2{"User: Dig / Proceed"}
+    U2 --> P3["Phase 3 — Synthesis<br/>biological truth · industry bias · grey zone"]
+    P3 --> U3{"User lens: M / N / B / A"}
+
+    U3 --> P4["Phase 4 — Multi-Perspective (4 LLM calls)"]
+
+    subgraph P4G["Phase 4 — ThreadPoolExecutor (max_workers=3)"]
+        direction LR
+        M["🏥 Mainstream LLM"]
+        N["🌿 Naturist LLM"]
+        B["🚀 Biohacker LLM"]
+    end
+    P4 --> P4G
+    P4G --> ASM["Assembler LLM<br/>merged markdown + 'Your Focus'"]
+
+    ASM --> SPLIT["Split body / references"]
+    SPLIT --> P5["Phase 5 — Layered Assembly"]
+
+    subgraph P5G["Phase 5 — Progressive disclosure"]
+        direction TB
+        L12["LLM: Layer 1 Conclusions +<br/>Layer 2 Reasoning (plain language)"]
+        L3f["Deterministic: Layer 3<br/>Statistical Appendix (Python, lossless)"]
+        GUARD["Verification guard<br/>_verify_no_silent_loss()"]
+    end
+    P5 --> P5G
+
+    P5G --> PAT["Patient report<br/>Layers 1-2"]
+    P5G --> PRAC["Practitioner report<br/>Layers 1-3"]
+    SPLIT -.->|references re-attached verbatim| PAT
+    SPLIT -.->|references re-attached verbatim| PRAC
+```
+
+Interactive gates use sensible defaults in non-interactive mode (`Both` →
+`Proceed` → `Balanced` lens). The other three agents share the same
+collect-references → validate → layered-report tail with their own phases.
+
+---
+
 ## Installation
 
-Requirements: **Python 3.12+** and the **[uv](https://docs.astral.sh/uv/)** package manager.
+Requirements: **Python 3.12+** and the **[uv](https://docs.astral.sh/uv/)** package manager (recommended).
+
+### Quick setup (recommended)
+
+Run the automated setup script to check Python version, install dependencies, initialize `.env`, and create workspace directories:
 
 ```bash
 # Clone and enter the repository
 git clone <repo-url>
 cd research_agent_alpha
 
+# Run automated setup
+chmod +x setup.sh
+./setup.sh
+```
+
+### Manual installation
+
+Alternatively, install dependencies manually:
+
+```bash
 # Install core dependencies
 uv sync
 
@@ -68,11 +235,11 @@ uv sync --extra dev
 
 ### API keys
 
-Set at least one provider key. The default model is `grok-4.3` (xAI):
+Set at least one provider key. The default routing model is `grok-4.5` (xAI):
 
 ```bash
 # .env or shell
-XAI_API_KEY="your-xai-key"           # grok-4.3 (default)
+XAI_API_KEY="your-xai-key"           # grok-4.5 (default), grok-4.3
 ANTHROPIC_API_KEY="your-key"          # Claude models
 OPENAI_API_KEY="your-key"             # GPT-4o
 ```
@@ -97,6 +264,18 @@ Create a `.env` file in the project root — it is loaded automatically.
 ---
 
 ## Quick start
+
+Using `make` shortcuts:
+
+```bash
+make setup        # Automated environment setup
+make check-llms   # Check configured LLM provider keys
+make run          # Start interactive router (default)
+make api          # Start REST API server (port 8000)
+make test         # Run test suite
+```
+
+Or running directly with `uv`:
 
 ```bash
 # Check which LLM providers are configured
@@ -132,15 +311,16 @@ Medical Multi-Agent Router
 Available LLM models by supplier:
 
   xAI:
-    1. grok-4.3 (default)
+    1. grok-4.5 (default)
+    2. grok-4.3
 
   Anthropic:
-    2. claude-sonnet
-    3. claude-opus
+    3. claude-sonnet
+    4. claude-opus
 
-Select a model (1-3) or press Enter for default [grok-4.3]:
+Select a model (1-4) or press Enter for default [grok-4.5]:
 
-Using model: grok-4.3
+Using model: grok-4.5
 Implementation: langchain
 Web research: enabled
 
@@ -286,7 +466,7 @@ uv run python run_analysis.py medication \
 uv run python run_analysis.py medication \
   --subject "Metformin" \
   --indication "Type 2 Diabetes" \
-  --llm grok-4.3 \
+  --llm grok-4.5 \
   --web-search
 ```
 
@@ -324,7 +504,7 @@ uv run python run_analysis.py diagnostic \
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--llm` | `grok-4.3` | Provider: `claude-sonnet`, `claude-opus`, `openai`, `grok-4.3`, `ollama` |
+| `--llm` | `grok-4.5` | Provider: `claude-sonnet`, `claude-opus`, `openai`, `grok-4.5`, `grok-4.3`, `gemini-vertex`, `claude-vertex`, `ollama` |
 | `--implementation` | `langchain` | `langchain` or `original` (DSPy) |
 | `--web-search` | off | Enable web research (LangChain only) |
 | `--output-dir` | `outputs/` | Where to write output files |
@@ -386,7 +566,7 @@ curl -X POST http://localhost:8000/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Vitamin D supplementation",
-    "model": "grok-4.3",
+    "model": "grok-4.5",
     "web_search": true
   }'
 ```
@@ -397,7 +577,7 @@ curl -X POST http://localhost:8000/analyze \
 # Start job
 curl -X POST http://localhost:8000/analyze/async \
   -H "Content-Type: application/json" \
-  -d '{"query": "Metformin interactions", "model": "grok-4.3"}'
+  -d '{"query": "Metformin interactions", "model": "grok-4.5"}'
 # → {"job_id": "abc-123", "status": "pending", "check_status_url": "/jobs/abc-123"}
 
 # Poll for result
@@ -534,7 +714,7 @@ orch = AgentOrchestrator(output_dir="outputs")
 result, files = orch.run_procedure_analyzer(
     procedure="Laparoscopic cholecystectomy",
     details="Elective",
-    llm_provider="grok-4.3",
+    llm_provider="grok-4.5",
     enable_web_research=True,
 )
 
@@ -550,7 +730,7 @@ result, files = orch.run_medication_analyzer(
 session, files = orch.run_fact_checker(
     subject="Vitamin D supplementation",
     context="optimal dosing",
-    llm_provider="grok-4.3",
+    llm_provider="grok-4.5",
     enable_web_research=True,
 )
 
@@ -633,7 +813,7 @@ Set the missing key in `.env` and re-run.
 
 **Vertex AI fails with missing VERTEX_PROJECT**
 
-The router catches this and falls back to `grok-4.3` automatically. Set
+The router catches this and falls back to `grok-4.5` automatically. Set
 `VERTEX_PROJECT` in `.env.dev` to use Vertex models.
 
 **`/file` says "Could not parse" for a PDF**

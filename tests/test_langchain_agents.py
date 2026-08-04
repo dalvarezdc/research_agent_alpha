@@ -76,7 +76,15 @@ def test_langchain_procedure_agent(monkeypatch):
     )
 
     agent = LangChainMedicalReasoningAgent(enable_logging=False)
-    monkeypatch.setattr(agent, "_call_llm", lambda *args, **kwargs: next(responses))
+
+    def _proc_call(*args, **kwargs):
+        # The layered patient/practitioner build issues an extra plain-language
+        # call; return markdown for it rather than consuming a JSON response.
+        if kwargs.get("audit_step") == "procedure_layering":
+            return "## ✅ Conclusions\nHydrate.\n\n## 🧠 The Reasoning\nContrast affects kidneys."
+        return next(responses)
+
+    monkeypatch.setattr(agent, "_call_llm", _proc_call)
 
     result = agent.analyze_medical_procedure(
         MedicalInput(
@@ -90,6 +98,10 @@ def test_langchain_procedure_agent(monkeypatch):
     assert len(result.organs_analyzed) == 2
     assert result.reasoning_trace
     assert result.practitioner_report
+    # Layered outputs produced.
+    assert result.patient_report
+    assert "Statistical Appendix" in result.practitioner_report
+    assert "Statistical Appendix" not in result.patient_report
 
 
 def test_langchain_medication_agent(monkeypatch):
@@ -135,7 +147,13 @@ def test_langchain_medication_agent(monkeypatch):
     )
 
     agent = LangChainMedicationAnalyzer(enable_logging=False)
-    monkeypatch.setattr(agent, "_call_llm", lambda *args, **kwargs: response)
+
+    def _med_call(*args, **kwargs):
+        if kwargs.get("audit_step") == "medication_layering":
+            return "## ✅ Conclusions\nTake with food.\n\n## 🧠 The Reasoning\nReduces GI upset."
+        return response
+
+    monkeypatch.setattr(agent, "_call_llm", _med_call)
 
     result = agent.analyze_medication(MedicationInput(medication_name="Metformin"))
 
@@ -143,6 +161,11 @@ def test_langchain_medication_agent(monkeypatch):
     assert result.drug_class == "Biguanide"
     assert result.drug_interactions
     assert result.analysis_confidence == 0.8
+    # Layered outputs produced; black-box warning survives into practitioner layer.
+    assert result.patient_report
+    assert "Statistical Appendix" in result.practitioner_report
+    assert "Statistical Appendix" not in result.patient_report
+    assert "Lactic acidosis" in result.practitioner_report
 
 
 def test_langchain_factcheck_agent(monkeypatch):
@@ -501,3 +524,356 @@ def test_factchecker_end_to_end_references_preserved(monkeypatch):
     )
     assert phase4 is not None
     assert any(SENTINEL_REF in r.get("raw_citation", "") for r in phase4.references)
+
+
+# ── Task 7: Layered, lossless Phase 5 ─────────────────────────────────────────
+
+def test_phase4_no_500_char_truncation(monkeypatch):
+    """Full perspective findings (>500 chars) must reach the assembler prompt."""
+    from langchain_agents import LangChainMedicalFactChecker
+    from langchain_agents.factcheck_agent import PerspectiveLens
+
+    LONG_FINDING = "Finding sentence. " * 60  # ~1080 chars, well over old 500 cap
+    captured = {}
+
+    def fake_call_llm(system_prompt, user_prompt, **kwargs):
+        audit_step = kwargs.get("audit_step", "")
+        if "phase4_" in audit_step and "assembler" not in audit_step:
+            return json.dumps({
+                "findings": LONG_FINDING,
+                "recommendations": ["Rec"],
+                "key_insight": "Insight",
+                "citations": ["Author (2024). https://doi.org/10.1/x"],
+                "statistical_details": [],
+            })
+        # assembler — capture the rendered kwargs to confirm full findings passed
+        captured["kwargs"] = kwargs
+        return "## 📚 References\n[1] x"
+
+    agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
+    monkeypatch.setattr(agent, "_call_llm", fake_call_llm)
+
+    synthesis = {"biological_truth": "t", "industry_bias": "", "grey_zone": ""}
+    agent._phase4_generate_output("Vitamin D", synthesis, PerspectiveLens.BALANCED)
+
+    # The full (untruncated) finding must be passed to the assembler.
+    assert captured["kwargs"]["mainstream_findings"] == LONG_FINDING
+
+
+def test_phase5_produces_layered_documents(monkeypatch):
+    """Phase 5 must return both a patient and a practitioner layered document."""
+    from langchain_agents import LangChainMedicalFactChecker
+    from langchain_agents.factcheck_agent import PerspectiveLens
+
+    agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
+    monkeypatch.setattr(agent, "_call_llm",
+                        lambda *a, **k: "## ✅ Conclusions\nDo X.\n\n## 🧠 The Reasoning\nBecause Y.")
+
+    perspectives = {
+        "mainstream": {"findings": "f", "recommendations": ["r"],
+                       "key_insight": "Insight", "statistical_details": ["RR 0.70 (95% CI 0.60-0.82), p<0.001 [1]"]},
+        "naturist": {"findings": "f", "recommendations": [], "key_insight": "", "statistical_details": []},
+        "biohacker": {"findings": "f", "recommendations": [], "key_insight": "", "statistical_details": []},
+    }
+    phase2 = {"methodology_quality": "Two large RCTs, low risk of bias."}
+
+    result = agent._phase5_simplify_output(
+        "body text", lens=PerspectiveLens.MAINSTREAM,
+        phase2_content=phase2, perspectives=perspectives,
+    )
+
+    patient = result.content["simplified_output"]
+    practitioner = result.content["practitioner_layered"]
+
+    # Precise statistics appear ONLY in the practitioner document.
+    assert "RR 0.70" in practitioner
+    assert "Statistical Appendix" in practitioner
+    assert "Two large RCTs" in practitioner
+    assert "RR 0.70" not in patient
+    assert "Statistical Appendix" not in patient
+    # Both keep the plain-language conclusions layer.
+    assert "Conclusions" in patient and "Conclusions" in practitioner
+
+
+def test_phase5_layer_ordering(monkeypatch):
+    """Conclusions precede Reasoning, which precedes the Statistical Appendix."""
+    from langchain_agents import LangChainMedicalFactChecker
+    from langchain_agents.factcheck_agent import PerspectiveLens
+
+    agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
+    monkeypatch.setattr(agent, "_call_llm",
+                        lambda *a, **k: "## ✅ Conclusions\nC.\n\n## 🧠 The Reasoning\nR.")
+
+    perspectives = {
+        "mainstream": {"findings": "f", "recommendations": [], "key_insight": "",
+                       "statistical_details": ["OR 1.5 (1.1-2.0) [1]"]},
+    }
+    result = agent._phase5_simplify_output(
+        "body", lens=PerspectiveLens.BALANCED,
+        phase2_content={}, perspectives=perspectives,
+    )
+    doc = result.content["practitioner_layered"]
+    assert doc.index("Conclusions") < doc.index("Reasoning") < doc.index("Statistical Appendix")
+
+
+def test_phase5_verification_guard_warns_on_dropped_insight(monkeypatch, caplog):
+    """If a perspective key_insight is dropped, a loss warning must be logged."""
+    import logging
+    from langchain_agents import LangChainMedicalFactChecker
+    from langchain_agents.factcheck_agent import PerspectiveLens
+
+    agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
+    # LLM output that omits the unique key_insight entirely.
+    monkeypatch.setattr(agent, "_call_llm", lambda *a, **k: "## ✅ Conclusions\nUnrelated text.")
+
+    perspectives = {
+        "mainstream": {"findings": "f", "recommendations": [],
+                       "key_insight": "Zebra quantum flux paradox marker", "statistical_details": []},
+    }
+    with caplog.at_level(logging.WARNING):
+        agent._phase5_simplify_output(
+            "body", lens=PerspectiveLens.BALANCED,
+            phase2_content={}, perspectives=perspectives,
+        )
+    assert any("may have dropped" in r.message for r in caplog.records)
+
+
+def test_build_statistical_appendix_empty_when_no_stats():
+    """Appendix is empty string when there is no quantitative content."""
+    from langchain_agents import LangChainMedicalFactChecker
+
+    agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
+    assert agent._build_statistical_appendix({}, {"mainstream": {"statistical_details": []}}) == ""
+
+
+# ── Stage A: shared base layering helpers ─────────────────────────────────────
+
+def _make_base_agent():
+    """A minimal LangChainAgentBase instance for helper unit tests."""
+    from langchain_agents.base import LangChainAgentBase, LangChainAgentConfig
+    return LangChainAgentBase(LangChainAgentConfig(enable_audit=True))
+
+
+def test_base_build_statistical_appendix_sections_and_ordering():
+    agent = _make_base_agent()
+    appendix = agent._build_statistical_appendix({
+        "Group One": ["RR 0.70 (0.60-0.82), p<0.001 [1]"],
+        "Group Two": ["OR 1.5 (1.1-2.0) [2]"],
+        "Empty Group": [],
+    })
+    assert "📊 Statistical Appendix" in appendix
+    assert "### Group One" in appendix and "### Group Two" in appendix
+    assert "Empty Group" not in appendix  # empty groups omitted
+    assert appendix.index("Group One") < appendix.index("Group Two")
+
+
+def test_base_build_statistical_appendix_empty():
+    agent = _make_base_agent()
+    assert agent._build_statistical_appendix({"X": [], "Y": ["  "]}) == ""
+
+
+def test_base_build_layered_report_patient_omits_appendix():
+    agent = _make_base_agent()
+    body = "## ✅ Conclusions\nC.\n\n## 🧠 The Reasoning\nR."
+    appendix = "## 📊 Statistical Appendix\nStats here."
+    patient, practitioner = agent._build_layered_report(
+        conclusions_and_reasoning=body, appendix=appendix,
+    )
+    assert "Statistical Appendix" in practitioner
+    assert "Statistical Appendix" not in patient
+    assert "practitioner report" in patient.lower()  # pointer present
+    # Both keep the conclusions/reasoning layers.
+    assert "Conclusions" in patient and "Conclusions" in practitioner
+
+
+def test_base_build_layered_report_no_appendix_identical():
+    agent = _make_base_agent()
+    body = "## ✅ Conclusions\nC."
+    patient, practitioner = agent._build_layered_report(
+        conclusions_and_reasoning=body, appendix="",
+    )
+    assert patient == body == practitioner
+
+
+def test_base_verify_no_silent_loss_flags_and_audits(caplog):
+    import logging
+    agent = _make_base_agent()
+    with caplog.at_level(logging.WARNING):
+        missing = agent._verify_no_silent_loss(
+            "output that omits it entirely",
+            ["Zebra quantum flux paradox marker"],
+        )
+    assert missing  # something reported missing
+    assert any("may have dropped" in r.message for r in caplog.records)
+    assert any(e.get("step") == "layering_loss_check" for e in agent.audit_events)
+
+
+def test_base_verify_no_silent_loss_passes_when_present():
+    agent = _make_base_agent()
+    missing = agent._verify_no_silent_loss(
+        "The conclusion is that vitamin D supports bone health markedly.",
+        ["The conclusion is that vitamin D"],
+    )
+    assert missing == []
+
+
+# ── Stage B: procedure & medication layering ──────────────────────────────────
+
+def test_medication_statistical_appendix_contains_grading(monkeypatch):
+    """Medication practitioner report must carry evidence grading + safety in the appendix."""
+    from langchain_agents import LangChainMedicationAnalyzer
+
+    med_json = json.dumps({
+        "medication_name": "Metformin", "drug_class": "Biguanide",
+        "mechanism_of_action": "m", "absorption": "a", "metabolism": "b",
+        "elimination": "e", "half_life": "6h",
+        "approved_indications": ["T2DM"], "off_label_uses": [],
+        "standard_dosing": "500mg BID", "dose_adjustments": {"renal": "avoid <30"},
+        "common_adverse_effects": ["GI upset"], "serious_adverse_effects": ["Lactic acidosis"],
+        "contraindications": [], "black_box_warnings": ["Lactic acidosis risk"],
+        "drug_interactions": [{
+            "interaction_type": "drug-drug", "interacting_agent": "Cimetidine",
+            "severity": "moderate", "mechanism": "x", "clinical_effect": "raised levels",
+            "management": "monitor", "time_separation": None, "evidence_level": "moderate",
+        }],
+        "food_interactions": [], "environmental_considerations": [],
+        "evidence_based_recommendations": [{"intervention": "Titrate slowly"}],
+        "what_not_to_do": [], "debunked_claims": [], "monitoring_requirements": ["eGFR"],
+        "warning_signs": [], "evidence_quality": "moderate", "analysis_confidence": 0.8,
+    })
+
+    agent = LangChainMedicationAnalyzer(enable_logging=False)
+
+    def _call(*a, **k):
+        if k.get("audit_step") == "medication_layering":
+            return "## ✅ Conclusions\nc\n\n## 🧠 The Reasoning\nr"
+        return med_json
+
+    monkeypatch.setattr(agent, "_call_llm", _call)
+    result = agent.analyze_medication(MedicationInput(medication_name="Metformin"))
+
+    prac = result.practitioner_report
+    assert "Analysis confidence: 0.80/1.00" in prac
+    assert "Cimetidine" in prac  # interaction evidence in appendix
+    assert "Black Box Warnings" in prac
+    assert "Lactic acidosis risk" in prac
+
+
+def test_procedure_patient_report_has_no_stats(monkeypatch):
+    """Procedure patient report is plain; stats live only in practitioner report."""
+    from langchain_agents import LangChainMedicalReasoningAgent
+
+    responses = iter([
+        json.dumps({"organs": ["kidneys"]}),
+        json.dumps([{
+            "organ_name": "kidneys", "affected_by_procedure": True, "at_risk": True,
+            "risk_level": "high", "pathways_involved": ["renal"], "known_recommendations": ["Hydrate"],
+            "potential_recommendations": [], "debunked_claims": [], "evidence_quality": "moderate",
+        }]),
+        json.dumps({
+            "procedure_summary": "CT with contrast", "confidence_score": 0.9,
+            "general_recommendations": ["Hydrate well"], "research_gaps": [],
+        }),
+    ])
+
+    agent = LangChainMedicalReasoningAgent(enable_logging=False)
+
+    def _call(*a, **k):
+        if k.get("audit_step") == "procedure_layering":
+            return "## ✅ Conclusions\nHydrate.\n\n## 🧠 The Reasoning\nKidneys at risk."
+        return next(responses)
+
+    monkeypatch.setattr(agent, "_call_llm", _call)
+    result = agent.analyze_medical_procedure(
+        MedicalInput(procedure="CT", details="With contrast", objectives=("risks",))
+    )
+
+    assert "Per-Organ Evidence & Risk Grading" in result.practitioner_report
+    assert "Statistical Appendix" not in result.patient_report
+    assert "practitioner report" in result.patient_report.lower()
+
+
+# ── Stage C: references collected by procedure & medication ───────────────────
+
+def test_procedure_collects_references(monkeypatch):
+    from langchain_agents import LangChainMedicalReasoningAgent
+
+    CITATION = "Smith (2024). Contrast nephropathy. NEJM. https://doi.org/10.1/x"
+    responses = iter([
+        json.dumps({"organs": ["kidneys"]}),
+        json.dumps([{
+            "organ_name": "kidneys", "affected_by_procedure": True, "at_risk": True,
+            "risk_level": "high", "pathways_involved": [], "known_recommendations": [],
+            "potential_recommendations": [], "debunked_claims": [], "evidence_quality": "moderate",
+        }]),
+        json.dumps({
+            "procedure_summary": "CT", "confidence_score": 0.9,
+            "general_recommendations": ["Hydrate"], "research_gaps": [],
+            "references": [CITATION],
+        }),
+    ])
+    agent = LangChainMedicalReasoningAgent(enable_logging=False)
+
+    def _call(*a, **k):
+        if k.get("audit_step") == "procedure_layering":
+            return "## ✅ Conclusions\nc\n\n## 🧠 The Reasoning\nr"
+        return next(responses)
+
+    monkeypatch.setattr(agent, "_call_llm", _call)
+    result = agent.analyze_medical_procedure(
+        MedicalInput(procedure="CT", details="contrast", objectives=("risks",))
+    )
+    assert any(CITATION in r["raw_citation"] for r in result.references)
+
+
+def test_medication_collects_references(monkeypatch):
+    from langchain_agents import LangChainMedicationAnalyzer
+
+    CITATION = "Jones (2023). Metformin safety. Lancet. https://doi.org/10.1/y"
+    med_json = json.dumps({
+        "medication_name": "Metformin", "drug_class": "Biguanide",
+        "mechanism_of_action": "m", "absorption": "a", "metabolism": "b",
+        "elimination": "e", "half_life": "6h", "approved_indications": [],
+        "off_label_uses": [], "standard_dosing": "", "dose_adjustments": {},
+        "common_adverse_effects": [], "serious_adverse_effects": [],
+        "contraindications": [], "black_box_warnings": [], "drug_interactions": [],
+        "food_interactions": [], "environmental_considerations": [],
+        "evidence_based_recommendations": [], "what_not_to_do": [], "debunked_claims": [],
+        "monitoring_requirements": [], "warning_signs": [], "evidence_quality": "moderate",
+        "analysis_confidence": 0.8, "references": [CITATION],
+    })
+    agent = LangChainMedicationAnalyzer(enable_logging=False)
+
+    def _call(*a, **k):
+        if k.get("audit_step") == "medication_layering":
+            return "## ✅ Conclusions\nc\n\n## 🧠 The Reasoning\nr"
+        return med_json
+
+    monkeypatch.setattr(agent, "_call_llm", _call)
+    result = agent.analyze_medication(MedicationInput(medication_name="Metformin"))
+    assert any(CITATION in r["raw_citation"] for r in result.references)
+
+
+def test_collect_validated_references_reads_flat_references():
+    """Orchestrator collector must handle objects exposing a flat .references list."""
+    import sys
+    from unittest.mock import MagicMock
+    sys.modules.setdefault("pdf_generator", MagicMock())
+    from run_analysis import AgentOrchestrator
+
+    orch = AgentOrchestrator.__new__(AgentOrchestrator)
+    orch._reference_validation_cache = {}
+    orch._citation_url_validator = None
+
+    class _Result:
+        references = [{"raw_citation": "Smith (2024). Title. J. https://doi.org/10.1/z"}]
+
+    # Stub the URL resolver so no network call happens; treat citation as valid.
+    orch._resolve_reference_url = lambda citation, url, validator: (
+        "https://doi.org/10.1/z", None, 1.0, None,
+    )
+    orch._get_citation_url_validator = lambda: MagicMock()
+
+    kept, removed = orch._collect_validated_references(_Result())
+    assert kept and "Smith (2024)" in kept[0]
+    assert removed == []
