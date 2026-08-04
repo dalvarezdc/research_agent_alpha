@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, BackgroundTasks, File, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -51,6 +52,15 @@ app = FastAPI(
         "medical agents (Medication, Procedure, Diagnostic, and Fact Checker)."
     ),
     version="0.1.0"
+)
+
+# Enable CORS for frontend flexibility
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Ensure outputs directory exists and serve files statically
@@ -448,6 +458,11 @@ async def parse_document_endpoint(file: UploadFile = File(...)):
             "char_count": result.metadata.char_count,
         },
     }
+
+
+# Ensure frontend directory exists and serve static Web UI
+os.makedirs("frontend", exist_ok=True)
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
 def main():

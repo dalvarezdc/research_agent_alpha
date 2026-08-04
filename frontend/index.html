@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Medical Multi-Agent Intelligence Platform — Systematic clinical analysis for procedures, medications, diagnoses, and medical fact-checking.">
+  <title>Medical Multi-Agent Intelligence Workbench</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-heart-pulse"></i>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Medical Agent Intelligence</span>
+          <span class="brand-subtitle">Clinical Multi-Agent Reasoning Platform</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-badge" id="apiStatusBadge">
+          <span class="status-dot"></span>
+          <span id="apiStatusText">Checking API...</span>
+        </div>
+        <div class="header-links">
+          <a href="/docs" target="_blank" class="nav-link"><i class="fa-solid fa-book"></i> OpenAPI Docs</a>
+          <a href="/health" target="_blank" class="nav-link"><i class="fa-solid fa-notes-medical"></i> Health Check</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    
+    <!-- Toast & Alert Banner Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div class="workbench-grid">
+
+      <!-- LEFT COLUMN: Input & Document Workbench -->
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-pen-to-square"></i> Query & Clinical Context</h2>
+          <span class="badge">Workbench</span>
+        </div>
+
+        <!-- Query Input Form -->
+        <div class="form-group">
+          <label for="queryInput">Medical Query or Clinical Subject <span class="required">*</span></label>
+          <textarea id="queryInput" rows="4" placeholder="Enter a surgery, medication, symptom list, or medical evidence question (e.g. 'Laparoscopic cholecystectomy', 'Metformin and Aspirin interactions', 'Fatigue, cold intolerance, weight gain')..."></textarea>
+
+          <!-- Preset Example Chips -->
+          <div class="example-chips">
+            <span class="chip-label">Quick samples:</span>
+            <button class="chip" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
+            <button class="chip" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
+            <button class="chip" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
+            <button class="chip" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
+          </div>
+        </div>
+
+        <!-- Configuration Bar -->
+        <div class="config-grid">
+          <div class="form-group">
+            <label for="modelSelect"><i class="fa-solid fa-brain"></i> LLM Model</label>
+            <select id="modelSelect">
+              <option value="grok-4.5" selected>grok-4.5 (xAI Flagship - Default)</option>
+              <option value="grok-4.3">grok-4.3 (xAI)</option>
+              <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
+              <option value="claude-opus-4-8">claude-opus-4-8 (Anthropic)</option>
+              <option value="gemini-3.6-flash">gemini-3.6-flash (Google Vertex)</option>
+              <option value="gemini-2.5-pro">gemini-2.5-pro (Google Vertex)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="agentSelect"><i class="fa-solid fa-user-doctor"></i> Target Agent</label>
+            <select id="agentSelect">
+              <option value="auto" selected>Auto-Route (Recommended)</option>
+              <option value="procedure_agent">Procedure Specialist</option>
+              <option value="medication_agent">Medication Specialist</option>
+              <option value="diagnostic_agent">Diagnostic Specialist</option>
+              <option value="general_agent">Fact-Checker Specialist</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Web Search Toggle -->
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <i class="fa-solid fa-globe"></i>
+            <div>
+              <span class="toggle-title">Live Web Research</span>
+              <span class="toggle-desc">Fetch evidence from medical literature & guidelines (Tavily / DDG)</span>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="webSearchToggle" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <!-- Document Attachment & Parser Section -->
+        <div class="document-section">
+          <div class="section-title">
+            <i class="fa-solid fa-file-pdf"></i> Attach Patient Document or Clinical Report
+          </div>
+          
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf">
+            <div class="drop-content">
+              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+              <p class="drop-text">Drag & drop document here, or <span class="browse-link">browse</span></p>
+              <span class="format-tags">Supported: <strong>PDF, Word (.docx, .doc), TXT, Markdown, RTF</strong></span>
+            </div>
+          </div>
+
+          <!-- File Format Warning / Error Alert -->
+          <div class="alert alert-warning hidden" id="fileErrorAlert">
+            <i class="fa-solid fa-circle-exclamation alert-icon"></i>
+            <div class="alert-content" id="fileErrorMsg"></div>
+            <button class="alert-close" id="fileErrorClose">&times;</button>
+          </div>
+
+          <!-- Parsed Document Card -->
+          <div class="parsed-card hidden" id="parsedDocCard">
+            <div class="parsed-header">
+              <div class="parsed-file-meta">
+                <i class="fa-solid fa-file-lines parsed-icon"></i>
+                <div>
+                  <span class="parsed-name" id="parsedFileName">report.pdf</span>
+                  <div class="parsed-stats">
+                    <span class="stat-badge" id="parsedFormat">PDF</span>
+                    <span class="stat-badge" id="parsedPages">1 page</span>
+                    <span class="stat-badge" id="parsedChars">0 chars</span>
+                    <span class="stat-badge success" id="parsedStatus">parsed</span>
+                  </div>
+                </div>
+              </div>
+              <div class="parsed-actions">
+                <button class="btn btn-sm btn-ghost" id="btnToggleDocPreview">
+                  <i class="fa-solid fa-chevron-down"></i> Preview
+                </button>
+                <button class="btn btn-sm btn-danger-ghost" id="btnRemoveDoc">
+                  <i class="fa-solid fa-trash"></i> Remove
+                </button>
+              </div>
+            </div>
+
+            <!-- Parsed Markdown Collapsible Content -->
+            <div class="parsed-preview-box hidden" id="parsedPreviewBox">
+              <div class="preview-toolbar">
+                <span>Parsed Markdown Content</span>
+                <button class="btn btn-xs btn-outline" id="btnCopyParsed">Copy Text</button>
+              </div>
+              <pre class="parsed-content" id="parsedMarkdownContent"></pre>
+            </div>
+
+            <div class="attach-checkbox-row">
+              <label class="checkbox-container">
+                <input type="checkbox" id="attachContextCheck" checked>
+                <span class="checkmark"></span>
+                Ground analysis query with this parsed document context
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Controls -->
+        <div class="action-bar">
+          <button class="btn btn-primary" id="btnAnalyze">
+            <i class="fa-solid fa-bolt"></i> Run Agent Analysis
+          </button>
+          <button class="btn btn-secondary" id="btnRoute">
+            <i class="fa-solid fa-compass"></i> Route Only
+          </button>
+          <button class="btn btn-ghost" id="btnClear">
+            <i class="fa-solid fa-rotate-left"></i> Reset
+          </button>
+        </div>
+
+      </section>
+
+
+      <!-- RIGHT COLUMN: Output, Progress & Reports -->
+      <section class="panel output-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-square-poll-vertical"></i> Analysis Outputs & Reports</h2>
+          <span class="badge badge-accent" id="activeAgentBadge">Ready</span>
+        </div>
+
+        <!-- Placeholder State -->
+        <div class="placeholder-state" id="placeholderState">
+          <i class="fa-solid fa-microscope placeholder-icon"></i>
+          <h3>No Analysis Results Yet</h3>
+          <p>Submit a medical query or clinical document to generate structured multi-perspective reports, statistical appendices, and validated reference lists.</p>
+        </div>
+
+        <!-- Live Job Progress Card -->
+        <div class="job-progress-card hidden" id="jobProgressCard">
+          <div class="job-progress-header">
+            <div class="job-title-row">
+              <i class="fa-solid fa-spinner fa-spin spinner-icon"></i>
+              <span class="job-heading" id="jobStatusHeading">Analyzing Query...</span>
+            </div>
+            <span class="job-id-tag" id="jobIdTag">Job #1234</span>
+          </div>
+
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+          </div>
+
+          <div class="pipeline-steps">
+            <div class="step step-active" id="stepRoute">
+              <i class="fa-solid fa-compass"></i> <span>Query Routing</span>
+            </div>
+            <div class="step" id="stepReasoning">
+              <i class="fa-solid fa-brain"></i> <span>Multi-Agent Reasoning</span>
+            </div>
+            <div class="step" id="stepValidation">
+              <i class="fa-solid fa-shield-halved"></i> <span>Reference Validation</span>
+            </div>
+            <div class="step" id="stepReports">
+              <i class="fa-solid fa-file-pdf"></i> <span>Report Synthesis</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Route Classification Results Card -->
+        <div class="route-result-card hidden" id="routeResultCard">
+          <div class="route-header">
+            <i class="fa-solid fa-bullseye"></i>
+            <div>
+              <span class="route-subtitle">Router Classification Result</span>
+              <h3 class="route-agent-title" id="routedAgentName">Medication Specialist</h3>
+            </div>
+          </div>
+          <p class="route-desc" id="routedAgentDesc"></p>
+        </div>
+
+        <!-- Generated Files Grid -->
+        <div class="files-container hidden" id="filesContainer">
+          <div class="container-title">
+            <i class="fa-solid fa-folder-open"></i> Generated Report Artifacts
+          </div>
+          <div class="files-grid" id="filesGrid"></div>
+        </div>
+
+        <!-- Interactive Report Markdown Previewer -->
+        <div class="report-preview-card hidden" id="reportPreviewCard">
+          <div class="report-tabs">
+            <button class="tab-btn active" data-tab="patient"><i class="fa-solid fa-user"></i> Patient Report</button>
+            <button class="tab-btn" data-tab="practitioner"><i class="fa-solid fa-user-doctor"></i> Practitioner Report</button>
+            <button class="tab-btn" data-tab="summary"><i class="fa-solid fa-file-lines"></i> Summary</button>
+            <button class="tab-btn" data-tab="json"><i class="fa-solid fa-code"></i> Raw JSON</button>
+
+            <div class="tab-actions">
+              <button class="btn btn-xs btn-outline" id="btnCopyReport"><i class="fa-solid fa-copy"></i> Copy</button>
+              <a href="#" target="_blank" class="btn btn-xs btn-primary" id="btnDownloadCurrent"><i class="fa-solid fa-download"></i> Download</a>
+            </div>
+          </div>
+
+          <div class="report-body">
+            <div class="markdown-viewer" id="markdownViewer"></div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <p>Medical Multi-Agent System &bull; For Clinical Research & Information Purposes Only &bull; Evidence Quality & Validation Engine Enabled</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

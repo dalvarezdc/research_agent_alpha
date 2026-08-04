@@ -512,15 +512,22 @@ uv run python run_analysis.py diagnostic \
 
 ---
 
-## REST API
+## Web Interface & REST API
 
-Start the API server:
+Start the Web UI & API server:
 
 ```bash
-uv run python api.py
-# or
-uv run medical-api --host 0.0.0.0 --port 8000
+make api
+# or: uv run python api.py --port 8000
 ```
+
+Open **http://localhost:8000** in your browser to access the Web Application Workbench:
+
+- **Interactive Query Workbench**: Enter queries, select target LLM models (`grok-4.5`, `claude-sonnet-4-6`, `gemini-3.6-flash`, etc.), pick specialized agents, and toggle live web research.
+- **Document & File Parser**: Upload PDFs, Word documents (`.docx`, `.doc`), TXT, Markdown, or RTF files. PDF/Word documents are automatically converted into markdown via the built-in parser and grounded as clinical context for the agent analysis.
+- **Format Validation**: Uploading an unsupported file format triggers an error alert displaying allowed extensions (`.pdf`, `.docx`, `.doc`, `.txt`, `.md`, `.rtf`).
+- **Live Report Previews & Downloads**: Preview rendered Patient Reports, Practitioner Reports, Summaries, and Raw JSON directly in the browser with tab navigation, markdown styling, and direct download buttons.
+- **OpenAPI / Swagger UI**: Interactive API documentation is available at **http://localhost:8000/docs**.
 
 ### Parse a document
 
