@@ -202,13 +202,27 @@ collect-references → validate → layered-report tail with their own phases.
 
 ## Installation
 
-Requirements: **Python 3.12+** and the **[uv](https://docs.astral.sh/uv/)** package manager.
+Requirements: **Python 3.12+** and the **[uv](https://docs.astral.sh/uv/)** package manager (recommended).
+
+### Quick setup (recommended)
+
+Run the automated setup script to check Python version, install dependencies, initialize `.env`, and create workspace directories:
 
 ```bash
 # Clone and enter the repository
 git clone <repo-url>
 cd research_agent_alpha
 
+# Run automated setup
+chmod +x setup.sh
+./setup.sh
+```
+
+### Manual installation
+
+Alternatively, install dependencies manually:
+
+```bash
 # Install core dependencies
 uv sync
 
