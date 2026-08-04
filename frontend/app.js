@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeFiles = {};      // generated report file paths
   let loadedReportTexts = {};// cached report markdown strings
 
-  const SUPPORTED_EXTENSIONS = ['pdf', 'docx', 'doc', 'txt', 'md', 'rtf'];
+  const SUPPORTED_EXTENSIONS = ['pdf', 'docx', 'doc', 'txt', 'md', 'rtf', 'png', 'jpg', 'jpeg', 'webp', 'gif'];
 
   // DOM Elements
   const apiStatusBadge = document.getElementById('apiStatusBadge');
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check unsupported file formats (e.g. png, jpg, exe, zip, mp4)
     if (!SUPPORTED_EXTENSIONS.includes(ext)) {
       fileInput.value = '';
-      fileErrorMsg.innerHTML = `<strong>Unsupported File Format (.${ext.toUpperCase()}):</strong> File "${file.name}" is not supported.<br>Supported formats: <strong>PDF (.pdf), Word (.docx, .doc), Text (.txt, .md), and RTF (.rtf)</strong>.`;
+      fileErrorMsg.innerHTML = `<strong>Unsupported File Format (.${ext.toUpperCase()}):</strong> File "${file.name}" is not supported.<br>Supported formats: <strong>PDF (.pdf), Word (.docx, .doc), Images (.png, .jpg, .webp), Text (.txt, .md), and RTF (.rtf)</strong>.`;
       fileErrorAlert.classList.remove('hidden');
       showToast(`Unsupported file format: .${ext}`, 'error');
       return;

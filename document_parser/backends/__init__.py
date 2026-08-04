@@ -5,6 +5,7 @@ from __future__ import annotations
 from .base import ParserBackend
 from .doc_backend import DocBackend
 from .docx_backend import DocxBackend
+from .image_backend import ImageBackend
 from .pdf_backend import PdfBackend
 from .rtf_backend import RtfBackend
 from .text_backend import TextBackend
@@ -12,6 +13,7 @@ from .text_backend import TextBackend
 __all__ = [
     "DocBackend",
     "DocxBackend",
+    "ImageBackend",
     "ParserBackend",
     "PdfBackend",
     "RtfBackend",

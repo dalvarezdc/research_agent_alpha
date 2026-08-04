@@ -14,6 +14,7 @@ from pathlib import Path
 from .backends import (
     DocBackend,
     DocxBackend,
+    ImageBackend,
     ParserBackend,
     PdfBackend,
     RtfBackend,
@@ -30,6 +31,7 @@ _BACKENDS: tuple[ParserBackend, ...] = (
     TextBackend(),
     RtfBackend(),
     DocBackend(),
+    ImageBackend(),
 )
 
 # Build the extension → backend registry.

@@ -234,10 +234,10 @@ def run_background_job(
             jobs[job_id]["updated_at"] = datetime.now()
 
 
-@app.get("/")
-def root_endpoint():
+@app.get("/api-info")
+def api_info_endpoint():
     """
-    Root endpoint for Medical Multi-Agent API.
+    Metadata endpoint for Medical Multi-Agent API.
     Provides API metadata and links to interactive docs (/docs) and health check.
     """
     return {
