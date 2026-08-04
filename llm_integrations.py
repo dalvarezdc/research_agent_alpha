@@ -1384,7 +1384,7 @@ def create_llm_manager(
 
 def get_available_models() -> dict[str, str]:
     """
-    Get all available models mapped to their provider types.
+    Get all active models mapped to their provider types.
 
     Returns:
         Dictionary mapping model names to provider identifiers
@@ -1395,30 +1395,13 @@ def get_available_models() -> dict[str, str]:
         "claude-opus-4-7": "claude-opus",
         "claude-sonnet-4-6": "claude-sonnet",
         "claude-haiku-4-5": "claude-sonnet",   # cheapest Claude, maps to sonnet provider
-        # Anthropic — legacy (still usable, not yet deprecated)
-        "claude-sonnet-4-5-20250929": "claude-sonnet",
-        "claude-opus-4-5-20251101": "claude-opus",
         # ── xAI (Grok) — current ──────────────────────────────────────────────
         "grok-4.5": "grok-4.5",           # current flagship (default)
         "grok-4.3": "grok-4.3",           # previous flagship
-        # Grok — legacy (retiring May 15 2026, map to grok-4.5 provider)
-        "grok-4-1-fast-non-reasoning-latest": "grok-4-1-fast",
-        "grok-4-1-fast-reasoning-latest": "grok-4-1-reasoning",
-        "grok-code-fast": "grok-4-1-code",
-        # ── OpenAI — legacy (>1yr old, kept callable; hidden from menu) ────────
-        "gpt-4o": "openai",
-        "gpt-4o-mini": "openai",
-        "gpt-4-turbo": "openai",
-        "gpt-4-turbo-preview": "openai",
-        "gpt-3.5-turbo": "openai",
-        # ── Local models ──────────────────────────────────────────────────────
-        "llama2:13b": "ollama",
         # ── Google Vertex AI — current (global endpoint, GLOBAL_SERVICE=true) ──
         "gemini-3.6-flash": "gemini-vertex",   # default — fastest current Flash
         "gemini-3.5-flash": "gemini-vertex",   # stable Flash
         "gemini-2.5-pro": "gemini-vertex",     # current Pro (confirmed on global endpoint)
-        # Google Vertex AI — legacy (>1yr old, hidden from menu)
-        "gemini-1.5-pro": "gemini-vertex",
         # ── Claude on Vertex AI ───────────────────────────────────────────────
         "claude-opus-4-8-vertex": "claude-vertex-opus",
         "claude-sonnet-4-6-vertex": "claude-vertex",
@@ -1436,27 +1419,13 @@ MODEL_METADATA: dict[str, dict[str, str]] = {
     "claude-opus-4-7": {"supplier": "Anthropic", "release_date": "2026-03-01"},
     "claude-sonnet-4-6": {"supplier": "Anthropic", "release_date": "2026-02-01"},
     "claude-haiku-4-5": {"supplier": "Anthropic", "release_date": "2025-10-01"},
-    "claude-sonnet-4-5-20250929": {"supplier": "Anthropic", "release_date": "2025-09-29"},
-    "claude-opus-4-5-20251101": {"supplier": "Anthropic", "release_date": "2025-11-01"},
     # ── xAI (Grok) ────────────────────────────────────────────────────────────
     "grok-4.5": {"supplier": "xAI", "release_date": "2026-07-01"},
     "grok-4.3": {"supplier": "xAI", "release_date": "2026-01-15"},
-    "grok-4-1-fast-non-reasoning-latest": {"supplier": "xAI", "release_date": "2025-11-01"},
-    "grok-4-1-fast-reasoning-latest": {"supplier": "xAI", "release_date": "2025-11-01"},
-    "grok-code-fast": {"supplier": "xAI", "release_date": "2025-08-01"},
-    # ── OpenAI ────────────────────────────────────────────────────────────────
-    "gpt-4o": {"supplier": "OpenAI", "release_date": "2024-05-13"},
-    "gpt-4o-mini": {"supplier": "OpenAI", "release_date": "2024-07-18"},
-    "gpt-4-turbo": {"supplier": "OpenAI", "release_date": "2024-04-09"},
-    "gpt-4-turbo-preview": {"supplier": "OpenAI", "release_date": "2024-01-25"},
-    "gpt-3.5-turbo": {"supplier": "OpenAI", "release_date": "2023-03-01"},
-    # ── Meta (local via Ollama) ───────────────────────────────────────────────
-    "llama2:13b": {"supplier": "Meta (local)", "release_date": "2023-07-18"},
     # ── Google (Vertex AI, global endpoint) ──────────────────────────────────
     "gemini-3.6-flash": {"supplier": "Google", "release_date": "2026-06-01"},
     "gemini-3.5-flash": {"supplier": "Google", "release_date": "2026-04-01"},
     "gemini-2.5-pro": {"supplier": "Google", "release_date": "2026-01-01"},
-    "gemini-1.5-pro": {"supplier": "Google", "release_date": "2024-02-15"},
     # Claude served via Google Vertex AI
     "claude-opus-4-8-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-05-01"},
     "claude-sonnet-4-6-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-02-01"},

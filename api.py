@@ -224,6 +224,30 @@ def run_background_job(
             jobs[job_id]["updated_at"] = datetime.now()
 
 
+@app.get("/")
+def root_endpoint():
+    """
+    Root endpoint for Medical Multi-Agent API.
+    Provides API metadata and links to interactive docs (/docs) and health check.
+    """
+    return {
+        "title": app.title,
+        "version": app.version,
+        "description": app.description,
+        "documentation": "/docs",
+        "health": "/health",
+        "endpoints": {
+            "GET /health": "Health check status",
+            "GET /agents": "List available specialized agents",
+            "POST /route": "Route a medical query to an agent",
+            "POST /analyze": "Run synchronous medical analysis",
+            "POST /analyze/async": "Submit asynchronous medical analysis job",
+            "GET /jobs/{job_id}": "Check status of an async job",
+            "POST /parse": "Parse uploaded PDF/Word document to markdown",
+        }
+    }
+
+
 @app.get("/health")
 def health_endpoint():
     """

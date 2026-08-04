@@ -69,11 +69,11 @@ def test_router_with_llm():
 
     # Select model based on available API keys
     if has_grok:
-        model = "grok-4-1-fast-non-reasoning-latest"
-    elif has_openai:
-        model = "gpt-4o-mini"
+        model = "grok-4.5"
     elif has_anthropic:
-        model = "claude-sonnet-4-5-20250929"
+        model = "claude-sonnet-4-6"
+    else:
+        model = "grok-4.5"
 
     print(f"\nUsing model: {model}")
     print("\nRunning tests...\n")

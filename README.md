@@ -265,6 +265,18 @@ Create a `.env` file in the project root — it is loaded automatically.
 
 ## Quick start
 
+Using `make` shortcuts:
+
+```bash
+make setup        # Automated environment setup
+make check-llms   # Check configured LLM provider keys
+make run          # Start interactive router (default)
+make api          # Start REST API server (port 8000)
+make test         # Run test suite
+```
+
+Or running directly with `uv`:
+
 ```bash
 # Check which LLM providers are configured
 uv run python router.py --check-llms

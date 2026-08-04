@@ -20,33 +20,53 @@ fi
 echo "🏥 Medical Analysis Agents — Setup"
 echo "=================================="
 
-# --- Check Python ---
-if ! command -v python3 &>/dev/null; then
-  echo "❌ Python 3 not found. Install Python 3.12+ from https://python.org"
+# --- Ensure pyenv shims are in PATH if pyenv exists ---
+if [ -d "$HOME/.pyenv/shims" ] && [[ ":$PATH:" != *":$HOME/.pyenv/shims:"* ]]; then
+  export PATH="$HOME/.pyenv/shims:$PATH"
+fi
+if command -v pyenv &>/dev/null; then
+  eval "$(pyenv init - 2>/dev/null)" || true
+fi
+
+# --- Check & Locate Python 3.12+ ---
+PYTHON_BIN=""
+
+for candidate in python3.12 python3.13 python3 python "$HOME/.pyenv/shims/python3" "$HOME/.pyenv/shims/python"; do
+  if command -v "$candidate" &>/dev/null; then
+    BIN_PATH=$(command -v "$candidate")
+    if "$BIN_PATH" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 2>/dev/null; then
+      PYTHON_BIN="$BIN_PATH"
+      break
+    fi
+  elif [ -x "$candidate" ]; then
+    if "$candidate" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 2>/dev/null; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  fi
+done
+
+if [ -z "$PYTHON_BIN" ]; then
+  CURRENT_PY=$(command -v python3 &>/dev/null && python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" || echo "unknown")
+  echo "❌ Python 3.12+ required (found $CURRENT_PY at $(command -v python3 || echo 'none'))"
+  echo "💡 Tip: If using pyenv, ensure 'pyenv global 3.12.3' is set and shims are in PATH (~/.pyenv/shims)."
   exit 1
 fi
 
-PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PYTHON_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
-PYTHON_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
-
-if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 12 ]; }; then
-  echo "❌ Python 3.12+ required (found $PYTHON_VERSION)"
-  exit 1
-fi
-echo "✅ Python $PYTHON_VERSION"
+PYTHON_VERSION=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
+echo "✅ Found Python $PYTHON_VERSION ($PYTHON_BIN)"
 
 # --- Python Dependencies & Environment ---
 if command -v uv &>/dev/null; then
   echo "✅ uv package manager found"
   echo "📦 Syncing dependencies with uv..."
-  uv sync --extra parsing-extras --extra dev
+  uv sync --python "$PYTHON_BIN" --extra parsing-extras --extra dev
   echo "✅ Python dependencies installed via uv"
 else
   echo "⚠️  uv not found (recommended: https://docs.astral.sh/uv/)"
   if [ ! -d ".venv" ]; then
     echo "📦 Creating Python virtual environment..."
-    python3 -m venv .venv
+    "$PYTHON_BIN" -m venv .venv
   fi
   echo "📦 Installing Python dependencies with pip..."
   .venv/bin/pip install --quiet --upgrade pip
@@ -82,17 +102,23 @@ echo "📁 Ensuring output and cache directories exist..."
 mkdir -p outputs cache
 echo "✅ Workspace directories ready"
 
+# --- Optional System Dependencies (WeasyPrint PDF export on macOS) ---
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if ! command -v brew &>/dev/null || ! brew list pango &>/dev/null 2>&1; then
+    echo "💡 Note: For optional PDF report generation via WeasyPrint on macOS, install C-libraries with Homebrew:"
+    echo "   brew install pango gdk-pixbuf cairo libffi"
+  fi
+fi
+
 echo ""
 echo "✨ Setup complete!"
 echo ""
-echo "To check configured LLM providers:"
-echo "  uv run python router.py --check-llms"
+echo "Quick start with Makefile:"
+echo "  make run          # Start interactive router"
+echo "  make api          # Start REST API server (http://localhost:8000)"
+echo "  make check-llms   # Check configured LLM providers"
+echo "  make test         # Run test suite"
 echo ""
-echo "To start the interactive router:"
+echo "Or run directly:"
 echo "  uv run python router.py"
-echo ""
-echo "To start the REST API server:"
 echo "  uv run python api.py --port 8000"
-echo ""
-echo "To run tests:"
-echo "  uv run python -m pytest tests/"
