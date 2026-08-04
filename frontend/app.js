@@ -441,10 +441,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // 8. Handle Analysis Complete & Render Reports
   async function handleAnalysisCompleted(job) {
     const resultData = job.result || {};
-    activeFiles = resultData.files || {};
+    // Extract generated files from top-level job.files or nested job.result.files
+    activeFiles = job.files || resultData.files || {};
     loadedReportTexts = {};
 
-    activeAgentBadge.textContent = (resultData.agent_id || 'Agent').replace('_', ' ').toUpperCase();
+    const agentId = job.agent_id || resultData.agent_id || 'Agent';
+    activeAgentBadge.textContent = agentId.replace(/_/g, ' ').toUpperCase();
     showToast('Analysis completed successfully!', 'success');
 
     // Render Files Grid
@@ -456,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Display Preview Box
     reportPreviewCard.classList.remove('hidden');
 
-    // Render Default Active Tab (Patient Report)
+    // Render Default Active Tab (Patient Report or Summary)
     renderReportTab('patient');
   }
 
@@ -473,7 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fileEntries.forEach(([key, path]) => {
       const isPdf = path.endsWith('.pdf');
       const isJson = path.endsWith('.json');
-      const isMd = path.endsWith('.md');
       const filename = path.split('/').pop();
 
       const card = document.createElement('div');
@@ -484,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isJson) iconClass = 'fa-file-code';
 
       // Standardize download link via static mount /outputs
-      const fileUrl = path.startsWith('outputs/') ? `/${path}` : `/outputs/${filename}`;
+      const fileUrl = `/outputs/${filename}`;
 
       card.innerHTML = `
         <div class="file-card-top">
@@ -517,13 +518,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const keysToFetch = {
       patient: files.patient_report || files.patient_md,
       practitioner: files.practitioner_report || files.practitioner_md,
-      summary: files.summary_report || files.summary_md,
-      json: files.session || files.result || files.json_session
+      summary: files.summary_report || files.markdown_report || files.summary_md || files.medication_summary,
+      json: files.json_session || files.session || files.result || files.analysis_result || files.medication_analysis
     };
 
     for (const [tabKey, filePath] of Object.entries(keysToFetch)) {
       if (filePath) {
-        const fileUrl = filePath.startsWith('outputs/') ? `/${filePath}` : `/outputs/${filePath.split('/').pop()}`;
+        const filename = filePath.split('/').pop();
+        const fileUrl = `/outputs/${filename}`;
         try {
           const res = await fetch(fileUrl);
           if (res.ok) {
@@ -538,20 +540,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Render Selected Tab Content
   function renderReportTab(tabType) {
-    const rawContent = loadedReportTexts[tabType];
+    let rawContent = loadedReportTexts[tabType];
+
+    // Fallback to summary/markdown report if specific tab content is missing
+    if (!rawContent && (tabType === 'patient' || tabType === 'practitioner')) {
+      rawContent = loadedReportTexts['summary'];
+    }
+
     btnDownloadCurrent.setAttribute('href', '#');
 
     // Update download link for active tab
     const fileKeyMap = {
-      patient: activeFiles.patient_report,
-      practitioner: activeFiles.practitioner_report,
-      summary: activeFiles.summary_report,
-      json: activeFiles.session || activeFiles.result
+      patient: activeFiles.patient_report || activeFiles.markdown_report || activeFiles.summary_report,
+      practitioner: activeFiles.practitioner_report || activeFiles.markdown_report || activeFiles.summary_report,
+      summary: activeFiles.summary_report || activeFiles.markdown_report || activeFiles.medication_summary,
+      json: activeFiles.json_session || activeFiles.session || activeFiles.result || activeFiles.analysis_result
     };
     const currentPath = fileKeyMap[tabType];
     if (currentPath) {
-      const url = currentPath.startsWith('outputs/') ? `/${currentPath}` : `/outputs/${currentPath.split('/').pop()}`;
-      btnDownloadCurrent.setAttribute('href', url);
+      const filename = currentPath.split('/').pop();
+      btnDownloadCurrent.setAttribute('href', `/outputs/${filename}`);
     }
 
     if (!rawContent) {
