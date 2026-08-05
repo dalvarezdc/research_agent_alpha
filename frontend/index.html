@@ -107,8 +107,13 @@
 
             <!-- Query Input Form -->
             <div class="form-group">
-              <label for="queryInput">Medical Query or Clinical Subject <span class="required">*</span></label>
-              <textarea id="queryInput" rows="4" placeholder="Enter a surgery, medication, symptom list, or medical evidence question (e.g. 'Laparoscopic cholecystectomy', 'Metformin and Aspirin interactions', 'Fatigue, cold intolerance, weight gain')..."></textarea>
+              <label for="queryInput">
+                Medical Query or Clinical Subject <span class="required">*</span>
+                <span class="info-bulb" data-tooltip="Enter a surgery, medication, symptom list, or medical evidence question (e.g. 'Laparoscopic cholecystectomy', 'Metformin and Aspirin interactions', 'Fatigue, cold intolerance, weight gain').">
+                  <i class="fa-solid fa-circle-info"></i>
+                </span>
+              </label>
+              <textarea id="queryInput" rows="2" placeholder="Enter a surgery, medication, symptom list, or medical evidence question..."></textarea>
 
               <!-- Preset Example Chips -->
               <div class="example-chips">
@@ -123,7 +128,12 @@
             <!-- Configuration Bar -->
             <div class="config-grid">
               <div class="form-group">
-                <label for="modelSelect"><i class="fa-solid fa-brain"></i> LLM Model</label>
+                <label for="modelSelect">
+                  <i class="fa-solid fa-brain"></i> LLM Model
+                  <span class="info-bulb" data-tooltip="Select the AI language model for analysis (xAI Grok, Anthropic Claude, Google Gemini, or DeepSeek).">
+                    <i class="fa-solid fa-circle-info"></i>
+                  </span>
+                </label>
                 <select id="modelSelect">
                   <option value="grok-4.5" selected>grok-4.5 (xAI Flagship - Default)</option>
                   <option value="grok-4.3">grok-4.3 (xAI)</option>
@@ -137,7 +147,12 @@
               </div>
 
               <div class="form-group">
-                <label for="agentSelect"><i class="fa-solid fa-user-doctor"></i> Target Agent</label>
+                <label for="agentSelect">
+                  <i class="fa-solid fa-user-doctor"></i> Target Agent
+                  <span class="info-bulb" data-tooltip="Auto-Route intelligently selects between Procedure, Medication, Diagnostic, or Fact-Checker agent based on your query.">
+                    <i class="fa-solid fa-circle-info"></i>
+                  </span>
+                </label>
                 <select id="agentSelect">
                   <option value="auto" selected>Auto-Route (Recommended)</option>
                   <option value="procedure_agent">Procedure Specialist</option>
@@ -152,10 +167,12 @@
             <div class="toggle-row">
               <div class="toggle-info">
                 <i class="fa-solid fa-globe"></i>
-                <div>
-                  <span class="toggle-title">Live Web Research</span>
-                  <span class="toggle-desc">Fetch evidence from medical literature & guidelines (Tavily / DDG)</span>
-                </div>
+                <span class="toggle-title">
+                  Live Web Research
+                  <span class="info-bulb" data-tooltip="Fetch real-time evidence & clinical guidelines from medical literature databases (Tavily / DDG).">
+                    <i class="fa-solid fa-circle-info"></i>
+                  </span>
+                </span>
               </div>
               <label class="switch">
                 <input type="checkbox" id="webSearchToggle" checked>
@@ -165,14 +182,17 @@
 
             <!-- Document Attachment & Parser Section -->
             <div class="form-group">
-              <label><i class="fa-solid fa-paperclip"></i> Attach Medical Document (Optional)</label>
+              <label>
+                <i class="fa-solid fa-paperclip"></i> Attach Medical Document (Optional)
+                <span class="info-bulb" data-tooltip="Supports PDF, DOCX, TXT, RTF, MD, Images (Max 25MB). Parsed document text will be included as background clinical context.">
+                  <i class="fa-solid fa-circle-info"></i>
+                </span>
+              </label>
               
-              <div class="drop-zone" id="dropZone">
+              <div class="drop-zone drop-zone-compact" id="dropZone">
                 <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
-                <p class="drop-text">Drag & drop clinical report, lab PDF, or docx here</p>
-                <span class="drop-subtext">Supports PDF, DOCX, TXT, RTF, MD, Images (Max 25MB)</span>
+                <span class="drop-text">Drag & drop clinical report, lab PDF or <span class="browse-link" onclick="document.getElementById('fileInput').click()">Browse</span></span>
                 <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
-                <button type="button" class="btn btn-xs btn-outline mt-2" onclick="document.getElementById('fileInput').click()">Browse Files</button>
               </div>
 
               <!-- Upload Error Banner -->

@@ -100,7 +100,8 @@ def test_analyze_sync_endpoint(mock_execute):
         model="grok-4.3",
         implementation="langchain",
         web_search=True,
-        timeout=300
+        timeout=300,
+        agent_id_override=None
     )
 
 
