@@ -145,6 +145,59 @@ def test_analyze_async_job_flow(mock_execute):
     assert missing_response.status_code == 404
 
 
+def test_list_jobs_endpoint():
+    """Test GET /jobs to list all jobs."""
+    response = client.get("/jobs")
+    assert response.status_code == 200
+    jobs_list = response.json()
+    assert isinstance(jobs_list, list)
+
+
+@patch("urllib.request.urlopen")
+def test_slack_notify_endpoint_success(mock_urlopen):
+    """Test POST /slack/notify sends formatted task description attachments."""
+    from unittest.mock import MagicMock
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.read.return_value = b"ok"
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    # 1. Create a job first
+    with patch("api.execute_analysis_sync") as mock_exec:
+        mock_exec.return_value = {
+            "agent_id": "medication_agent",
+            "files": {},
+            "result": {"summary": "Metformin analysis summary text"}
+        }
+        res = client.post("/analyze/async", json={
+            "query": "Is Metformin safe?",
+            "model": "grok-4.3"
+        })
+        job_id = res.json()["job_id"]
+
+    # 2. Dispatch Slack notification
+    notify_res = client.post("/slack/notify", json={
+        "webhook_url": "https://hooks.slack.com/services/T000/B000/XXXX",
+        "job_ids": [job_id]
+    })
+
+    assert notify_res.status_code == 200
+    data = notify_res.json()
+    assert data["status"] == "success"
+    assert data["sent_count"] == 1
+    assert mock_urlopen.called
+
+
+def test_slack_notify_invalid_url():
+    """Test error handling for non-https webhook URL."""
+    res = client.post("/slack/notify", json={
+        "webhook_url": "http://invalid-url.com",
+        "job_ids": ["job-123"]
+    })
+    assert res.status_code == 400
+    assert "Invalid Slack Webhook URL" in res.json()["detail"]
+
+
 # ── /parse document upload endpoint ──────────────────────────────────────────
 
 

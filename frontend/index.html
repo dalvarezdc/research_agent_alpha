@@ -36,6 +36,7 @@
           <span id="apiStatusText">Checking API...</span>
         </div>
         <div class="header-links">
+          <button type="button" class="nav-link nav-btn-slack" id="btnOpenSlackModal"><i class="fa-brands fa-slack"></i> Slack Notify</button>
           <a href="/docs" target="_blank" class="nav-link"><i class="fa-solid fa-book"></i> OpenAPI Docs</a>
           <a href="/health" target="_blank" class="nav-link"><i class="fa-solid fa-notes-medical"></i> Health Check</a>
         </div>
@@ -281,8 +282,63 @@
           </div>
         </div>
 
-      </section>
+    </div>
 
+    <!-- Slack Notifications Modal -->
+    <div class="modal-overlay hidden" id="slackModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <i class="fa-brands fa-slack slack-icon"></i>
+            <div>
+              <h3>Slack Task Notifications</h3>
+              <p>Select multiple tasks and dispatch descriptions as Slack text snippet attachments.</p>
+            </div>
+          </div>
+          <button class="modal-close" id="btnCloseSlackModal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Slack Incoming Webhook URL <span class="required">*</span></label>
+            <input type="url" id="slackWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="input-text">
+            <span class="field-hint">URL will be remembered locally in your browser.</span>
+          </div>
+
+          <div class="tasks-selection-container">
+            <div class="tasks-header-row">
+              <span class="section-title"><i class="fa-solid fa-list-check"></i> Select Tasks to Dispatch</span>
+              <button class="btn btn-xs btn-outline" id="btnSlackSelectAll">Select All</button>
+            </div>
+
+            <div class="tasks-table-wrapper">
+              <table class="slack-tasks-table">
+                <thead>
+                  <tr>
+                    <th width="40"><input type="checkbox" id="chkSelectAllSlack"></th>
+                    <th>Task / Query</th>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody id="slackTasksTbody">
+                  <tr>
+                    <td colspan="5" class="empty-tasks-row">Loading tasks...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="btnCancelSlackModal">Cancel</button>
+          <button class="btn btn-slack" id="btnSendSlackNotify" disabled>
+            <i class="fa-brands fa-slack"></i> Send Selected Tasks (0)
+          </button>
+        </div>
+      </div>
     </div>
   </main>
 

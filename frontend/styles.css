@@ -1119,3 +1119,222 @@ input:checked + .slider:before {
 
 /* Utilities */
 .hidden { display: none !important; }
+
+/* Slack Integration & Modal Styles */
+.nav-btn-slack {
+  background: rgba(74, 21, 75, 0.3) !important;
+  border: 1px solid rgba(224, 30, 90, 0.4) !important;
+  color: #ecb22e !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease;
+}
+
+.nav-btn-slack:hover {
+  background: rgba(74, 21, 75, 0.6) !important;
+  border-color: #e01e5a !important;
+  box-shadow: 0 0 12px rgba(224, 30, 90, 0.3);
+}
+
+.btn-slack {
+  background: linear-gradient(135deg, #4A154B 0%, #611f69 100%);
+  color: #ffffff;
+  border: 1px solid #e01e5a;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-slack:hover:not(:disabled) {
+  background: linear-gradient(135deg, #611f69 0%, #4A154B 100%);
+  box-shadow: 0 0 15px rgba(224, 30, 90, 0.4);
+}
+
+.btn-slack:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 12, 22, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal-card {
+  background: #111827;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 750px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleIn {
+  from { transform: scale(0.94); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--card-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.slack-icon {
+  font-size: 1.8rem;
+  color: #e01e5a;
+}
+
+.modal-title h3 {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin: 0;
+}
+
+.modal-title p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.6rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.modal-close:hover {
+  color: var(--text-bright);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.input-text {
+  width: 100%;
+  background: #0b0f19;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-bright);
+  font-size: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  margin-top: 0.35rem;
+  transition: border-color 0.2s;
+}
+
+.input-text:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.field-hint {
+  display: block;
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+}
+
+.tasks-selection-container {
+  margin-top: 1.25rem;
+}
+
+.tasks-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.tasks-table-wrapper {
+  background: #0b0f19;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.slack-tasks-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+}
+
+.slack-tasks-table th {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--card-border);
+  position: sticky;
+  top: 0;
+  background: #0e1422;
+  z-index: 10;
+}
+
+.slack-tasks-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-bright);
+  vertical-align: middle;
+}
+
+.slack-tasks-table tr:last-child td {
+  border-bottom: none;
+}
+
+.slack-tasks-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.empty-tasks-row {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 1.5rem !important;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background: #0b0f19;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}

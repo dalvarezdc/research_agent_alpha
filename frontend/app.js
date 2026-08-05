@@ -70,6 +70,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDownloadCurrent = document.getElementById('btnDownloadCurrent');
   const toastContainer = document.getElementById('toastContainer');
 
+  // Slack Modal Elements
+  const btnOpenSlackModal = document.getElementById('btnOpenSlackModal');
+  const slackModal = document.getElementById('slackModal');
+  const btnCloseSlackModal = document.getElementById('btnCloseSlackModal');
+  const btnCancelSlackModal = document.getElementById('btnCancelSlackModal');
+  const slackWebhookUrl = document.getElementById('slackWebhookUrl');
+  const btnSlackSelectAll = document.getElementById('btnSlackSelectAll');
+  const chkSelectAllSlack = document.getElementById('chkSelectAllSlack');
+  const slackTasksTbody = document.getElementById('slackTasksTbody');
+  const btnSendSlackNotify = document.getElementById('btnSendSlackNotify');
+
   // Initialize
   checkApiHealth();
   loadAvailableModels();
@@ -89,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       apiStatusBadge.classList.add('error');
       apiStatusText.textContent = 'API Offline';
-      showToast('Backend API is not responding at http://localhost:8000', 'error');
+      showToast('Backend API is not responding at http://localhost:8080', 'error');
     }
   }
 
@@ -191,6 +202,30 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Report content copied to clipboard!', 'success');
       }
     });
+
+    // Slack Modal Handlers
+    if (btnOpenSlackModal) {
+      btnOpenSlackModal.addEventListener('click', openSlackModal);
+    }
+    if (btnCloseSlackModal) {
+      btnCloseSlackModal.addEventListener('click', closeSlackModal);
+    }
+    if (btnCancelSlackModal) {
+      btnCancelSlackModal.addEventListener('click', closeSlackModal);
+    }
+    if (btnSlackSelectAll) {
+      btnSlackSelectAll.addEventListener('click', toggleSelectAllSlackTasks);
+    }
+    if (chkSelectAllSlack) {
+      chkSelectAllSlack.addEventListener('change', (e) => {
+        const checkboxes = slackTasksTbody.querySelectorAll('.task-checkbox');
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        updateSlackSendButtonState();
+      });
+    }
+    if (btnSendSlackNotify) {
+      btnSendSlackNotify.addEventListener('click', sendSlackNotification);
+    }
   }
 
   // 4. File Format Validation & Parsing (/parse)
@@ -623,5 +658,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // 10. Slack Notifications Modal Logic
+  function openSlackModal() {
+    const savedUrl = localStorage.getItem('slack_webhook_url') || '';
+    slackWebhookUrl.value = savedUrl;
+    slackModal.classList.remove('hidden');
+    loadSlackTasks();
+  }
+
+  function closeSlackModal() {
+    slackModal.classList.add('hidden');
+  }
+
+  async function loadSlackTasks() {
+    slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row"><i class="fa-solid fa-spinner fa-spin"></i> Loading tasks...</td></tr>';
+    chkSelectAllSlack.checked = false;
+    updateSlackSendButtonState();
+
+    try {
+      const res = await fetch('/jobs');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const tasks = await res.json();
+
+      if (!tasks || tasks.length === 0) {
+        slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row"><i class="fa-solid fa-folder-open"></i> No tasks found. Run an analysis first to generate tasks.</td></tr>';
+        return;
+      }
+
+      slackTasksTbody.innerHTML = '';
+      tasks.forEach(task => {
+        const tr = document.createElement('tr');
+        const statusClass = task.status === 'completed' ? 'success' : (task.status === 'failed' ? 'error' : '');
+        const dateStr = task.created_at ? new Date(task.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A';
+        const agentName = task.agent_id ? task.agent_id.replace('_agent', '').replace('_', ' ') : 'Auto';
+
+        tr.innerHTML = `
+          <td><input type="checkbox" class="task-checkbox" data-id="${task.id}"></td>
+          <td><strong style="color:var(--text-bright);">${escapeHtml(task.query || 'Query')}</strong></td>
+          <td><span class="stat-badge">${escapeHtml(agentName)}</span></td>
+          <td><span class="stat-badge ${statusClass}">${escapeHtml(task.status || 'unknown')}</span></td>
+          <td style="color:var(--text-muted); font-size:0.75rem;">${dateStr}</td>
+        `;
+
+        const checkbox = tr.querySelector('.task-checkbox');
+        checkbox.addEventListener('change', updateSlackSendButtonState);
+        slackTasksTbody.appendChild(tr);
+      });
+
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
+      slackTasksTbody.innerHTML = `<tr><td colspan="5" class="empty-tasks-row" style="color:#fca5a5;"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load tasks: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  function toggleSelectAllSlackTasks() {
+    const checkboxes = slackTasksTbody.querySelectorAll('.task-checkbox');
+    if (checkboxes.length === 0) return;
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+    chkSelectAllSlack.checked = !allChecked;
+    updateSlackSendButtonState();
+  }
+
+  function updateSlackSendButtonState() {
+    const selectedBoxes = slackTasksTbody.querySelectorAll('.task-checkbox:checked');
+    const count = selectedBoxes.length;
+    btnSendSlackNotify.disabled = count === 0;
+    btnSendSlackNotify.innerHTML = `<i class="fa-brands fa-slack"></i> Send Selected Tasks (${count})`;
+  }
+
+  async function sendSlackNotification() {
+    const webhookUrl = slackWebhookUrl.value.trim();
+    if (!webhookUrl || !webhookUrl.startsWith('https://')) {
+      showToast('Please enter a valid Slack Webhook URL (starts with https://)', 'error');
+      slackWebhookUrl.focus();
+      return;
+    }
+
+    const selectedBoxes = slackTasksTbody.querySelectorAll('.task-checkbox:checked');
+    const selectedJobIds = Array.from(selectedBoxes).map(cb => cb.getAttribute('data-id'));
+
+    if (selectedJobIds.length === 0) {
+      showToast('Select at least one task to send.', 'error');
+      return;
+    }
+
+    localStorage.setItem('slack_webhook_url', webhookUrl);
+
+    btnSendSlackNotify.disabled = true;
+    btnSendSlackNotify.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+
+    try {
+      const res = await fetch('/slack/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          webhook_url: webhookUrl,
+          job_ids: selectedJobIds
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      showToast(`Successfully sent ${data.sent_count} task(s) with descriptions to Slack!`, 'success');
+      closeSlackModal();
+
+    } catch (err) {
+      showToast(`Slack dispatch failed: ${err.message}`, 'error');
+    } finally {
+      updateSlackSendButtonState();
+    }
   }
 });

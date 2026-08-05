@@ -7,7 +7,7 @@ help:
 	@echo "  make setup        Run automated setup script"
 	@echo "  make run          Start interactive router (default)"
 	@echo "  make check-llms   Verify configured LLM provider API keys"
-	@echo "  make api          Start REST API server (port 8000)"
+	@echo "  make api          Start REST API server (port 8080)"
 	@echo "  make api-dev      Start REST API server with auto-reload"
 	@echo "  make test         Run test suite"
 	@echo "  make test-verbose Run test suite in verbose mode"
@@ -36,16 +36,16 @@ check-llms:
 
 api:
 	@if command -v uv >/dev/null 2>&1; then \
-		uv run python api.py --port 8000; \
+		uv run python api.py --port 8080; \
 	else \
-		python3 api.py --port 8000; \
+		python3 api.py --port 8080; \
 	fi
 
 api-dev:
 	@if command -v uv >/dev/null 2>&1; then \
-		uv run python api.py --reload --port 8000; \
+		uv run python api.py --reload --port 8080; \
 	else \
-		python3 api.py --reload --port 8000; \
+		python3 api.py --reload --port 8080; \
 	fi
 
 test:
