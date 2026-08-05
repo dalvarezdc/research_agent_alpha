@@ -149,3 +149,28 @@ def test_parse_patient_report_endpoint(mock_parse_doc, mock_categorize):
     assert data["categorized_data"]["liver"][0]["marker"] == "ALT"
     assert data["categorized_data"]["pancreas"][0]["marker"] == "HbA1c"
 
+
+@patch("api.execute_analysis_sync")
+def test_agent_override_in_analyze_async(mock_exec):
+    """Test POST /analyze/async correctly respects explicit agent_id override."""
+    mock_exec.return_value = {
+        "agent_id": "general_agent",
+        "files": {"patient_report": "outputs/patient_report.md"},
+        "result": {"summary": "Fact check results"}
+    }
+
+    payload = {
+        "query": "cortisol can cause cancer",
+        "model": "grok-4.5",
+        "agent_id": "general_agent",
+        "web_search": True
+    }
+    res = client.post("/analyze/async", json=payload)
+    assert res.status_code == 202
+    job_data = res.json()
+    job_id = job_data["job_id"]
+    
+    assert job_id in jobs
+    assert jobs[job_id]["agent_id"] == "general_agent"
+
+

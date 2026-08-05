@@ -61,25 +61,26 @@ sample_agents = [
     AgentSpec(
         id="medication_agent",
         name="Medication Specialist",
-        description="Handles queries about medications, drugs, dosages, side effects, and prescriptions",
+        description="Handles queries about medications, drugs, dosages, side effects, interactions, and prescriptions",
         routing_notes="Use for pharmaceutical and medication-related questions"
     ),
     AgentSpec(
         id="procedure_agent",
         name="Medical Procedure Specialist",
-        description="Handles queries about medical procedures, surgeries, and treatments",
+        description="Handles queries about medical procedures, surgeries, interventions, and perioperative care",
         routing_notes="Use for procedural and interventional medical questions"
     ),
     AgentSpec(
         id="diagnostic_agent",
         name="Diagnostic Specialist",
-        description="Handles queries about symptoms, diagnoses, and medical conditions",
-        routing_notes="Use for diagnostic and condition-related questions"
+        description="Handles differential diagnosis, patient symptom presentation, and diagnostic workups",
+        routing_notes="Use ONLY when analyzing specific patient symptoms or clinical diagnostic presentations"
     ),
     AgentSpec(
         id="general_agent",
-        name="General Medical Assistant",
-        description="Handles general medical queries that don't fit other specialized categories"
+        name="Medical Fact-Checker & General Assistant",
+        description="Handles health claims, fact-checking, myths/controversies, risk factors ('X causes Y'), and general medical evidence analysis",
+        routing_notes="Use for health claims ('cortisol causes cancer', 'does X cause Y'), evidence verification, controversies, and general health questions"
     )
 ]
 

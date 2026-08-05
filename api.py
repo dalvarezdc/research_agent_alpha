@@ -96,6 +96,8 @@ class AnalyzeRequest(BaseModel):
     implementation: str = Field("langchain", description="Agent implementation to use ('original' or 'langchain').")
     web_search: bool = Field(True, description="Whether to enable web search for the agent.")
     timeout: int = Field(300, description="LLM API timeout in seconds.")
+    agent_id: Optional[str] = Field(None, description="Target agent ID override (medication_agent, procedure_agent, diagnostic_agent, general_agent).")
+
 
 
 class RegenerateRequest(BaseModel):
@@ -420,7 +422,8 @@ def analyze_query_sync_endpoint(req: AnalyzeRequest):
             model=req.model,
             implementation=req.implementation,
             web_search=req.web_search,
-            timeout=req.timeout
+            timeout=req.timeout,
+            agent_id_override=req.agent_id
         )
         return {
             "status": "success",
@@ -449,7 +452,7 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
         jobs[job_id] = {
             "id": job_id,
             "query": req.query,
-            "agent_id": None,
+            "agent_id": req.agent_id,
             "status": JobStatus.PENDING,
             "created_at": now,
             "updated_at": now,
@@ -465,7 +468,8 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
         model=req.model,
         implementation=req.implementation,
         web_search=req.web_search,
-        timeout=req.timeout
+        timeout=req.timeout,
+        agent_id_override=req.agent_id
     )
 
     return {
