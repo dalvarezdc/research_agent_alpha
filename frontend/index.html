@@ -105,15 +105,32 @@
               <span class="badge">Workbench</span>
             </div>
 
-            <!-- Query Input Form -->
+            <!-- Query Input & Intake Chatbot Workbench -->
             <div class="form-group">
-              <label for="queryInput">
-                Medical Query or Clinical Subject <span class="required">*</span>
-                <span class="info-bulb" data-tooltip="Enter a surgery, medication, symptom list, or medical evidence question (e.g. 'Laparoscopic cholecystectomy', 'Metformin and Aspirin interactions', 'Fatigue, cold intolerance, weight gain').">
-                  <i class="fa-solid fa-circle-info"></i>
-                </span>
-              </label>
-              <textarea id="queryInput" rows="2" placeholder="Enter a surgery, medication, symptom list, or medical evidence question..."></textarea>
+              <div class="label-with-badge">
+                <label for="queryInput">
+                  Medical Query or Clinical Subject <span class="required">*</span>
+                  <span class="info-bulb" data-tooltip="Submit a single query directly or chat with the intake assistant to ask clarifying questions and enrich your prompt before analysis.">
+                    <i class="fa-solid fa-circle-info"></i>
+                  </span>
+                </label>
+                <div class="mode-badge-container">
+                  <span class="mode-badge direct" id="intakeModeBadge"><i class="fa-solid fa-bolt"></i> Direct Prompt</span>
+                </div>
+              </div>
+
+              <!-- Intake Chat Stream Container -->
+              <div class="intake-chat-stream hidden" id="intakeChatStream"></div>
+
+              <!-- Input Area & Chat Action Bar -->
+              <div class="intake-input-wrapper">
+                <textarea id="queryInput" rows="2" placeholder="Enter a surgery, medication, symptom list, or medical evidence question..."></textarea>
+                <div class="intake-input-actions">
+                  <button type="button" class="btn btn-secondary btn-chat-send" id="btnChatSend" title="Send message to Intake Assistant to ask clarifying questions">
+                    <i class="fa-solid fa-paper-plane"></i> Send / Clarify
+                  </button>
+                </div>
+              </div>
 
               <!-- Preset Example Chips -->
               <div class="example-chips">

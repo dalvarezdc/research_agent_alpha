@@ -23,6 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   let activeCategory = 'heart';
 
+  // Intake Chatbot State
+  let intakeChatHistory = []; // Array of { role: 'user'|'assistant', content: string }
+  let isIntakeChatLoading = false;
+
   const CAT_TITLES = {
     heart: '🫀 Heart & Cardiovascular System',
     liver: '🥩 Liver & Hepatic Function',
@@ -47,13 +51,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const conversationSearchInput = document.getElementById('conversationSearchInput');
   const conversationsList = document.getElementById('conversationsList');
 
-  // Workbench Form Elements
+  // Workbench Form & Intake Elements
   const apiStatusBadge = document.getElementById('apiStatusBadge');
   const apiStatusText = document.getElementById('apiStatusText');
   const queryInput = document.getElementById('queryInput');
   const modelSelect = document.getElementById('modelSelect');
   const agentSelect = document.getElementById('agentSelect');
   const webSearchToggle = document.getElementById('webSearchToggle');
+  const intakeModeBadge = document.getElementById('intakeModeBadge');
+  const intakeChatStream = document.getElementById('intakeChatStream');
+  const btnChatSend = document.getElementById('btnChatSend');
 
   // File Upload Elements
   const dropZone = document.getElementById('dropZone');
@@ -286,6 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
     btnAddCatRow.addEventListener('click', addCategoryRow);
 
     // Main Actions
+    btnChatSend.addEventListener('click', sendIntakeChatMessage);
+
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && (e.ctrlKey || e.metaKey || intakeChatHistory.length > 0)) {
+        e.preventDefault();
+        sendIntakeChatMessage();
+      }
+    });
+
     btnAnalyze.addEventListener('click', submitAsyncAnalysis);
     btnRoute.addEventListener('click', routeQueryOnly);
     btnClear.addEventListener('click', resetForm);
@@ -853,16 +869,156 @@ document.addEventListener('DOMContentLoaded', () => {
     fileErrorAlert.classList.remove('hidden');
   }
 
-  // 9. Submit Asynchronous Analysis Run
-  async function submitAsyncAnalysis() {
-    let query = queryInput.value.trim();
-    if (!query) {
-      showToast('Please enter a medical query or clinical subject.', 'error');
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function updateIntakeChatUI() {
+    if (!intakeChatStream || !intakeModeBadge) return;
+
+    if (intakeChatHistory.length === 0) {
+      intakeChatStream.classList.add('hidden');
+      intakeChatStream.innerHTML = '';
+      intakeModeBadge.className = 'mode-badge direct';
+      intakeModeBadge.innerHTML = '<i class="fa-solid fa-bolt"></i> Direct Prompt';
+    } else {
+      intakeChatStream.classList.remove('hidden');
+      intakeModeBadge.className = 'mode-badge chat';
+      intakeModeBadge.innerHTML = `<i class="fa-solid fa-comments"></i> Intake Chat (${intakeChatHistory.length} turns)`;
+
+      let html = '';
+      intakeChatHistory.forEach(msg => {
+        const isUser = msg.role === 'user';
+        const icon = isUser ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-user-doctor"></i>';
+        html += `
+          <div class="chat-msg ${isUser ? 'user' : 'assistant'}">
+            <div class="chat-avatar">${icon}</div>
+            <div class="chat-bubble">${escapeHtml(msg.content)}</div>
+          </div>
+        `;
+      });
+
+      if (isIntakeChatLoading) {
+        html += `
+          <div class="chat-msg assistant">
+            <div class="chat-avatar"><i class="fa-solid fa-spinner fa-spin"></i></div>
+            <div class="chat-bubble chat-bubble-typing">
+              <i class="fa-solid fa-circle-notch fa-spin"></i> Intake Assistant is evaluating...
+            </div>
+          </div>
+        `;
+      }
+
+      intakeChatStream.innerHTML = html;
+      intakeChatStream.scrollTop = intakeChatStream.scrollHeight;
+    }
+  }
+
+  async function sendIntakeChatMessage() {
+    const text = queryInput.value.trim();
+    if (!text && intakeChatHistory.length === 0) {
+      showToast('Please enter a medical query to start intake chat.', 'error');
       queryInput.focus();
       return;
     }
 
-    if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked) {
+    if (text) {
+      intakeChatHistory.push({ role: 'user', content: text });
+      queryInput.value = '';
+    }
+
+    isIntakeChatLoading = true;
+    updateIntakeChatUI();
+
+    btnChatSend.disabled = true;
+    btnChatSend.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+
+    try {
+      let docContext = null;
+      if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked) {
+        docContext = parsedDocument.markdown;
+      }
+
+      const res = await fetch('/intake/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: intakeChatHistory,
+          model: modelSelect.value,
+          document_context: docContext
+        })
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (data && data.content) {
+        intakeChatHistory.push({ role: 'assistant', content: data.content });
+      }
+    } catch (err) {
+      showToast(`Intake assistant error: ${err.message}`, 'error');
+    } finally {
+      isIntakeChatLoading = false;
+      btnChatSend.disabled = false;
+      btnChatSend.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send / Clarify';
+      updateIntakeChatUI();
+      queryInput.focus();
+    }
+  }
+
+  // 9. Submit Asynchronous Analysis Run
+  async function submitAsyncAnalysis() {
+    let query = queryInput.value.trim();
+
+    // If chat turns exist, summarize conversation context
+    if (intakeChatHistory.length > 0) {
+      if (query) {
+        intakeChatHistory.push({ role: 'user', content: query });
+        queryInput.value = '';
+        updateIntakeChatUI();
+      }
+
+      btnAnalyze.disabled = true;
+      btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Summarizing Intake Chat...';
+
+      try {
+        let docContext = null;
+        if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked) {
+          docContext = parsedDocument.markdown;
+        }
+
+        const sumRes = await fetch('/intake/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: intakeChatHistory,
+            model: modelSelect.value,
+            document_context: docContext
+          })
+        });
+
+        if (sumRes.ok) {
+          const sumData = await sumRes.json();
+          if (sumData && sumData.summary) {
+            query = sumData.summary;
+          }
+        }
+      } catch (err) {
+        console.warn('Summary endpoint error, using transcript fallback:', err);
+        query = intakeChatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+      }
+    }
+
+    if (!query) {
+      showToast('Please enter a medical query or clinical subject.', 'error');
+      queryInput.focus();
+      btnAnalyze.disabled = false;
+      btnAnalyze.innerHTML = '<i class="fa-solid fa-play"></i> Start Analysis Run';
+      return;
+    }
+
+    if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked && intakeChatHistory.length === 0) {
       query += `\n\n--- ATTACHED MEDICAL DOCUMENT (${parsedDocument.filename}) ---\n` + parsedDocument.markdown;
     }
 
@@ -1078,7 +1234,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 12. Route Query Only (Synchronous Classification)
   async function routeQueryOnly() {
-    const query = queryInput.value.trim();
+    let query = queryInput.value.trim();
+    if (!query && intakeChatHistory.length > 0) {
+      const lastUserMsg = [...intakeChatHistory].reverse().find(m => m.role === 'user');
+      query = lastUserMsg ? lastUserMsg.content : '';
+    }
     if (!query) {
       showToast('Please enter a medical query to route.', 'error');
       queryInput.focus();
@@ -1122,6 +1282,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function resetForm() {
     queryInput.value = '';
+    intakeChatHistory = [];
+    isIntakeChatLoading = false;
+    updateIntakeChatUI();
     removeUploadedDocument();
     placeholderState.classList.remove('hidden');
     jobProgressCard.classList.add('hidden');

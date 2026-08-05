@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, ANY
+from unittest.mock import patch, ANY, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -248,3 +248,50 @@ def test_parse_endpoint_rejects_oversize_upload(monkeypatch):
         files={"file": ("big.txt", b"way too large payload", "text/plain")},
     )
     assert response.status_code == 413
+
+
+@patch("api.create_llm_manager")
+def test_intake_chat_endpoint(mock_llm_factory):
+    mock_mgr = MagicMock()
+    mock_provider = MagicMock()
+    mock_provider.generate_response.return_value = ("Could you clarify patient age and duration of symptoms?", None)
+    mock_mgr.get_provider_direct.return_value = mock_provider
+    mock_llm_factory.return_value = mock_mgr
+
+    payload = {
+        "messages": [
+            {"role": "user", "content": "I have headache and mild fever"}
+        ],
+        "model": "grok-4.5",
+        "document_context": "Patient lab report: WBC 11.2"
+    }
+
+    response = client.post("/intake/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["role"] == "assistant"
+    assert "patient age" in data["content"]
+
+
+@patch("api.create_llm_manager")
+def test_intake_summarize_endpoint(mock_llm_factory):
+    mock_mgr = MagicMock()
+    mock_provider = MagicMock()
+    mock_provider.generate_response.return_value = ("Clinical Query: 45yo male with 3-day history of headache and mild fever (100.4F). WBC 11.2.", None)
+    mock_mgr.get_provider_direct.return_value = mock_provider
+    mock_llm_factory.return_value = mock_mgr
+
+    payload = {
+        "messages": [
+            {"role": "user", "content": "I have headache and mild fever"},
+            {"role": "assistant", "content": "What is the duration?"},
+            {"role": "user", "content": "3 days"}
+        ],
+        "model": "grok-4.5"
+    }
+
+    response = client.post("/intake/summarize", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "summary" in data
+    assert "45yo male" in data["summary"]

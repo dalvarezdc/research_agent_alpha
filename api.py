@@ -39,7 +39,7 @@ from database import repository
 # Import agent router functions and models
 from router import route_agent, sample_agents, DEFAULT_ROUTING_MODEL
 from run_analysis import AgentOrchestrator
-from llm_integrations import get_available_models
+from llm_integrations import get_available_models, create_llm_manager
 from document_parser import parse_document
 from medical_report_categorizer import categorize_medical_markdown
 
@@ -97,6 +97,23 @@ class AnalyzeRequest(BaseModel):
     web_search: bool = Field(True, description="Whether to enable web search for the agent.")
     timeout: int = Field(300, description="LLM API timeout in seconds.")
     agent_id: Optional[str] = Field(None, description="Target agent ID override (medication_agent, procedure_agent, diagnostic_agent, general_agent).")
+
+
+class IntakeChatMessage(BaseModel):
+    role: str = Field(..., description="Message role: 'user' or 'assistant'")
+    content: str = Field(..., description="Message text content")
+
+
+class IntakeChatRequest(BaseModel):
+    messages: List[IntakeChatMessage] = Field(..., description="Intake conversation history so far.")
+    model: Optional[str] = Field(DEFAULT_ROUTING_MODEL, description="LLM model to use for intake assistant.")
+    document_context: Optional[str] = Field(None, description="Optional background document context.")
+
+
+class IntakeSummarizeRequest(BaseModel):
+    messages: List[IntakeChatMessage] = Field(..., description="Full intake conversation history to summarize.")
+    document_context: Optional[str] = Field(None, description="Optional background document context.")
+    model: Optional[str] = Field(DEFAULT_ROUTING_MODEL, description="LLM model to use for prompt synthesis.")
 
 
 
@@ -408,6 +425,101 @@ def route_query_endpoint(req: RouteRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Routing failure: {e}"
+        )
+
+
+@app.post("/intake/chat")
+@app.post("/intake/chat/")
+def intake_chat_endpoint(req: IntakeChatRequest):
+    """
+    Interactive intake assistant endpoint. Evaluates query history (+ optional document context)
+    and returns concise, focused clinical clarifying questions to enrich the prompt.
+    """
+    try:
+        model_name = req.model or DEFAULT_ROUTING_MODEL
+        llm_mgr = create_llm_manager(primary_provider=model_name)
+        provider = llm_mgr.get_provider_direct() or llm_mgr.get_available_provider()
+        if not provider:
+            raise RuntimeError("No LLM provider available for intake assistant.")
+
+        system_prompt = (
+            "You are an expert clinical intake assistant. Your sole role is to help the user refine and enrich "
+            "their medical query before it is submitted to specialized clinical AI agents for full research.\n"
+            "Rules:\n"
+            "1. Focus strictly on asking 1 to 2 high-yield, relevant clinical clarifying questions (e.g. patient demographics, "
+            "symptom duration, specific drug dosages, medical history/comorbidities, contraindications, or primary objective).\n"
+            "2. If the user's information is already thorough and complete, state clearly: 'Your query is detailed and ready for analysis run! Feel free to press Start Analysis Run or provide any final details.'\n"
+            "3. Keep your response brief, professional, and directly actionable (2-4 sentences max).\n"
+            "4. Do NOT attempt to perform the full medical analysis yourself or give diagnostic recommendations—only ask clarifying questions."
+        )
+
+        formatted_convo = ""
+        for msg in req.messages:
+            role_label = "User" if msg.role == "user" else "Assistant"
+            formatted_convo += f"{role_label}: {msg.content}\n\n"
+
+        if req.document_context and req.document_context.strip():
+            formatted_convo += f"--- ATTACHED CLINICAL DOCUMENT CONTEXT ---\n{req.document_context.strip()}\n\n"
+
+        prompt = f"Below is the current intake conversation transcript:\n\n{formatted_convo}Please review the clinical prompt above and respond with clarifying questions or confirmation."
+
+        res = provider.generate_response(prompt, system_prompt=system_prompt)
+        reply_text = res[0] if isinstance(res, (tuple, list)) else str(res)
+        return {
+            "role": "assistant",
+            "content": reply_text.strip()
+        }
+    except Exception as e:
+        logger.error(f"Error in intake chat: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Intake chat failure: {e}"
+        )
+
+
+@app.post("/intake/summarize")
+@app.post("/intake/summarize/")
+def intake_summarize_endpoint(req: IntakeSummarizeRequest):
+    """
+    Synthesizes a multi-turn intake chat transcript (+ optional document context)
+    into a unified, rich clinical query prompt ready for agent analysis.
+    """
+    try:
+        model_name = req.model or DEFAULT_ROUTING_MODEL
+        llm_mgr = create_llm_manager(primary_provider=model_name)
+        provider = llm_mgr.get_provider_direct() or llm_mgr.get_available_provider()
+        if not provider:
+            raise RuntimeError("No LLM provider available for prompt synthesis.")
+
+        system_prompt = (
+            "You are a medical prompt synthesizer. Your task is to synthesize the provided intake chat conversation "
+            "and clinical context into a single, cohesive, comprehensive clinical query prompt.\n"
+            "Instructions:\n"
+            "- Combine all user goals, patient details, symptoms, dosages, questions, and clarifying details into one structured prompt.\n"
+            "- Omit chat preamble, greetings, and conversational filler.\n"
+            "- Output ONLY the final synthesized clinical prompt, clear and ready for specialized medical analysis."
+        )
+
+        formatted_convo = ""
+        for msg in req.messages:
+            role_label = "User" if msg.role == "user" else "Assistant"
+            formatted_convo += f"{role_label}: {msg.content}\n\n"
+
+        if req.document_context and req.document_context.strip():
+            formatted_convo += f"--- ATTACHED CLINICAL DOCUMENT CONTEXT ---\n{req.document_context.strip()}\n\n"
+
+        prompt = f"Synthesize the following intake transcript into a single clinical query prompt:\n\n{formatted_convo}"
+
+        res = provider.generate_response(prompt, system_prompt=system_prompt)
+        summary_text = res[0] if isinstance(res, (tuple, list)) else str(res)
+        return {
+            "summary": summary_text.strip()
+        }
+    except Exception as e:
+        logger.error(f"Error in intake summarize: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Intake summarize failure: {e}"
         )
 
 
