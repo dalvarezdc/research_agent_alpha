@@ -2039,17 +2039,24 @@ Examples:
             "claude-opus",
             "openai",
             "ollama",
+            "grok-4.5",
             "grok-4.3",
+            "gemini-vertex",
+            "claude-vertex",
+            "deepseek",
+            "deepseek-v4-flash",
+            "deepseek-v4-pro",
+            "deepseek-chat",
+            "deepseek-reasoner",
             "grok-4-1-fast",
             "grok-4-1-code",
             "grok-4-1-reasoning",
         ],
         help=(
             "LLM provider to use (default: claude-sonnet). Options: "
-            "claude-sonnet (Sonnet 4.6), claude-opus (Opus 4.7), openai (GPT-4o), "
-            "ollama (local), grok-4.3 (current xAI flagship), "
-            "grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning "
-            "(legacy, mapped to grok-4.3, retiring May 15 2026)"
+            "claude-sonnet, claude-opus, openai, ollama, grok-4.5, grok-4.3, "
+            "gemini-vertex, claude-vertex, deepseek-v4-flash, deepseek-v4-pro, "
+            "deepseek-chat, deepseek-reasoner"
         ),
     )
 

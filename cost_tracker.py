@@ -119,6 +119,12 @@ PRICING = {
     "gemini-2.5-pro": {"input": 2.00, "output": 12.00, "cache_read": 0.20},
     # gemini-1.5-pro (legacy): $1.25/1M input, $5.00/1M output (<= 128k tokens)
     "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+    # ── DeepSeek models ───────────────────────────────────────────────────────
+    "deepseek": {"input": 0.14, "output": 0.28, "cache_read": 0.0028},
+    "deepseek-v4-flash": {"input": 0.14, "output": 0.28, "cache_read": 0.0028},
+    "deepseek-v4-pro": {"input": 0.435, "output": 0.87, "cache_read": 0.003625},
+    "deepseek-chat": {"input": 0.14, "output": 0.28, "cache_read": 0.0028},
+    "deepseek-reasoner": {"input": 0.55, "output": 2.19, "cache_read": 0.14},
     # Default
     "default": {"input": 3.00, "output": 15.00},
 }

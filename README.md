@@ -242,6 +242,7 @@ Set at least one provider key. The default routing model is `grok-4.5` (xAI):
 XAI_API_KEY="your-xai-key"           # grok-4.5 (default), grok-4.3
 ANTHROPIC_API_KEY="your-key"          # Claude models
 OPENAI_API_KEY="your-key"             # GPT-4o
+DEEPSEEK_API_KEY="your-key"           # DeepSeek V4 Flash / Pro
 ```
 
 Optional integrations:

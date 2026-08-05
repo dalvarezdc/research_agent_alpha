@@ -255,6 +255,8 @@ uv run python -m pytest tests/test_langchain_agents.py -v
 | `gemini-vertex` | `gemini-2.5-pro` | ~$2 / $12 |
 | `claude-vertex` | `claude-sonnet-4-6` (via Vertex) | $3 / $15 |
 | `openai` | `gpt-4o` | $2.50 / $10 |
+| `deepseek-v4-flash` / `deepseek` | `deepseek-v4-flash` | $0.14 / $0.28 |
+| `deepseek-v4-pro` | `deepseek-v4-pro` | $0.435 / $0.87 |
 | `ollama` | `llama2:13b` | local |
 
 Default routing model: `grok-4.5` (set in `router.py:DEFAULT_ROUTING_MODEL`).

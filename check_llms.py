@@ -62,6 +62,12 @@ _PROVIDER_PRESENTATION: list[dict[str, Any]] = [
         "env_var": "VERTEX_PROJECT",
         "model": "gemini-3.5-flash",
     },
+    {
+        "name": "DeepSeek V4 Flash",
+        "cli": "deepseek-v4-flash",
+        "env_var": "DEEPSEEK_API_KEY",
+        "model": "deepseek-v4-flash",
+    },
 ]
 
 
