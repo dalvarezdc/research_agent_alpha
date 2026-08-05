@@ -14,7 +14,8 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import PatientData, Report, ReportFile, Subject, User
+import os
+from .models import Patient, PatientData, Report, ReportFile, Subject, User
 from .users import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -192,3 +193,131 @@ def list_patient_data(
         .limit(limit)
     )
     return list(session.scalars(stmt))
+
+
+# ── Patient CRUD Helpers ──────────────────────────────────────────────────────
+
+
+def create_patient(
+    session: Session,
+    *,
+    user: Optional[User] = None,
+    name: str,
+    age: Optional[int] = None,
+    gender: Optional[str] = None,
+    primary_condition: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    contact_phone: Optional[str] = None,
+    metadata_json: Optional[dict[str, Any]] = None,
+    clinical_data: Optional[dict[str, Any]] = None,
+) -> Patient:
+    """Create and persist a new Patient entity."""
+    if user is None:
+        user = get_current_user(session)
+    if user is None:
+        raise ValueError("No acting user available.")
+
+    patient = Patient(
+        user_id=user.id,
+        name=name.strip(),
+        age=age,
+        gender=gender,
+        primary_condition=primary_condition,
+        contact_email=contact_email,
+        contact_phone=contact_phone,
+        metadata_json=metadata_json or {},
+        clinical_data=clinical_data or {},
+    )
+    session.add(patient)
+    session.flush()
+    return patient
+
+
+def list_patients(
+    session: Session, *, user_id: Optional[str] = None, limit: int = 200
+) -> list[Patient]:
+    """List patients, newest first."""
+    stmt = select(Patient).order_by(Patient.created_at.desc())
+    if user_id:
+        stmt = stmt.where(Patient.user_id == user_id)
+    stmt = stmt.limit(limit)
+    return list(session.scalars(stmt))
+
+
+def get_patient(session: Session, patient_id: str) -> Optional[Patient]:
+    """Fetch a single Patient by primary key ID."""
+    return session.get(Patient, patient_id)
+
+
+def update_patient(
+    session: Session,
+    patient_id: str,
+    *,
+    name: Optional[str] = None,
+    age: Optional[int] = None,
+    gender: Optional[str] = None,
+    primary_condition: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    contact_phone: Optional[str] = None,
+    metadata_json: Optional[dict[str, Any]] = None,
+    clinical_data: Optional[dict[str, Any]] = None,
+) -> Optional[Patient]:
+    """Update existing Patient record."""
+    patient = session.get(Patient, patient_id)
+    if patient is None:
+        return None
+
+    if name is not None:
+        patient.name = name.strip()
+    if age is not None:
+        patient.age = age
+    if gender is not None:
+        patient.gender = gender
+    if primary_condition is not None:
+        patient.primary_condition = primary_condition
+    if contact_email is not None:
+        patient.contact_email = contact_email
+    if contact_phone is not None:
+        patient.contact_phone = contact_phone
+    if metadata_json is not None:
+        patient.metadata_json = metadata_json
+    if clinical_data is not None:
+        patient.clinical_data = clinical_data
+
+    session.flush()
+    return patient
+
+
+def delete_patient(session: Session, patient_id: str) -> bool:
+    """Delete a patient record."""
+    patient = session.get(Patient, patient_id)
+    if patient is None:
+        return False
+    session.delete(patient)
+    session.flush()
+    return True
+
+
+def delete_report_and_artifacts(session: Session, report_id: str) -> list[str]:
+    """Delete a report database record and remove all its on-disk files.
+    
+    Returns a list of removed file paths.
+    """
+    report = session.get(Report, report_id)
+    if report is None:
+        return []
+
+    removed_paths = []
+    for report_file in report.files:
+        path = report_file.file_path
+        if path and os.path.exists(path):
+            try:
+                os.remove(path)
+                removed_paths.append(path)
+            except Exception as e:
+                logger.warning("Failed to remove file %s: %s", path, e)
+
+    session.delete(report)
+    session.flush()
+    return removed_paths
+

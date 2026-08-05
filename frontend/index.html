@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Medical Multi-Agent Intelligence Platform — Systematic clinical analysis for procedures, medications, diagnoses, and medical fact-checking.">
+  <meta name="description" content="Medical Multi-Agent Intelligence Platform — Systematic clinical analysis for procedures, medications, diagnoses, medical fact-checking, and patient management.">
   <title>Medical Multi-Agent Intelligence Workbench</title>
   <!-- Google Fonts: Inter & Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,330 +17,610 @@
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand">
+  <div class="app-layout">
+
+    <!-- LEFT SIDEBAR NAVIGATION -->
+    <aside class="app-sidebar" id="appSidebar">
+      <div class="sidebar-header">
         <div class="brand-icon">
           <i class="fa-solid fa-heart-pulse"></i>
         </div>
         <div class="brand-text">
-          <span class="brand-title">Medical Agent Intelligence</span>
-          <span class="brand-subtitle">Clinical Multi-Agent Reasoning Platform</span>
+          <span class="brand-title">Medical Agent</span>
+          <span class="brand-subtitle">Intelligence Hub</span>
         </div>
       </div>
 
-      <div class="header-status">
+      <nav class="sidebar-menu">
+        <button class="nav-item active" id="navBtnConversations" data-view="viewConversations">
+          <i class="fa-solid fa-comments"></i>
+          <span>Conversations</span>
+          <span class="badge-count" id="conversationsCountTag">0</span>
+        </button>
+        <button class="nav-item" id="navBtnPatients" data-view="viewPatients">
+          <i class="fa-solid fa-user-group"></i>
+          <span>Patients</span>
+          <span class="badge-count" id="patientsCountTag">0</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-section-title">Quick Utilities</div>
+      <div class="sidebar-actions">
+        <button type="button" class="btn btn-xs btn-outline btn-slack-side" id="btnOpenSlackModal">
+          <i class="fa-brands fa-slack"></i> Slack Notify
+        </button>
+        <a href="/docs" target="_blank" class="sidebar-link"><i class="fa-solid fa-book"></i> OpenAPI Docs</a>
+        <a href="/health" target="_blank" class="sidebar-link"><i class="fa-solid fa-notes-medical"></i> API Health</a>
+      </div>
+
+      <div class="sidebar-footer">
         <div class="status-badge" id="apiStatusBadge">
           <span class="status-dot"></span>
           <span id="apiStatusText">Checking API...</span>
         </div>
-        <div class="header-links">
-          <button type="button" class="nav-link nav-btn-slack" id="btnOpenSlackModal"><i class="fa-brands fa-slack"></i> Slack Notify</button>
-          <a href="/docs" target="_blank" class="nav-link"><i class="fa-solid fa-book"></i> OpenAPI Docs</a>
-          <a href="/health" target="_blank" class="nav-link"><i class="fa-solid fa-notes-medical"></i> Health Check</a>
-        </div>
       </div>
-    </div>
-  </header>
+    </aside>
 
-  <!-- Main Container -->
-  <main class="main-container">
-    
-    <!-- Toast & Alert Banner Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- MAIN VIEWPORT CONTAINER -->
+    <main class="main-viewport">
+      
+      <!-- Toast & Alert Banner Container -->
+      <div id="toastContainer" class="toast-container"></div>
 
-    <div class="workbench-grid">
-
-      <!-- LEFT COLUMN: Input & Document Workbench -->
-      <section class="panel input-panel">
-        <div class="panel-header">
-          <h2><i class="fa-solid fa-pen-to-square"></i> Query & Clinical Context</h2>
-          <span class="badge">Workbench</span>
+      <!-- VIEW 1: CONVERSATIONS & WORKBENCH -->
+      <div class="tab-view active" id="viewConversations">
+        
+        <div class="view-header">
+          <div>
+            <h2><i class="fa-solid fa-comments"></i> Medical Conversations & Analysis</h2>
+            <p>Select past runs to inspect outputs, clear cached files, or regenerate reports with specialized agents.</p>
+          </div>
+          <button class="btn btn-sm btn-outline" id="btnRefreshConversations">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh History
+          </button>
         </div>
 
-        <!-- Query Input Form -->
-        <div class="form-group">
-          <label for="queryInput">Medical Query or Clinical Subject <span class="required">*</span></label>
-          <textarea id="queryInput" rows="4" placeholder="Enter a surgery, medication, symptom list, or medical evidence question (e.g. 'Laparoscopic cholecystectomy', 'Metformin and Aspirin interactions', 'Fatigue, cold intolerance, weight gain')..."></textarea>
-
-          <!-- Preset Example Chips -->
-          <div class="example-chips">
-            <span class="chip-label">Quick samples:</span>
-            <button class="chip" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
-            <button class="chip" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
-            <button class="chip" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
-            <button class="chip" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
-          </div>
-        </div>
-
-        <!-- Configuration Bar -->
-        <div class="config-grid">
-          <div class="form-group">
-            <label for="modelSelect"><i class="fa-solid fa-brain"></i> LLM Model</label>
-            <select id="modelSelect">
-              <option value="grok-4.5" selected>grok-4.5 (xAI Flagship - Default)</option>
-              <option value="grok-4.3">grok-4.3 (xAI)</option>
-              <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
-              <option value="claude-opus-4-8">claude-opus-4-8 (Anthropic)</option>
-              <option value="gemini-3.6-flash">gemini-3.6-flash (Google Vertex)</option>
-              <option value="gemini-2.5-pro">gemini-2.5-pro (Google Vertex)</option>
-              <option value="deepseek-v4-flash">deepseek-v4-flash (DeepSeek Flash)</option>
-              <option value="deepseek-v4-pro">deepseek-v4-pro (DeepSeek Pro)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="agentSelect"><i class="fa-solid fa-user-doctor"></i> Target Agent</label>
-            <select id="agentSelect">
-              <option value="auto" selected>Auto-Route (Recommended)</option>
-              <option value="procedure_agent">Procedure Specialist</option>
-              <option value="medication_agent">Medication Specialist</option>
-              <option value="diagnostic_agent">Diagnostic Specialist</option>
-              <option value="general_agent">Fact-Checker Specialist</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Web Search Toggle -->
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <i class="fa-solid fa-globe"></i>
-            <div>
-              <span class="toggle-title">Live Web Research</span>
-              <span class="toggle-desc">Fetch evidence from medical literature & guidelines (Tavily / DDG)</span>
-            </div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="webSearchToggle" checked>
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <!-- Document Attachment & Parser Section -->
-        <div class="document-section">
-          <div class="section-title">
-            <i class="fa-solid fa-file-pdf"></i> Attach Patient Document or Clinical Report
-          </div>
-          
-          <div class="drop-zone" id="dropZone">
-            <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp,.gif">
-            <div class="drop-content">
-              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
-              <p class="drop-text">Drag & drop document or image here, or <span class="browse-link">browse</span></p>
-              <span class="format-tags">Supported: <strong>PDF, Word (.docx, .doc), Images (.png, .jpg, .webp), TXT, Markdown, RTF</strong></span>
+        <!-- Conversations History Drawer / Top Section -->
+        <div class="conversations-panel" id="conversationsPanel">
+          <div class="conversations-header">
+            <span class="panel-subtitle"><i class="fa-solid fa-clock-rotate-left"></i> Recent Conversations & Jobs</span>
+            <div class="conversations-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="conversationSearchInput" placeholder="Filter conversations...">
             </div>
           </div>
 
-          <!-- File Format Warning / Error Alert -->
-          <div class="alert alert-warning hidden" id="fileErrorAlert">
-            <i class="fa-solid fa-circle-exclamation alert-icon"></i>
-            <div class="alert-content" id="fileErrorMsg"></div>
-            <button class="alert-close" id="fileErrorClose">&times;</button>
+          <div class="conversations-list" id="conversationsList">
+            <div class="empty-conversations">Loading conversations...</div>
           </div>
+        </div>
 
-          <!-- Parsed Document Card -->
-          <div class="parsed-card hidden" id="parsedDocCard">
-            <div class="parsed-header">
-              <div class="parsed-file-meta">
-                <i class="fa-solid fa-file-lines parsed-icon"></i>
+        <!-- Workbench Grid -->
+        <div class="workbench-grid">
+
+          <!-- LEFT COLUMN: Input & Document Workbench -->
+          <section class="panel input-panel">
+            <div class="panel-header">
+              <h2><i class="fa-solid fa-pen-to-square"></i> New Analysis Query</h2>
+              <span class="badge">Workbench</span>
+            </div>
+
+            <!-- Query Input Form -->
+            <div class="form-group">
+              <label for="queryInput">Medical Query or Clinical Subject <span class="required">*</span></label>
+              <textarea id="queryInput" rows="4" placeholder="Enter a surgery, medication, symptom list, or medical evidence question (e.g. 'Laparoscopic cholecystectomy', 'Metformin and Aspirin interactions', 'Fatigue, cold intolerance, weight gain')..."></textarea>
+
+              <!-- Preset Example Chips -->
+              <div class="example-chips">
+                <span class="chip-label">Quick samples:</span>
+                <button class="chip" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
+                <button class="chip" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
+                <button class="chip" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
+                <button class="chip" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
+              </div>
+            </div>
+
+            <!-- Configuration Bar -->
+            <div class="config-grid">
+              <div class="form-group">
+                <label for="modelSelect"><i class="fa-solid fa-brain"></i> LLM Model</label>
+                <select id="modelSelect">
+                  <option value="grok-4.5" selected>grok-4.5 (xAI Flagship - Default)</option>
+                  <option value="grok-4.3">grok-4.3 (xAI)</option>
+                  <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
+                  <option value="claude-opus-4-8">claude-opus-4-8 (Anthropic)</option>
+                  <option value="gemini-3.6-flash">gemini-3.6-flash (Google Vertex)</option>
+                  <option value="gemini-2.5-pro">gemini-2.5-pro (Google Vertex)</option>
+                  <option value="deepseek-v4-flash">deepseek-v4-flash (DeepSeek Flash)</option>
+                  <option value="deepseek-v4-pro">deepseek-v4-pro (DeepSeek Pro)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="agentSelect"><i class="fa-solid fa-user-doctor"></i> Target Agent</label>
+                <select id="agentSelect">
+                  <option value="auto" selected>Auto-Route (Recommended)</option>
+                  <option value="procedure_agent">Procedure Specialist</option>
+                  <option value="medication_agent">Medication Specialist</option>
+                  <option value="diagnostic_agent">Diagnostic Specialist</option>
+                  <option value="general_agent">Fact-Checker Specialist</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Web Search Toggle -->
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <i class="fa-solid fa-globe"></i>
                 <div>
-                  <span class="parsed-name" id="parsedFileName">report.pdf</span>
-                  <div class="parsed-stats">
-                    <span class="stat-badge" id="parsedFormat">PDF</span>
-                    <span class="stat-badge" id="parsedPages">1 page</span>
-                    <span class="stat-badge" id="parsedChars">0 chars</span>
-                    <span class="stat-badge success" id="parsedStatus">parsed</span>
-                  </div>
+                  <span class="toggle-title">Live Web Research</span>
+                  <span class="toggle-desc">Fetch evidence from medical literature & guidelines (Tavily / DDG)</span>
                 </div>
               </div>
-              <div class="parsed-actions">
-                <button class="btn btn-sm btn-ghost" id="btnToggleDocPreview">
-                  <i class="fa-solid fa-chevron-down"></i> Preview
-                </button>
-                <button class="btn btn-sm btn-danger-ghost" id="btnRemoveDoc">
-                  <i class="fa-solid fa-trash"></i> Remove
-                </button>
-              </div>
-            </div>
-
-            <!-- Parsed Markdown Collapsible Content -->
-            <div class="parsed-preview-box hidden" id="parsedPreviewBox">
-              <div class="preview-toolbar">
-                <span>Parsed Markdown Content</span>
-                <button class="btn btn-xs btn-outline" id="btnCopyParsed">Copy Text</button>
-              </div>
-              <pre class="parsed-content" id="parsedMarkdownContent"></pre>
-            </div>
-
-            <div class="attach-checkbox-row">
-              <label class="checkbox-container">
-                <input type="checkbox" id="attachContextCheck" checked>
-                <span class="checkmark"></span>
-                Ground analysis query with this parsed document context
+              <label class="switch">
+                <input type="checkbox" id="webSearchToggle" checked>
+                <span class="slider round"></span>
               </label>
             </div>
-          </div>
-        </div>
 
-        <!-- Action Controls -->
-        <div class="action-bar">
-          <button class="btn btn-primary" id="btnAnalyze">
-            <i class="fa-solid fa-bolt"></i> Run Agent Analysis
+            <!-- Document Attachment & Parser Section -->
+            <div class="form-group">
+              <label><i class="fa-solid fa-paperclip"></i> Attach Medical Document (Optional)</label>
+              
+              <div class="drop-zone" id="dropZone">
+                <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                <p class="drop-text">Drag & drop clinical report, lab PDF, or docx here</p>
+                <span class="drop-subtext">Supports PDF, DOCX, TXT, RTF, MD, Images (Max 25MB)</span>
+                <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
+                <button type="button" class="btn btn-xs btn-outline mt-2" onclick="document.getElementById('fileInput').click()">Browse Files</button>
+              </div>
+
+              <!-- Upload Error Banner -->
+              <div class="alert alert-error hidden" id="fileErrorAlert">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span id="fileErrorMsg">Error parsing document</span>
+                <button class="alert-close" id="fileErrorClose">&times;</button>
+              </div>
+
+              <!-- Parsed Document Preview Card -->
+              <div class="parsed-doc-card hidden" id="parsedDocCard">
+                <div class="parsed-doc-header">
+                  <div class="file-info">
+                    <i class="fa-solid fa-file-lines file-icon"></i>
+                    <div>
+                      <span class="file-name" id="parsedFileName">document.pdf</span>
+                      <div class="file-meta">
+                        <span id="parsedFormat">PDF</span> &bull; 
+                        <span id="parsedPages">1 page</span> &bull; 
+                        <span id="parsedChars">0 chars</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="parsed-actions">
+                    <span class="status-pill success" id="parsedStatus">Parsed</span>
+                    <button type="button" class="btn btn-xs btn-ghost" id="btnToggleDocPreview" title="Toggle Text Preview">
+                      <i class="fa-solid fa-eye"></i>
+                    </button>
+                    <button type="button" class="btn btn-xs btn-danger-icon" id="btnRemoveDoc" title="Remove File">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="parsed-preview-box hidden" id="parsedPreviewBox">
+                  <div class="preview-header">
+                    <span>Parsed Markdown Content</span>
+                    <button type="button" class="btn btn-xs btn-ghost" id="btnCopyParsed"><i class="fa-solid fa-copy"></i> Copy</button>
+                  </div>
+                  <pre class="preview-text" id="parsedMarkdownContent"></pre>
+                </div>
+
+                <div class="context-attach-option">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="attachContextCheck" checked>
+                    Include parsed document text as background clinical context for analysis
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons Bar -->
+            <div class="action-bar">
+              <button class="btn btn-primary" id="btnAnalyze">
+                <i class="fa-solid fa-play"></i> Start Analysis Run
+              </button>
+              <button class="btn btn-secondary" id="btnRoute">
+                <i class="fa-solid fa-compass"></i> Route Only
+              </button>
+              <button class="btn btn-ghost" id="btnClear">
+                <i class="fa-solid fa-eraser"></i> Clear
+              </button>
+            </div>
+          </section>
+
+          <!-- RIGHT COLUMN: Output & Results Display -->
+          <section class="panel output-panel">
+            <div class="panel-header">
+              <h2><i class="fa-solid fa-square-poll-vertical"></i> Clinical Analysis Output</h2>
+              <div class="active-agent-badge hidden" id="activeAgentBadge">
+                <i class="fa-solid fa-robot"></i> <span id="activeAgentBadgeText">Medication Agent</span>
+              </div>
+            </div>
+
+            <!-- Empty Placeholder State -->
+            <div class="placeholder-state" id="placeholderState">
+              <i class="fa-solid fa-notes-medical placeholder-icon"></i>
+              <h3>No Analysis Run Active</h3>
+              <p>Enter a query or select a sample preset on the left, then click <strong>Start Analysis Run</strong> to execute multi-perspective medical reasoning.</p>
+            </div>
+
+            <!-- Asynchronous Job Progress Card -->
+            <div class="job-progress-card hidden" id="jobProgressCard">
+              <div class="progress-header">
+                <div>
+                  <h3 id="jobStatusHeading">Analysis Job Submitted</h3>
+                  <span class="job-id-tag" id="jobIdTag">Job ID: ---</span>
+                </div>
+                <div class="spinner"></div>
+              </div>
+              <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+              </div>
+              <div class="progress-steps">
+                <span class="step-badge active" id="stepRoute"><i class="fa-solid fa-check"></i> Routing</span>
+                <span class="step-badge" id="stepReasoning"><i class="fa-solid fa-spinner fa-spin"></i> Reasoning</span>
+                <span class="step-badge" id="stepValidation"><i class="fa-solid fa-shield-halved"></i> Ref Validation</span>
+                <span class="step-badge" id="stepReports"><i class="fa-solid fa-file-pdf"></i> Reports</span>
+              </div>
+            </div>
+
+            <!-- Query Route Result Card (When Route Only is clicked) -->
+            <div class="route-result-card hidden" id="routeResultCard">
+              <div class="route-header">
+                <i class="fa-solid fa-route route-icon"></i>
+                <div>
+                  <span class="route-label">Classification Result</span>
+                  <h3 id="routedAgentName">Agent Name</h3>
+                </div>
+              </div>
+              <p class="route-desc" id="routedAgentDesc">Agent description...</p>
+            </div>
+
+            <!-- Generated Files Bar -->
+            <div class="files-container hidden" id="filesContainer">
+              <div class="section-title"><i class="fa-solid fa-folder-open"></i> Generated Output Artifacts</div>
+              <div class="files-grid" id="filesGrid"></div>
+            </div>
+
+            <!-- Report Viewer Card -->
+            <div class="report-preview-card hidden" id="reportPreviewCard">
+              <div class="report-tabs">
+                <button class="tab-btn active" data-tab="patient"><i class="fa-solid fa-user"></i> Patient Report</button>
+                <button class="tab-btn" data-tab="practitioner"><i class="fa-solid fa-user-doctor"></i> Practitioner Report</button>
+                <button class="tab-btn" data-tab="summary"><i class="fa-solid fa-file-lines"></i> Summary</button>
+                <button class="tab-btn" data-tab="json"><i class="fa-solid fa-code"></i> Raw JSON</button>
+
+                <div class="tab-actions">
+                  <button class="btn btn-xs btn-outline" id="btnCopyReport"><i class="fa-solid fa-copy"></i> Copy</button>
+                  <a href="#" target="_blank" class="btn btn-xs btn-primary" id="btnDownloadCurrent"><i class="fa-solid fa-download"></i> Download</a>
+                </div>
+              </div>
+
+              <div class="report-body">
+                <div class="markdown-viewer" id="markdownViewer"></div>
+              </div>
+            </div>
+
+          </section>
+        </div>
+      </div>
+
+      <!-- VIEW 2: PATIENTS MANAGEMENT -->
+      <div class="tab-view hidden" id="viewPatients">
+        <div class="patients-header-bar">
+          <div>
+            <h2><i class="fa-solid fa-user-group"></i> Patient Records & Metadata</h2>
+            <p>Manage patient profiles, clinical attributes, key-value metadata tags, and associated data tables.</p>
+          </div>
+          <button class="btn btn-primary" id="btnAddNewPatient">
+            <i class="fa-solid fa-user-plus"></i> Add New Patient
           </button>
-          <button class="btn btn-secondary" id="btnRoute">
-            <i class="fa-solid fa-compass"></i> Route Only
-          </button>
-          <button class="btn btn-ghost" id="btnClear">
-            <i class="fa-solid fa-rotate-left"></i> Reset
-          </button>
         </div>
 
-      </section>
-
-
-      <!-- RIGHT COLUMN: Output, Progress & Reports -->
-      <section class="panel output-panel">
-        <div class="panel-header">
-          <h2><i class="fa-solid fa-square-poll-vertical"></i> Analysis Outputs & Reports</h2>
-          <span class="badge badge-accent" id="activeAgentBadge">Ready</span>
+        <div class="patients-controls-row">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="patientSearchInput" placeholder="Search patients by name, condition, or metadata..." class="input-text">
+          </div>
+          <span class="patient-count-badge" id="patientTotalBadge">Total Patients: 0</span>
         </div>
 
-        <!-- Placeholder State -->
-        <div class="placeholder-state" id="placeholderState">
-          <i class="fa-solid fa-microscope placeholder-icon"></i>
-          <h3>No Analysis Results Yet</h3>
-          <p>Submit a medical query or clinical document to generate structured multi-perspective reports, statistical appendices, and validated reference lists.</p>
+        <div class="patients-table-card">
+          <table class="patients-table">
+            <thead>
+              <tr>
+                <th>Patient Name</th>
+                <th>Age / Gender</th>
+                <th>Primary Condition</th>
+                <th>Contact</th>
+                <th>Custom Metadata</th>
+                <th>Created</th>
+                <th width="120" style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="patientsTableBody">
+              <tr>
+                <td colspan="7" class="empty-patients-row">Loading patient directory...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        <!-- Live Job Progress Card -->
-        <div class="job-progress-card hidden" id="jobProgressCard">
-          <div class="job-progress-header">
-            <div class="job-title-row">
-              <i class="fa-solid fa-spinner fa-spin spinner-icon"></i>
-              <span class="job-heading" id="jobStatusHeading">Analyzing Query...</span>
-            </div>
-            <span class="job-id-tag" id="jobIdTag">Job #1234</span>
-          </div>
+    </main>
 
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="progressBarFill"></div>
-          </div>
+  </div>
 
-          <div class="pipeline-steps">
-            <div class="step step-active" id="stepRoute">
-              <i class="fa-solid fa-compass"></i> <span>Query Routing</span>
-            </div>
-            <div class="step" id="stepReasoning">
-              <i class="fa-solid fa-brain"></i> <span>Multi-Agent Reasoning</span>
-            </div>
-            <div class="step" id="stepValidation">
-              <i class="fa-solid fa-shield-halved"></i> <span>Reference Validation</span>
-            </div>
-            <div class="step" id="stepReports">
-              <i class="fa-solid fa-file-pdf"></i> <span>Report Synthesis</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Route Classification Results Card -->
-        <div class="route-result-card hidden" id="routeResultCard">
-          <div class="route-header">
-            <i class="fa-solid fa-bullseye"></i>
-            <div>
-              <span class="route-subtitle">Router Classification Result</span>
-              <h3 class="route-agent-title" id="routedAgentName">Medication Specialist</h3>
-            </div>
-          </div>
-          <p class="route-desc" id="routedAgentDesc"></p>
-        </div>
-
-        <!-- Generated Files Grid -->
-        <div class="files-container hidden" id="filesContainer">
-          <div class="container-title">
-            <i class="fa-solid fa-folder-open"></i> Generated Report Artifacts
-          </div>
-          <div class="files-grid" id="filesGrid"></div>
-        </div>
-
-        <!-- Interactive Report Markdown Previewer -->
-        <div class="report-preview-card hidden" id="reportPreviewCard">
-          <div class="report-tabs">
-            <button class="tab-btn active" data-tab="patient"><i class="fa-solid fa-user"></i> Patient Report</button>
-            <button class="tab-btn" data-tab="practitioner"><i class="fa-solid fa-user-doctor"></i> Practitioner Report</button>
-            <button class="tab-btn" data-tab="summary"><i class="fa-solid fa-file-lines"></i> Summary</button>
-            <button class="tab-btn" data-tab="json"><i class="fa-solid fa-code"></i> Raw JSON</button>
-
-            <div class="tab-actions">
-              <button class="btn btn-xs btn-outline" id="btnCopyReport"><i class="fa-solid fa-copy"></i> Copy</button>
-              <a href="#" target="_blank" class="btn btn-xs btn-primary" id="btnDownloadCurrent"><i class="fa-solid fa-download"></i> Download</a>
-            </div>
-          </div>
-
-          <div class="report-body">
-            <div class="markdown-viewer" id="markdownViewer"></div>
+  <!-- MODAL 1: SLACK NOTIFICATIONS -->
+  <div class="modal-overlay hidden" id="slackModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-brands fa-slack slack-icon"></i>
+          <div>
+            <h3>Slack Task Notifications</h3>
+            <p>Select multiple tasks and dispatch descriptions as Slack text snippet attachments.</p>
           </div>
         </div>
+        <button class="modal-close" id="btnCloseSlackModal">&times;</button>
+      </div>
 
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Slack Incoming Webhook URL <span class="required">*</span></label>
+          <input type="url" id="slackWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="input-text">
+          <span class="field-hint">URL will be remembered locally in your browser.</span>
+        </div>
+
+        <div class="tasks-selection-container">
+          <div class="tasks-header-row">
+            <span class="section-title"><i class="fa-solid fa-list-check"></i> Select Tasks to Dispatch</span>
+            <button class="btn btn-xs btn-outline" id="btnSlackSelectAll">Select All</button>
+          </div>
+
+          <div class="tasks-table-wrapper">
+            <table class="slack-tasks-table">
+              <thead>
+                <tr>
+                  <th width="40"><input type="checkbox" id="chkSelectAllSlack"></th>
+                  <th>Task / Query</th>
+                  <th>Agent</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody id="slackTasksTbody">
+                <tr>
+                  <td colspan="5" class="empty-tasks-row">Loading tasks...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelSlackModal">Cancel</button>
+        <button class="btn btn-slack" id="btnSendSlackNotify" disabled>
+          <i class="fa-brands fa-slack"></i> Send Selected Tasks (0)
+        </button>
+      </div>
     </div>
+  </div>
 
-    <!-- Slack Notifications Modal -->
-    <div class="modal-overlay hidden" id="slackModal">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title">
-            <i class="fa-brands fa-slack slack-icon"></i>
-            <div>
-              <h3>Slack Task Notifications</h3>
-              <p>Select multiple tasks and dispatch descriptions as Slack text snippet attachments.</p>
-            </div>
+  <!-- MODAL 2: PATIENT CRUD & METADATA EDITOR -->
+  <div class="modal-overlay hidden" id="patientModal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-user-gear patient-icon"></i>
+          <div>
+            <h3 id="patientModalTitle">Add New Patient</h3>
+            <p>Fill out demographics, clinical condition, and custom key-value metadata.</p>
           </div>
-          <button class="modal-close" id="btnCloseSlackModal">&times;</button>
         </div>
+        <button class="modal-close" id="btnClosePatientModal">&times;</button>
+      </div>
 
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Slack Incoming Webhook URL <span class="required">*</span></label>
-            <input type="url" id="slackWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="input-text">
-            <span class="field-hint">URL will be remembered locally in your browser.</span>
-          </div>
+      <div class="modal-body">
+        <form id="patientForm" onsubmit="return false;">
+          <input type="hidden" id="patientEditId">
 
-          <div class="tasks-selection-container">
-            <div class="tasks-header-row">
-              <span class="section-title"><i class="fa-solid fa-list-check"></i> Select Tasks to Dispatch</span>
-              <button class="btn btn-xs btn-outline" id="btnSlackSelectAll">Select All</button>
+          <!-- Demographics Grid -->
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="patientName">Full Name <span class="required">*</span></label>
+              <input type="text" id="patientName" required placeholder="e.g. Jane Doe" class="input-text">
             </div>
 
-            <div class="tasks-table-wrapper">
-              <table class="slack-tasks-table">
+            <div class="form-group">
+              <label for="patientPrimaryCondition">Primary Condition / Diagnosis</label>
+              <input type="text" id="patientPrimaryCondition" placeholder="e.g. Type 2 Diabetes, Essential Hypertension" class="input-text">
+            </div>
+          </div>
+
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="patientAge">Age</label>
+              <input type="number" id="patientAge" min="0" max="130" placeholder="45" class="input-text">
+            </div>
+
+            <div class="form-group">
+              <label for="patientGender">Gender</label>
+              <select id="patientGender" class="input-text">
+                <option value="">Select Gender</option>
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="patientEmail">Email</label>
+              <input type="email" id="patientEmail" placeholder="patient@example.com" class="input-text">
+            </div>
+          </div>
+
+          <!-- Upload Medical Document Drop Zone -->
+          <div class="form-section">
+            <div class="section-header">
+              <i class="fa-solid fa-file-medical"></i>
+              <h4>Upload & Auto-Parse Medical Report (PDF / Word / TXT)</h4>
+            </div>
+            <p class="field-hint">Upload a medical report or lab PDF to automatically extract & categorize markers into Organ System tables below.</p>
+            
+            <div class="drop-zone drop-zone-sm" id="patientDocDropZone">
+              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+              <p class="drop-text">Drag & drop lab PDF or medical report here</p>
+              <span class="drop-subtext">Supports PDF, DOCX, TXT (Max 25MB). Auto-classifies Liver, Heart, Pancreas, Nutrients, CBC</span>
+              <input type="file" id="patientFileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
+              <button type="button" class="btn btn-xs btn-outline mt-2" onclick="document.getElementById('patientFileInput').click()">Browse Medical Report</button>
+            </div>
+            
+            <div class="parsed-status-box hidden" id="patientParseStatusBox">
+              <i class="fa-solid fa-spinner fa-spin"></i> Categorizing medical metrics into Organ Systems...
+            </div>
+          </div>
+
+          <!-- Metadata Section -->
+          <div class="form-section">
+            <div class="section-header">
+              <i class="fa-solid fa-tags"></i>
+              <h4>Custom Metadata Tags & Attributes</h4>
+            </div>
+            <p class="field-hint">Add key-value metadata pairs (e.g. Insurance, Allergies, Assigned Physician, Blood Type).</p>
+
+            <div class="metadata-input-row">
+              <input type="text" id="metaKeyInput" placeholder="Key (e.g. Allergy)" class="input-text">
+              <input type="text" id="metaValInput" placeholder="Value (e.g. Penicillin)" class="input-text">
+              <button type="button" class="btn btn-sm btn-outline" id="btnAddMetaTag">
+                <i class="fa-solid fa-plus"></i> Add Tag
+              </button>
+            </div>
+
+            <div class="metadata-tags-container" id="metadataTagsContainer">
+              <span class="no-tags-hint">No custom metadata tags added yet.</span>
+            </div>
+          </div>
+
+          <!-- Categorized Clinical Organ System Tables -->
+          <div class="form-section">
+            <div class="section-header">
+              <i class="fa-solid fa-table-cells"></i>
+              <h4>Categorized Organ System & Clinical Domain Tables</h4>
+            </div>
+            <p class="field-hint">View and edit measurements categorized by organ system.</p>
+
+            <div class="cat-tabs-row">
+              <button type="button" class="cat-tab-btn active" data-cat="heart"><i class="fa-solid fa-heart-pulse"></i> Heart</button>
+              <button type="button" class="cat-tab-btn" data-cat="liver"><i class="fa-solid fa-cubes-stacked"></i> Liver</button>
+              <button type="button" class="cat-tab-btn" data-cat="pancreas"><i class="fa-solid fa-stethoscope"></i> Pancreas</button>
+              <button type="button" class="cat-tab-btn" data-cat="nutrients"><i class="fa-solid fa-apple-whole"></i> Nutrients</button>
+              <button type="button" class="cat-tab-btn" data-cat="overall_health"><i class="fa-solid fa-microscope"></i> Overall Health</button>
+              <button type="button" class="cat-tab-btn" data-cat="medications"><i class="fa-solid fa-pills"></i> Medications</button>
+            </div>
+
+            <div class="cat-table-card">
+              <div class="cat-table-header">
+                <span class="cat-table-title" id="currentCatTitle">🫀 Heart & Cardiovascular System</span>
+                <button type="button" class="btn btn-xs btn-outline" id="btnAddCatRow"><i class="fa-solid fa-plus"></i> Add Test</button>
+              </div>
+
+              <table class="clinical-cat-table">
                 <thead>
                   <tr>
-                    <th width="40"><input type="checkbox" id="chkSelectAllSlack"></th>
-                    <th>Task / Query</th>
-                    <th>Agent</th>
-                    <th>Status</th>
-                    <th>Created</th>
+                    <th>Biomarker / Test</th>
+                    <th>Result & Unit</th>
+                    <th>Reference Range</th>
+                    <th width="110">Status</th>
+                    <th>Notes / Organ Impact</th>
+                    <th width="40"></th>
                   </tr>
                 </thead>
-                <tbody id="slackTasksTbody">
+                <tbody id="catTableTbody">
                   <tr>
-                    <td colspan="5" class="empty-tasks-row">Loading tasks...</td>
+                    <td colspan="6" class="empty-cat-row">No recorded measurements for this category yet. Upload a report or click + Add Test.</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
-        </div>
+        </form>
+      </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-ghost" id="btnCancelSlackModal">Cancel</button>
-          <button class="btn btn-slack" id="btnSendSlackNotify" disabled>
-            <i class="fa-brands fa-slack"></i> Send Selected Tasks (0)
-          </button>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelPatientModal">Cancel</button>
+        <button class="btn btn-primary" id="btnSavePatient">
+          <i class="fa-solid fa-floppy-disk"></i> Save Patient Record
+        </button>
       </div>
     </div>
-  </main>
+  </div>
+
+  <!-- MODAL 3: REGENERATE REPORT WITH DIFFERENT AGENT -->
+  <div class="modal-overlay hidden" id="regenerateModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-arrows-rotate regen-icon"></i>
+          <div>
+            <h3>Regenerate Analysis Report</h3>
+            <p>Re-run query with a different specialized agent or model.</p>
+          </div>
+        </div>
+        <button class="modal-close" id="btnCloseRegenModal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="regenSourceJobId">
+
+        <div class="form-group">
+          <label>Original Query / Subject</label>
+          <div class="query-preview-box" id="regenQueryPreview">---</div>
+        </div>
+
+        <div class="form-group">
+          <label for="regenAgentSelect"><i class="fa-solid fa-user-doctor"></i> Select Target Agent Override <span class="required">*</span></label>
+          <select id="regenAgentSelect" class="input-text">
+            <option value="medication_agent">💊 Medication Specialist (Pharmacology & Interactions)</option>
+            <option value="procedure_agent">🏥 Procedure Specialist (Organ-by-Organ & Surgical)</option>
+            <option value="diagnostic_agent">🩺 Diagnostic Specialist (Symptom-to-Condition Pipeline)</option>
+            <option value="general_agent">🔬 Fact-Checker Specialist (Multi-Perspective Evidence Audit)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="regenModelSelect"><i class="fa-solid fa-brain"></i> Select LLM Model</label>
+          <select id="regenModelSelect" class="input-text">
+            <option value="grok-4.5" selected>grok-4.5 (xAI Flagship - Default)</option>
+            <option value="grok-4.3">grok-4.3 (xAI)</option>
+            <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
+            <option value="claude-opus-4-8">claude-opus-4-8 (Anthropic)</option>
+            <option value="gemini-3.6-flash">gemini-3.6-flash (Google Vertex)</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro (Google Vertex)</option>
+            <option value="deepseek-v4-flash">deepseek-v4-flash (DeepSeek Flash)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelRegenModal">Cancel</button>
+        <button class="btn btn-primary" id="btnConfirmRegenerate">
+          <i class="fa-solid fa-play"></i> Start Regeneration
+        </button>
+      </div>
+    </div>
+  </div>
 
   <footer class="app-footer">
     <p>Medical Multi-Agent System &bull; For Clinical Research & Information Purposes Only &bull; Evidence Quality & Validation Engine Enabled</p>

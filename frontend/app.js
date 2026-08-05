@@ -1,6 +1,6 @@
 /**
  * Medical Multi-Agent Intelligence Web Application Script
- * Communicates with FastAPI REST API endpoints (/analyze, /analyze/async, /parse, /route, /models, /health)
+ * Communicates with REST API endpoints (/analyze, /analyze/async, /jobs, /patients, /patients/parse-report, /parse, /models, /health)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,10 +10,44 @@ document.addEventListener('DOMContentLoaded', () => {
   let pollInterval = null;   // polling timer
   let activeFiles = {};      // generated report file paths
   let loadedReportTexts = {};// cached report markdown strings
+  let conversationsCache = []; // list of past background jobs
+  let patientsCache = [];      // list of patient records
+  let currentPatientMeta = {}; // key-value metadata object for editing patient
+  let currentPatientClinicalData = {
+    heart: [],
+    liver: [],
+    pancreas: [],
+    nutrients: [],
+    overall_health: [],
+    medications: []
+  };
+  let activeCategory = 'heart';
+
+  const CAT_TITLES = {
+    heart: '🫀 Heart & Cardiovascular System',
+    liver: '🥩 Liver & Hepatic Function',
+    pancreas: '🩺 Pancreas, Endocrine & Glucose',
+    nutrients: '🥗 Nutrients, Vitamins & Electrolytes',
+    overall_health: '🔬 Overall Health, Hematology & CBC',
+    medications: '💊 Active Medications & Dosage'
+  };
 
   const SUPPORTED_EXTENSIONS = ['pdf', 'docx', 'doc', 'txt', 'md', 'rtf', 'png', 'jpg', 'jpeg', 'webp', 'gif'];
 
-  // DOM Elements
+  // Navigation & View Tab Elements
+  const navBtnConversations = document.getElementById('navBtnConversations');
+  const navBtnPatients = document.getElementById('navBtnPatients');
+  const viewConversations = document.getElementById('viewConversations');
+  const viewPatients = document.getElementById('viewPatients');
+  const conversationsCountTag = document.getElementById('conversationsCountTag');
+  const patientsCountTag = document.getElementById('patientsCountTag');
+
+  // Conversations History Panel Elements
+  const btnRefreshConversations = document.getElementById('btnRefreshConversations');
+  const conversationSearchInput = document.getElementById('conversationSearchInput');
+  const conversationsList = document.getElementById('conversationsList');
+
+  // Workbench Form Elements
   const apiStatusBadge = document.getElementById('apiStatusBadge');
   const apiStatusText = document.getElementById('apiStatusText');
   const queryInput = document.getElementById('queryInput');
@@ -70,6 +104,41 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDownloadCurrent = document.getElementById('btnDownloadCurrent');
   const toastContainer = document.getElementById('toastContainer');
 
+  // Patient Management Elements
+  const btnAddNewPatient = document.getElementById('btnAddNewPatient');
+  const patientSearchInput = document.getElementById('patientSearchInput');
+  const patientTotalBadge = document.getElementById('patientTotalBadge');
+  const patientsTableBody = document.getElementById('patientsTableBody');
+  const patientModal = document.getElementById('patientModal');
+  const btnClosePatientModal = document.getElementById('btnClosePatientModal');
+  const btnCancelPatientModal = document.getElementById('btnCancelPatientModal');
+  const btnSavePatient = document.getElementById('btnSavePatient');
+  const patientModalTitle = document.getElementById('patientModalTitle');
+  const patientEditId = document.getElementById('patientEditId');
+  const patientName = document.getElementById('patientName');
+  const patientPrimaryCondition = document.getElementById('patientPrimaryCondition');
+  const patientAge = document.getElementById('patientAge');
+  const patientGender = document.getElementById('patientGender');
+  const patientEmail = document.getElementById('patientEmail');
+  const metaKeyInput = document.getElementById('metaKeyInput');
+  const metaValInput = document.getElementById('metaValInput');
+  const btnAddMetaTag = document.getElementById('btnAddMetaTag');
+  const metadataTagsContainer = document.getElementById('metadataTagsContainer');
+  const patientDocDropZone = document.getElementById('patientDocDropZone');
+  const patientFileInput = document.getElementById('patientFileInput');
+  const patientParseStatusBox = document.getElementById('patientParseStatusBox');
+  const btnAddCatRow = document.getElementById('btnAddCatRow');
+
+  // Regenerate Modal Elements
+  const regenerateModal = document.getElementById('regenerateModal');
+  const btnCloseRegenModal = document.getElementById('btnCloseRegenModal');
+  const btnCancelRegenModal = document.getElementById('btnCancelRegenModal');
+  const btnConfirmRegenerate = document.getElementById('btnConfirmRegenerate');
+  const regenSourceJobId = document.getElementById('regenSourceJobId');
+  const regenQueryPreview = document.getElementById('regenQueryPreview');
+  const regenAgentSelect = document.getElementById('regenAgentSelect');
+  const regenModelSelect = document.getElementById('regenModelSelect');
+
   // Slack Modal Elements
   const btnOpenSlackModal = document.getElementById('btnOpenSlackModal');
   const slackModal = document.getElementById('slackModal');
@@ -85,13 +154,14 @@ document.addEventListener('DOMContentLoaded', () => {
   checkApiHealth();
   loadAvailableModels();
   setupEventListeners();
+  loadConversationsHistory();
+  loadPatients();
 
   // 1. API Health Check
   async function checkApiHealth() {
     try {
       const res = await fetch('/health');
       if (res.ok) {
-        const data = await res.json();
         apiStatusBadge.classList.remove('error');
         apiStatusText.textContent = 'API Connected';
       } else {
@@ -126,6 +196,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 3. Setup Event Handlers
   function setupEventListeners() {
+    // Sidebar Navigation Tabs
+    navBtnConversations.addEventListener('click', () => switchView('viewConversations'));
+    navBtnPatients.addEventListener('click', () => switchView('viewPatients'));
+
+    // Refresh Conversations
+    btnRefreshConversations.addEventListener('click', loadConversationsHistory);
+    conversationSearchInput.addEventListener('input', renderConversationsList);
+
     // Sample Chips
     document.querySelectorAll('.chip').forEach(chip => {
       chip.addEventListener('click', () => {
@@ -134,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // Drag & Drop
+    // Drag & Drop for Main Analysis Document
     dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
       dropZone.classList.add('dragover');
@@ -148,109 +226,584 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       dropZone.classList.remove('dragover');
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        handleFileSelected(e.dataTransfer.files[0]);
+        handleFileUpload(e.dataTransfer.files[0]);
       }
     });
 
     fileInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files.length > 0) {
-        handleFileSelected(e.target.files[0]);
+        handleFileUpload(e.target.files[0]);
       }
     });
 
-    fileErrorClose.addEventListener('click', () => {
-      fileErrorAlert.classList.add('hidden');
-    });
+    fileErrorClose.addEventListener('click', () => fileErrorAlert.classList.add('hidden'));
 
     btnToggleDocPreview.addEventListener('click', () => {
       parsedPreviewBox.classList.toggle('hidden');
-      const isHidden = parsedPreviewBox.classList.contains('hidden');
-      btnToggleDocPreview.innerHTML = isHidden 
-        ? '<i class="fa-solid fa-chevron-down"></i> Preview' 
-        : '<i class="fa-solid fa-chevron-up"></i> Hide';
     });
 
-    btnRemoveDoc.addEventListener('click', removeParsedDocument);
+    btnRemoveDoc.addEventListener('click', removeUploadedDocument);
 
     btnCopyParsed.addEventListener('click', () => {
       if (parsedDocument && parsedDocument.markdown) {
         navigator.clipboard.writeText(parsedDocument.markdown);
-        showToast('Parsed markdown copied to clipboard!', 'success');
+        showToast('Parsed document markdown copied to clipboard!', 'info');
       }
     });
 
-    // Action Buttons
-    btnAnalyze.addEventListener('click', startAnalysis);
-    btnRoute.addEventListener('click', runRouteOnly);
+    // Drag & Drop for Patient Medical Report Upload
+    patientDocDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      patientDocDropZone.classList.add('dragover');
+    });
+
+    patientDocDropZone.addEventListener('dragleave', () => {
+      patientDocDropZone.classList.remove('dragover');
+    });
+
+    patientDocDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      patientDocDropZone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handlePatientReportUpload(e.dataTransfer.files[0]);
+      }
+    });
+
+    patientFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handlePatientReportUpload(e.target.files[0]);
+      }
+    });
+
+    // Categorized Table Tabs
+    document.querySelectorAll('.cat-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const catKey = btn.getAttribute('data-cat');
+        switchCategoryTab(catKey);
+      });
+    });
+
+    btnAddCatRow.addEventListener('click', addCategoryRow);
+
+    // Main Actions
+    btnAnalyze.addEventListener('click', submitAsyncAnalysis);
+    btnRoute.addEventListener('click', routeQueryOnly);
     btnClear.addEventListener('click', resetForm);
 
-    // Report Tab Buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    // Output Report Tabs
+    document.querySelectorAll('.report-tabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.report-tabs .tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const tabType = btn.getAttribute('data-tab');
-        renderReportTab(tabType);
+        const tab = btn.getAttribute('data-tab');
+        renderReportTab(tab);
       });
     });
 
     btnCopyReport.addEventListener('click', () => {
-      const activeTab = document.querySelector('.tab-btn.active').getAttribute('data-tab');
-      const text = loadedReportTexts[activeTab] || '';
+      const activeTabBtn = document.querySelector('.report-tabs .tab-btn.active');
+      const tab = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'patient';
+      const text = loadedReportTexts[tab] || '';
       if (text) {
         navigator.clipboard.writeText(text);
-        showToast('Report content copied to clipboard!', 'success');
+        showToast('Report copied to clipboard!', 'info');
       }
     });
 
+    // Patient Manager Handlers
+    btnAddNewPatient.addEventListener('click', () => openPatientModal());
+    patientSearchInput.addEventListener('input', renderPatientsTable);
+    btnClosePatientModal.addEventListener('click', closePatientModal);
+    btnCancelPatientModal.addEventListener('click', closePatientModal);
+    btnSavePatient.addEventListener('click', savePatientRecord);
+    btnAddMetaTag.addEventListener('click', addMetaTagFromInput);
+
+    // Regenerate Modal Handlers
+    btnCloseRegenModal.addEventListener('click', closeRegenModal);
+    btnCancelRegenModal.addEventListener('click', closeRegenModal);
+    btnConfirmRegenerate.addEventListener('click', confirmRegenerateJob);
+
     // Slack Modal Handlers
-    if (btnOpenSlackModal) {
-      btnOpenSlackModal.addEventListener('click', openSlackModal);
-    }
-    if (btnCloseSlackModal) {
-      btnCloseSlackModal.addEventListener('click', closeSlackModal);
-    }
-    if (btnCancelSlackModal) {
-      btnCancelSlackModal.addEventListener('click', closeSlackModal);
-    }
-    if (btnSlackSelectAll) {
-      btnSlackSelectAll.addEventListener('click', toggleSelectAllSlackTasks);
-    }
-    if (chkSelectAllSlack) {
-      chkSelectAllSlack.addEventListener('change', (e) => {
-        const checkboxes = slackTasksTbody.querySelectorAll('.task-checkbox');
-        checkboxes.forEach(cb => cb.checked = e.target.checked);
-        updateSlackSendButtonState();
-      });
-    }
-    if (btnSendSlackNotify) {
-      btnSendSlackNotify.addEventListener('click', sendSlackNotification);
+    btnOpenSlackModal.addEventListener('click', openSlackModal);
+    btnCloseSlackModal.addEventListener('click', closeSlackModal);
+    btnCancelSlackModal.addEventListener('click', closeSlackModal);
+    btnSlackSelectAll.addEventListener('click', toggleSelectAllSlackTasks);
+    chkSelectAllSlack.addEventListener('change', toggleSelectAllSlackTasks);
+    btnSendSlackNotify.addEventListener('click', sendSlackNotification);
+
+    // Restore saved webhook url
+    const savedUrl = localStorage.getItem('slack_webhook_url');
+    if (savedUrl) slackWebhookUrl.value = savedUrl;
+  }
+
+  // 4. View Switching
+  function switchView(viewId) {
+    if (viewId === 'viewConversations') {
+      navBtnConversations.classList.add('active');
+      navBtnPatients.classList.remove('active');
+      viewConversations.classList.remove('hidden');
+      viewPatients.classList.add('hidden');
+    } else {
+      navBtnPatients.classList.add('active');
+      navBtnConversations.classList.remove('active');
+      viewPatients.classList.remove('hidden');
+      viewConversations.classList.add('hidden');
+      loadPatients();
     }
   }
 
-  // 4. File Format Validation & Parsing (/parse)
-  async function handleFileSelected(file) {
-    fileErrorAlert.classList.add('hidden');
-    const ext = file.name.split('.').pop().toLowerCase();
+  // 5. Conversations History Management
+  async function loadConversationsHistory() {
+    try {
+      const res = await fetch('/jobs');
+      if (res.ok) {
+        conversationsCache = await res.json();
+        conversationsCountTag.textContent = conversationsCache.length;
+        renderConversationsList();
+      }
+    } catch (err) {
+      console.warn('Failed to fetch conversations:', err);
+    }
+  }
 
-    // Check unsupported file formats (e.g. png, jpg, exe, zip, mp4)
-    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-      fileInput.value = '';
-      fileErrorMsg.innerHTML = `<strong>Unsupported File Format (.${ext.toUpperCase()}):</strong> File "${file.name}" is not supported.<br>Supported formats: <strong>PDF (.pdf), Word (.docx, .doc), Images (.png, .jpg, .webp), Text (.txt, .md), and RTF (.rtf)</strong>.`;
-      fileErrorAlert.classList.remove('hidden');
-      showToast(`Unsupported file format: .${ext}`, 'error');
+  function renderConversationsList() {
+    const filter = (conversationSearchInput.value || '').toLowerCase().trim();
+    const filtered = conversationsCache.filter(j => 
+      (j.query || '').toLowerCase().includes(filter) ||
+      (j.agent_id || '').toLowerCase().includes(filter) ||
+      (j.status || '').toLowerCase().includes(filter)
+    );
+
+    if (filtered.length === 0) {
+      conversationsList.innerHTML = '<div class="empty-conversations">No matching conversations found.</div>';
       return;
     }
 
-    // Process Supported File
-    showToast(`Parsing ${file.name}...`, 'info');
-    parsedFileName.textContent = file.name;
-    parsedFormat.textContent = ext.toUpperCase();
-    parsedPages.textContent = 'Parsing...';
-    parsedChars.textContent = '...';
-    parsedStatus.textContent = 'Processing';
-    parsedStatus.className = 'stat-badge';
-    parsedCardShow();
+    conversationsList.innerHTML = '';
+    filtered.forEach(job => {
+      const card = document.createElement('div');
+      card.className = 'conversation-card';
+
+      const agentLabel = job.agent_id ? job.agent_id.replace('_agent', '').toUpperCase() : 'AUTO';
+      const statusColor = job.status === 'completed' ? '#34d399' : (job.status === 'failed' ? '#f87171' : '#fbbf24');
+      const dateStr = job.created_at ? new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+
+      card.innerHTML = `
+        <div class="conversation-main">
+          <span class="conversation-title">${escapeHtml(job.query || 'Untitled Query')}</span>
+          <div class="conversation-meta">
+            <span class="agent-tag">${escapeHtml(agentLabel)}</span>
+            <span style="color: ${statusColor}; font-weight:600;"><i class="fa-solid fa-circle" style="font-size:0.5rem;"></i> ${escapeHtml(job.status || 'pending')}</span>
+            <span>${dateStr}</span>
+          </div>
+        </div>
+        <div class="conversation-actions">
+          <button class="btn-icon-sm btn-view-job" title="View Results" data-id="${job.id}">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+          <button class="btn-icon-sm btn-regen-job" title="Regenerate with Agent..." data-id="${job.id}" data-query="${escapeHtml(job.query || '')}">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+          <button class="btn-icon-sm danger btn-delete-job" title="Delete & Clear Cache" data-id="${job.id}">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      `;
+
+      card.querySelector('.btn-view-job').addEventListener('click', () => loadConversationDetails(job.id));
+      card.querySelector('.btn-regen-job').addEventListener('click', () => openRegenModal(job.id, job.query));
+      card.querySelector('.btn-delete-job').addEventListener('click', () => deleteConversation(job.id));
+
+      conversationsList.appendChild(card);
+    });
+  }
+
+  async function loadConversationDetails(jobId) {
+    try {
+      const res = await fetch(`/jobs/${jobId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const job = await res.json();
+      currentJob = job;
+      displayJobResults(job);
+      showToast(`Loaded conversation result for: "${job.query || jobId}"`, 'info');
+    } catch (err) {
+      showToast(`Failed to load conversation details: ${err.message}`, 'error');
+    }
+  }
+
+  async function deleteConversation(jobId) {
+    if (!confirm('Are you sure you want to delete this conversation and purge its cached files?')) return;
+    try {
+      const res = await fetch(`/jobs/${jobId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Conversation and cached output files purged.', 'success');
+      loadConversationsHistory();
+    } catch (err) {
+      showToast(`Failed to delete conversation: ${err.message}`, 'error');
+    }
+  }
+
+  // 6. Regenerate Report Modal
+  function openRegenModal(jobId, query) {
+    regenSourceJobId.value = jobId;
+    regenQueryPreview.textContent = query || 'Selected Query';
+    regenerateModal.classList.remove('hidden');
+  }
+
+  function closeRegenModal() {
+    regenerateModal.classList.add('hidden');
+  }
+
+  async function confirmRegenerateJob() {
+    const jobId = regenSourceJobId.value;
+    const targetAgent = regenAgentSelect.value;
+    const targetModel = regenModelSelect.value;
+
+    btnConfirmRegenerate.disabled = true;
+    btnConfirmRegenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
+
+    try {
+      const res = await fetch(`/jobs/${jobId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_id: targetAgent,
+          model: targetModel,
+          web_search: true
+        })
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      closeRegenModal();
+      showToast(`Regeneration job submitted! Polling new job ${data.job_id}...`, 'success');
+      
+      pollJobStatus(data.job_id);
+      loadConversationsHistory();
+    } catch (err) {
+      showToast(`Failed to regenerate: ${err.message}`, 'error');
+    } finally {
+      btnConfirmRegenerate.disabled = false;
+      btnConfirmRegenerate.innerHTML = '<i class="fa-solid fa-play"></i> Start Regeneration';
+    }
+  }
+
+  // 7. Patient Directory & CRUD Management
+  async function loadPatients() {
+    try {
+      const res = await fetch('/patients');
+      if (res.ok) {
+        patientsCache = await res.json();
+        patientsCountTag.textContent = patientsCache.length;
+        patientTotalBadge.textContent = `Total Patients: ${patientsCache.length}`;
+        renderPatientsTable();
+      }
+    } catch (err) {
+      console.warn('Failed to load patients:', err);
+    }
+  }
+
+  function renderPatientsTable() {
+    const filter = (patientSearchInput.value || '').toLowerCase().trim();
+    const filtered = patientsCache.filter(p => 
+      (p.name || '').toLowerCase().includes(filter) ||
+      (p.primary_condition || '').toLowerCase().includes(filter) ||
+      (p.contact_email || '').toLowerCase().includes(filter) ||
+      JSON.stringify(p.metadata_json || {}).toLowerCase().includes(filter) ||
+      JSON.stringify(p.clinical_data || {}).toLowerCase().includes(filter)
+    );
+
+    if (filtered.length === 0) {
+      patientsTableBody.innerHTML = '<tr><td colspan="7" class="empty-patients-row">No patient records found. Click <strong>+ Add New Patient</strong> to create one.</td></tr>';
+      return;
+    }
+
+    patientsTableBody.innerHTML = '';
+    filtered.forEach(p => {
+      const tr = document.createElement('tr');
+      
+      // Build Metadata chips preview
+      let metaHtml = '';
+      const metaObj = p.metadata_json || {};
+      const keys = Object.keys(metaObj);
+      if (keys.length > 0) {
+        metaHtml = '<div class="meta-tags-list">' + keys.slice(0, 3).map(k => 
+          `<span class="meta-chip"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(metaObj[k]))}</span>`
+        ).join('') + (keys.length > 3 ? `<span class="meta-chip">+${keys.length - 3} more</span>` : '') + '</div>';
+      } else {
+        metaHtml = '<span style="color:var(--text-muted); font-size:0.75rem;">None</span>';
+      }
+
+      const createdStr = p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A';
+
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(p.name)}</strong></td>
+        <td>${escapeHtml(p.age ? String(p.age) + ' yrs' : 'N/A')} / ${escapeHtml(p.gender || 'N/A')}</td>
+        <td>${escapeHtml(p.primary_condition || 'Unspecified')}</td>
+        <td>${escapeHtml(p.contact_email || p.contact_phone || 'N/A')}</td>
+        <td>${metaHtml}</td>
+        <td style="color:var(--text-muted); font-size:0.75rem;">${createdStr}</td>
+        <td style="text-align: right;">
+          <button class="btn-icon-sm btn-edit-patient" title="Edit Patient & Metadata" data-id="${p.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button class="btn-icon-sm danger btn-delete-patient" title="Delete Patient" data-id="${p.id}"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+      `;
+
+      tr.querySelector('.btn-edit-patient').addEventListener('click', () => openPatientModal(p.id));
+      tr.querySelector('.btn-delete-patient').addEventListener('click', () => deletePatientRecord(p.id));
+
+      patientsTableBody.appendChild(tr);
+    });
+  }
+
+  function openPatientModal(patientId = null) {
+    currentPatientMeta = {};
+    currentPatientClinicalData = {
+      heart: [],
+      liver: [],
+      pancreas: [],
+      nutrients: [],
+      overall_health: [],
+      medications: []
+    };
+
+    if (patientId) {
+      const patient = patientsCache.find(p => p.id === patientId);
+      if (patient) {
+        patientModalTitle.textContent = 'Edit Patient & Categorized Data';
+        patientEditId.value = patient.id;
+        patientName.value = patient.name || '';
+        patientPrimaryCondition.value = patient.primary_condition || '';
+        patientAge.value = patient.age || '';
+        patientGender.value = patient.gender || '';
+        patientEmail.value = patient.contact_email || '';
+        currentPatientMeta = { ...(patient.metadata_json || {}) };
+        
+        const clinical = patient.clinical_data || {};
+        ['heart', 'liver', 'pancreas', 'nutrients', 'overall_health', 'medications'].forEach(cat => {
+          if (Array.isArray(clinical[cat])) {
+            currentPatientClinicalData[cat] = JSON.parse(JSON.stringify(clinical[cat]));
+          }
+        });
+      }
+    } else {
+      patientModalTitle.textContent = 'Add New Patient';
+      patientEditId.value = '';
+      document.getElementById('patientForm').reset();
+    }
+
+    renderMetadataTagsEditor();
+    switchCategoryTab('heart');
+    patientModal.classList.remove('hidden');
+  }
+
+  function closePatientModal() {
+    patientModal.classList.add('hidden');
+  }
+
+  async function handlePatientReportUpload(file) {
+    patientParseStatusBox.classList.remove('hidden');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', modelSelect ? modelSelect.value : 'grok-4.5');
+
+    try {
+      const res = await fetch('/patients/parse-report', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      
+      const catData = data.categorized_data || {};
+      ['heart', 'liver', 'pancreas', 'nutrients', 'overall_health', 'medications'].forEach(cat => {
+        if (Array.isArray(catData[cat]) && catData[cat].length > 0) {
+          currentPatientClinicalData[cat] = catData[cat];
+        }
+      });
+
+      switchCategoryTab(activeCategory);
+      showToast(`Medical report parsed & categorized for ${data.filename}!`, 'success');
+    } catch (err) {
+      showToast(`Failed to parse patient report: ${err.message}`, 'error');
+    } finally {
+      patientParseStatusBox.classList.add('hidden');
+    }
+  }
+
+  function switchCategoryTab(catKey) {
+    activeCategory = catKey;
+    document.querySelectorAll('.cat-tab-btn').forEach(btn => {
+      if (btn.getAttribute('data-cat') === catKey) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    document.getElementById('currentCatTitle').textContent = CAT_TITLES[catKey] || catKey;
+    renderCategorizedTable(catKey);
+  }
+
+  function renderCategorizedTable(catKey) {
+    const catTableTbody = document.getElementById('catTableTbody');
+    const items = currentPatientClinicalData[catKey] || [];
+    
+    if (items.length === 0) {
+      catTableTbody.innerHTML = '<tr><td colspan="6" class="empty-cat-row">No recorded measurements for this category yet. Upload a report or click + Add Test.</td></tr>';
+      return;
+    }
+
+    catTableTbody.innerHTML = '';
+    items.forEach((item, index) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="cell-input input-marker" value="${escapeHtml(item.marker || '')}" placeholder="Biomarker"></td>
+        <td><input type="text" class="cell-input input-value" value="${escapeHtml(item.value || '')}" placeholder="Result"></td>
+        <td><input type="text" class="cell-input input-range" value="${escapeHtml(item.reference_range || '')}" placeholder="Range"></td>
+        <td>
+          <select class="cell-select input-status">
+            <option value="Normal" ${item.status === 'Normal' ? 'selected' : ''}>Normal</option>
+            <option value="High" ${item.status === 'High' ? 'selected' : ''}>High</option>
+            <option value="Low" ${item.status === 'Low' ? 'selected' : ''}>Low</option>
+            <option value="Critical" ${item.status === 'Critical' ? 'selected' : ''}>Critical</option>
+          </select>
+        </td>
+        <td><input type="text" class="cell-input input-notes" value="${escapeHtml(item.notes || '')}" placeholder="Notes"></td>
+        <td><button type="button" class="btn-icon-sm danger btn-del-row" title="Delete Row">&times;</button></td>
+      `;
+
+      tr.querySelector('.input-marker').addEventListener('input', (e) => item.marker = e.target.value);
+      tr.querySelector('.input-value').addEventListener('input', (e) => item.value = e.target.value);
+      tr.querySelector('.input-range').addEventListener('input', (e) => item.reference_range = e.target.value);
+      tr.querySelector('.input-status').addEventListener('change', (e) => item.status = e.target.value);
+      tr.querySelector('.input-notes').addEventListener('input', (e) => item.notes = e.target.value);
+      tr.querySelector('.btn-del-row').addEventListener('click', () => {
+        items.splice(index, 1);
+        renderCategorizedTable(catKey);
+      });
+
+      catTableTbody.appendChild(tr);
+    });
+  }
+
+  function addCategoryRow() {
+    if (!currentPatientClinicalData[activeCategory]) {
+      currentPatientClinicalData[activeCategory] = [];
+    }
+    currentPatientClinicalData[activeCategory].push({
+      marker: '',
+      value: '',
+      reference_range: '',
+      status: 'Normal',
+      notes: ''
+    });
+    renderCategorizedTable(activeCategory);
+  }
+
+  function renderMetadataTagsEditor() {
+    metadataTagsContainer.innerHTML = '';
+    const keys = Object.keys(currentPatientMeta);
+    if (keys.length === 0) {
+      metadataTagsContainer.innerHTML = '<span class="no-tags-hint">No custom metadata tags added yet. Enter key & value above.</span>';
+      return;
+    }
+
+    keys.forEach(k => {
+      const tag = document.createElement('span');
+      tag.className = 'meta-tag-edit';
+      tag.innerHTML = `
+        <strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(currentPatientMeta[k]))}
+        <button type="button" class="remove-tag-btn" data-key="${escapeHtml(k)}">&times;</button>
+      `;
+      tag.querySelector('.remove-tag-btn').addEventListener('click', () => {
+        delete currentPatientMeta[k];
+        renderMetadataTagsEditor();
+      });
+      metadataTagsContainer.appendChild(tag);
+    });
+  }
+
+  function addMetaTagFromInput() {
+    const key = metaKeyInput.value.trim();
+    const val = metaValInput.value.trim();
+    if (!key || !val) {
+      showToast('Please enter both Key and Value for metadata tag.', 'error');
+      return;
+    }
+    currentPatientMeta[key] = val;
+    metaKeyInput.value = '';
+    metaValInput.value = '';
+    renderMetadataTagsEditor();
+  }
+
+  async function savePatientRecord() {
+    const name = patientName.value.trim();
+    if (!name) {
+      showToast('Patient full name is required.', 'error');
+      patientName.focus();
+      return;
+    }
+
+    const payload = {
+      name: name,
+      primary_condition: patientPrimaryCondition.value.trim() || null,
+      age: patientAge.value ? parseInt(patientAge.value) : null,
+      gender: patientGender.value || null,
+      contact_email: patientEmail.value.trim() || null,
+      metadata_json: currentPatientMeta,
+      clinical_data: currentPatientClinicalData
+    };
+
+    const patientId = patientEditId.value;
+    const url = patientId ? `/patients/${patientId}` : '/patients';
+    const method = patientId ? 'PUT' : 'POST';
+
+    btnSavePatient.disabled = true;
+    btnSavePatient.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+    try {
+      const res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast(`Patient record successfully ${patientId ? 'updated' : 'created'}!`, 'success');
+      closePatientModal();
+      loadPatients();
+    } catch (err) {
+      showToast(`Failed to save patient: ${err.message}`, 'error');
+    } finally {
+      btnSavePatient.disabled = false;
+      btnSavePatient.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Patient Record';
+    }
+  }
+
+  async function deletePatientRecord(patientId) {
+    if (!confirm('Are you sure you want to delete this patient record?')) return;
+    try {
+      const res = await fetch(`/patients/${patientId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Patient record deleted successfully.', 'info');
+      loadPatients();
+    } catch (err) {
+      showToast(`Failed to delete patient: ${err.message}`, 'error');
+    }
+  }
+
+  // 8. Document File Upload Handler for Main Analysis
+  async function handleFileUpload(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+      showFileError(`Unsupported file extension '.${ext}'. Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`);
+      return;
+    }
+
+    fileErrorAlert.classList.add('hidden');
+    parsedStatus.textContent = 'Parsing...';
+    parsedStatus.className = 'status-pill pending';
 
     const formData = new FormData();
     formData.append('file', file);
@@ -263,56 +816,277 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || 'Parsing error');
+        throw new Error(errData.detail || `HTTP ${res.status}`);
       }
 
       const data = await res.json();
       parsedDocument = data;
 
-      // Update Card UI
       parsedFileName.textContent = data.filename;
-      parsedFormat.textContent = (data.metadata.file_format || ext).toUpperCase();
-      parsedPages.textContent = `${data.metadata.page_count || 1} page(s)`;
-      parsedChars.textContent = `${(data.metadata.char_count || data.markdown.length).toLocaleString()} chars`;
-      parsedStatus.textContent = data.status || 'success';
-      parsedStatus.className = 'stat-badge success';
+      parsedFormat.textContent = (data.metadata?.file_format || ext).toUpperCase();
+      parsedPages.textContent = `${data.metadata?.page_count || 1} page(s)`;
+      parsedChars.textContent = `${data.metadata?.char_count || data.markdown.length} chars`;
+      parsedMarkdownContent.textContent = data.markdown || '(No text extracted)';
 
-      parsedMarkdownContent.textContent = data.markdown || '(No text content extracted)';
-      showToast(`Successfully parsed ${data.filename}`, 'success');
+      parsedStatus.textContent = data.status === 'success' ? 'Parsed Successfully' : 'Parse Warnings';
+      parsedStatus.className = `status-pill ${data.status === 'success' ? 'success' : 'error'}`;
+
+      parsedDocCard.classList.remove('hidden');
+      showToast(`Successfully parsed document: ${data.filename}`, 'success');
 
     } catch (err) {
-      parsedStatus.textContent = 'Failed';
-      parsedStatus.className = 'stat-badge error';
-      fileErrorMsg.innerHTML = `<strong>Document Parsing Error:</strong> ${err.message}`;
-      fileErrorAlert.classList.remove('hidden');
-      showToast(`Error parsing document: ${err.message}`, 'error');
+      console.error('Upload Error:', err);
+      showFileError(`Failed to parse document: ${err.message}`);
     }
   }
 
-  function parsedCardShow() {
-    parsedDocCard.classList.remove('hidden');
-  }
-
-  function removeParsedDocument() {
+  function removeUploadedDocument() {
     parsedDocument = null;
-    fileInput.value = '';
     parsedDocCard.classList.add('hidden');
     parsedPreviewBox.classList.add('hidden');
-    fileErrorAlert.classList.add('hidden');
-    showToast('Attached document removed', 'info');
+    fileInput.value = '';
+    showToast('Document detached.', 'info');
   }
 
-  // 5. Run Query Routing Only (/route)
-  async function runRouteOnly() {
+  function showFileError(msg) {
+    fileErrorMsg.textContent = msg;
+    fileErrorAlert.classList.remove('hidden');
+  }
+
+  // 9. Submit Asynchronous Analysis Run
+  async function submitAsyncAnalysis() {
+    let query = queryInput.value.trim();
+    if (!query) {
+      showToast('Please enter a medical query or clinical subject.', 'error');
+      queryInput.focus();
+      return;
+    }
+
+    if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked) {
+      query += `\n\n--- ATTACHED MEDICAL DOCUMENT (${parsedDocument.filename}) ---\n` + parsedDocument.markdown;
+    }
+
+    const payload = {
+      query: query,
+      model: modelSelect.value,
+      implementation: 'langchain',
+      web_search: webSearchToggle.checked,
+      timeout: 300
+    };
+
+    const targetAgentOverride = agentSelect.value;
+    if (targetAgentOverride !== 'auto') {
+      payload.agent_id = targetAgentOverride;
+    }
+
+    btnAnalyze.disabled = true;
+    btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
+
+    try {
+      const res = await fetch('/analyze/async', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      currentJob = data;
+      showToast(`Analysis job submitted (ID: ${data.job_id.substring(0, 8)}...)`, 'info');
+
+      placeholderState.classList.add('hidden');
+      routeResultCard.classList.add('hidden');
+      filesContainer.classList.add('hidden');
+      reportPreviewCard.classList.add('hidden');
+      jobProgressCard.classList.remove('hidden');
+
+      jobIdTag.textContent = `Job ID: ${data.job_id}`;
+      jobStatusHeading.textContent = 'Job Submitted — Processing...';
+      updateProgressSteps('pending');
+
+      pollJobStatus(data.job_id);
+      loadConversationsHistory();
+
+    } catch (err) {
+      showToast(`Failed to submit analysis: ${err.message}`, 'error');
+    } finally {
+      btnAnalyze.disabled = false;
+      btnAnalyze.innerHTML = '<i class="fa-solid fa-play"></i> Start Analysis Run';
+    }
+  }
+
+  // 10. Poll Job Status
+  function pollJobStatus(jobId) {
+    if (pollInterval) clearInterval(pollInterval);
+
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/jobs/${jobId}`);
+        if (!res.ok) return;
+
+        const job = await res.json();
+        currentJob = job;
+
+        updateProgressSteps(job.status);
+
+        if (job.status === 'completed') {
+          clearInterval(pollInterval);
+          showToast('Analysis completed successfully!', 'success');
+          jobProgressCard.classList.add('hidden');
+          displayJobResults(job);
+          loadConversationsHistory();
+        } else if (job.status === 'failed') {
+          clearInterval(pollInterval);
+          jobStatusHeading.textContent = 'Analysis Run Failed';
+          showToast(`Job failed: ${job.error || 'Unknown error'}`, 'error');
+          loadConversationsHistory();
+        }
+      } catch (err) {
+        console.warn('Poll error:', err);
+      }
+    }, 2500);
+  }
+
+  function updateProgressSteps(status) {
+    if (status === 'pending') {
+      progressBarFill.style.width = '25%';
+      stepRoute.className = 'step-badge active';
+      stepReasoning.className = 'step-badge';
+      stepValidation.className = 'step-badge';
+      stepReports.className = 'step-badge';
+    } else if (status === 'running') {
+      progressBarFill.style.width = '65%';
+      stepRoute.className = 'step-badge active';
+      stepReasoning.className = 'step-badge active';
+      stepValidation.className = 'step-badge active';
+      stepReports.className = 'step-badge';
+    } else if (status === 'completed') {
+      progressBarFill.style.width = '100%';
+      stepRoute.className = 'step-badge active';
+      stepReasoning.className = 'step-badge active';
+      stepValidation.className = 'step-badge active';
+      stepReports.className = 'step-badge active';
+    }
+  }
+
+  // 11. Display Job Results & Artifacts
+  async function displayJobResults(job) {
+    placeholderState.classList.add('hidden');
+    jobProgressCard.classList.add('hidden');
+
+    const agentId = job.agent_id || 'general_agent';
+    const agentNames = {
+      'medication_agent': 'Medication Specialist',
+      'procedure_agent': 'Procedure Specialist',
+      'diagnostic_agent': 'Diagnostic Specialist',
+      'general_agent': 'Medical Fact-Checker'
+    };
+
+    activeAgentBadgeText.textContent = agentNames[agentId] || agentId;
+    activeAgentBadge.classList.remove('hidden');
+
+    activeFiles = job.files || {};
+    loadedReportTexts = {};
+
+    filesGrid.innerHTML = '';
+    if (Object.keys(activeFiles).length > 0) {
+      filesContainer.classList.remove('hidden');
+      Object.keys(activeFiles).forEach(fileKey => {
+        const filePath = activeFiles[fileKey];
+        if (!filePath) return;
+
+        const fileName = filePath.split('/').pop();
+        const btn = document.createElement('a');
+        btn.className = 'file-card-btn';
+        btn.href = `/${filePath}`;
+        btn.target = '_blank';
+
+        const isPdf = fileName.endsWith('.pdf');
+        const isJson = fileName.endsWith('.json');
+        const iconClass = isPdf ? 'fa-solid fa-file-pdf' : (isJson ? 'fa-solid fa-code' : 'fa-solid fa-file-lines');
+        const formatBadge = isPdf ? 'PDF' : (isJson ? 'JSON' : 'MD');
+        const catClass = isPdf ? 'pdf' : (isJson ? 'json' : 'md');
+
+        btn.innerHTML = `
+          <div class="file-icon-box ${catClass}">
+            <i class="${iconClass}"></i>
+          </div>
+          <div class="file-info-col">
+            <span class="file-name-text">${escapeHtml(fileKey.replace(/_/g, ' '))}</span>
+            <span class="file-format-tag">${formatBadge} Artifact</span>
+          </div>
+          <i class="fa-solid fa-arrow-down-to-line file-dl-icon"></i>
+        `;
+        filesGrid.appendChild(btn);
+      });
+    }
+
+    reportPreviewCard.classList.remove('hidden');
+
+    await loadReportText('patient', activeFiles['patient_report']);
+    await loadReportText('practitioner', activeFiles['practitioner_report']);
+    await loadReportText('summary', activeFiles['summary'] || activeFiles['medication_summary']);
+
+    if (job.result) {
+      loadedReportTexts['json'] = JSON.stringify(job.result, null, 2);
+    }
+
+    const patientTabBtn = document.querySelector('.report-tabs .tab-btn[data-tab="patient"]');
+    if (patientTabBtn) patientTabBtn.click();
+  }
+
+  async function loadReportText(tabKey, filePath) {
+    if (!filePath) return;
+    try {
+      const res = await fetch(`/${filePath}`);
+      if (res.ok) {
+        const text = await res.text();
+        loadedReportTexts[tabKey] = text;
+      }
+    } catch (err) {
+      console.warn(`Could not load report file ${filePath}:`, err);
+    }
+  }
+
+  function renderReportTab(tabKey) {
+    const text = loadedReportTexts[tabKey];
+    if (!text) {
+      markdownViewer.innerHTML = '<p class="text-muted">No content available for this report view.</p>';
+      btnDownloadCurrent.style.display = 'none';
+      return;
+    }
+
+    if (tabKey === 'json') {
+      markdownViewer.innerHTML = `<pre class="json-box">${escapeHtml(text)}</pre>`;
+      btnDownloadCurrent.style.display = 'none';
+    } else {
+      markdownViewer.innerHTML = marked.parse(text);
+      
+      const filePath = activeFiles[`${tabKey}_report`] || activeFiles[tabKey];
+      if (filePath) {
+        btnDownloadCurrent.href = `/${filePath}`;
+        btnDownloadCurrent.style.display = 'inline-flex';
+      } else {
+        btnDownloadCurrent.style.display = 'none';
+      }
+    }
+  }
+
+  // 12. Route Query Only (Synchronous Classification)
+  async function routeQueryOnly() {
     const query = queryInput.value.trim();
     if (!query) {
-      showToast('Please enter a medical query or subject.', 'error');
+      showToast('Please enter a medical query to route.', 'error');
       queryInput.focus();
       return;
     }
 
     btnRoute.disabled = true;
-    showToast('Routing query...', 'info');
+    btnRoute.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Routing...';
 
     try {
       const res = await fetch('/route', {
@@ -328,342 +1102,39 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
 
       placeholderState.classList.add('hidden');
+      jobProgressCard.classList.add('hidden');
+      filesContainer.classList.add('hidden');
+      reportPreviewCard.classList.add('hidden');
       routeResultCard.classList.remove('hidden');
 
-      const agentMap = {
-        'medication_agent': { name: 'Medication Specialist', desc: 'Focuses on drug pharmacology, interactions, side effects, dosing, and safety.' },
-        'procedure_agent': { name: 'Procedure Specialist', desc: 'Provides organ-by-organ perioperative care, anatomical risks, and surgical analysis.' },
-        'diagnostic_agent': { name: 'Diagnostic Specialist', desc: 'Differential diagnosis pipeline linking symptoms to potential conditions.' },
-        'general_agent': { name: 'Fact-Checker Specialist', desc: 'Open medical evidence analysis with multi-perspective synthesis.' }
-      };
+      routedAgentName.textContent = data.agent_name || data.agent_id;
+      routedAgentDesc.textContent = `Query classified for ${data.agent_id}. Click "Start Analysis Run" to invoke reasoning pipeline.`;
 
-      const info = agentMap[data.routed_agent_id] || { name: data.routed_agent_id, desc: 'Specialized clinical reasoning agent.' };
-      routedAgentName.textContent = info.name;
-      routedAgentDesc.textContent = info.desc;
-      activeAgentBadge.textContent = info.name;
-
-      showToast(`Routed to ${info.name}`, 'success');
+      showToast(`Routed to: ${data.agent_name}`, 'success');
 
     } catch (err) {
       showToast(`Routing failed: ${err.message}`, 'error');
     } finally {
       btnRoute.disabled = false;
+      btnRoute.innerHTML = '<i class="fa-solid fa-compass"></i> Route Only';
     }
   }
 
-  // 6. Start Full Multi-Agent Analysis (/analyze/async)
-  async function startAnalysis() {
-    let query = queryInput.value.trim();
-    if (!query) {
-      showToast('Please enter a medical query or subject.', 'error');
-      queryInput.focus();
-      return;
-    }
-
-    // Attach Grounded Parsed Document Context if checked
-    if (parsedDocument && attachContextCheck.checked && parsedDocument.markdown) {
-      query += `\n\n--- ATTACHED CLINICAL DOCUMENT: ${parsedDocument.filename} ---\n${parsedDocument.markdown}`;
-    }
-
-    btnAnalyze.disabled = true;
-    placeholderState.classList.add('hidden');
-    routeResultCard.classList.add('hidden');
-    filesContainer.classList.add('hidden');
-    reportPreviewCard.classList.add('hidden');
-    jobProgressCard.classList.remove('hidden');
-
-    updateProgressUI(10, 'Submitting Analysis Job...', 'stepRoute');
-
-    try {
-      const reqPayload = {
-        query: query,
-        model: modelSelect.value,
-        implementation: 'langchain',
-        web_search: webSearchToggle.checked,
-        timeout: 300
-      };
-
-      const res = await fetch('/analyze/async', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reqPayload)
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json();
-        throw new Error(errJson.detail || 'Failed to start job');
-      }
-
-      const jobData = await res.json();
-      currentJob = jobData;
-      jobIdTag.textContent = `Job #${jobData.job_id.substring(0, 8)}`;
-
-      // Start Polling Loop
-      pollJobStatus(jobData.job_id);
-
-    } catch (err) {
-      btnAnalyze.disabled = false;
-      jobProgressCard.classList.add('hidden');
-      showToast(`Failed to start analysis: ${err.message}`, 'error');
-    }
-  }
-
-  // 7. Poll Job Status (/jobs/{id})
-  function pollJobStatus(jobId) {
-    if (pollInterval) clearInterval(pollInterval);
-
-    let stepCount = 0;
-    pollInterval = setInterval(async () => {
-      stepCount++;
-      try {
-        const res = await fetch(`/jobs/${jobId}`);
-        if (!res.ok) throw new Error('Job poll error');
-        const job = await res.json();
-
-        if (job.status === 'running') {
-          if (stepCount <= 3) {
-            updateProgressUI(30, 'Routing and Prompt Synthesis...', 'stepRoute');
-          } else if (stepCount <= 8) {
-            updateProgressUI(60, 'Invoking Multi-Agent Reasoning Pipeline...', 'stepReasoning');
-          } else {
-            updateProgressUI(85, 'Validating Citation URLs & Building Reports...', 'stepValidation');
-          }
-        } else if (job.status === 'completed') {
-          clearInterval(pollInterval);
-          updateProgressUI(100, 'Analysis Complete!', 'stepReports');
-          setTimeout(() => {
-            jobProgressCard.classList.add('hidden');
-            handleAnalysisCompleted(job);
-            btnAnalyze.disabled = false;
-          }, 600);
-        } else if (job.status === 'failed') {
-          clearInterval(pollInterval);
-          jobProgressCard.classList.add('hidden');
-          btnAnalyze.disabled = false;
-          showToast(`Analysis Job Failed: ${job.error || 'Unknown error'}`, 'error');
-        }
-      } catch (err) {
-        console.warn('Poll error:', err);
-      }
-    }, 2000);
-  }
-
-  function updateProgressUI(pct, label, activeStepId) {
-    progressBarFill.style.width = `${pct}%`;
-    jobStatusHeading.textContent = label;
-
-    [stepRoute, stepReasoning, stepValidation, stepReports].forEach(el => {
-      el.className = 'step';
-    });
-
-    if (activeStepId === 'stepRoute') {
-      stepRoute.className = 'step step-active';
-    } else if (activeStepId === 'stepReasoning') {
-      stepRoute.className = 'step step-done';
-      stepReasoning.className = 'step step-active';
-    } else if (activeStepId === 'stepValidation') {
-      stepRoute.className = 'step step-done';
-      stepReasoning.className = 'step step-done';
-      stepValidation.className = 'step step-active';
-    } else if (activeStepId === 'stepReports') {
-      stepRoute.className = 'step step-done';
-      stepReasoning.className = 'step step-done';
-      stepValidation.className = 'step step-done';
-      stepReports.className = 'step step-active';
-    }
-  }
-
-  // 8. Handle Analysis Complete & Render Reports
-  async function handleAnalysisCompleted(job) {
-    const resultData = job.result || {};
-    // Extract generated files from top-level job.files or nested job.result.files
-    activeFiles = job.files || resultData.files || {};
-    loadedReportTexts = {};
-
-    const agentId = job.agent_id || resultData.agent_id || 'Agent';
-    activeAgentBadge.textContent = agentId.replace(/_/g, ' ').toUpperCase();
-    showToast('Analysis completed successfully!', 'success');
-
-    // Render Files Grid
-    renderFilesGrid(activeFiles);
-
-    // Load Report Text Content
-    await loadReportContents(activeFiles);
-
-    // Display Preview Box
-    reportPreviewCard.classList.remove('hidden');
-
-    // Render Default Active Tab (Patient Report or Summary)
-    renderReportTab('patient');
-  }
-
-  function renderFilesGrid(files) {
-    filesGrid.innerHTML = '';
-    filesContainer.classList.remove('hidden');
-
-    const fileEntries = Object.entries(files);
-    if (fileEntries.length === 0) {
-      filesGrid.innerHTML = '<p style="color:var(--text-muted)">No output files generated.</p>';
-      return;
-    }
-
-    fileEntries.forEach(([key, path]) => {
-      const isPdf = path.endsWith('.pdf');
-      const isJson = path.endsWith('.json');
-      const filename = path.split('/').pop();
-
-      const card = document.createElement('div');
-      card.className = 'file-card';
-
-      let iconClass = 'fa-file-lines';
-      if (isPdf) iconClass = 'fa-file-pdf';
-      if (isJson) iconClass = 'fa-file-code';
-
-      // Standardize download link via static mount /outputs
-      const fileUrl = `/outputs/${filename}`;
-
-      card.innerHTML = `
-        <div class="file-card-top">
-          <i class="fa-solid ${iconClass} file-card-icon"></i>
-          <div>
-            <div class="file-card-title">${formatFileKey(key)}</div>
-            <div class="file-card-meta">${filename}</div>
-          </div>
-        </div>
-        <div class="file-card-actions">
-          <a href="${fileUrl}" target="_blank" class="btn btn-xs btn-outline">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
-          </a>
-          <a href="${fileUrl}" download class="btn btn-xs btn-primary">
-            <i class="fa-solid fa-download"></i> Download
-          </a>
-        </div>
-      `;
-
-      filesGrid.appendChild(card);
-    });
-  }
-
-  function formatFileKey(key) {
-    return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-  }
-
-  // Load report markdown content via fetch
-  async function loadReportContents(files) {
-    const keysToFetch = {
-      patient: files.patient_report || files.patient_md,
-      practitioner: files.practitioner_report || files.practitioner_md,
-      summary: files.summary_report || files.markdown_report || files.summary_md || files.medication_summary,
-      json: files.json_session || files.session || files.result || files.analysis_result || files.medication_analysis
-    };
-
-    for (const [tabKey, filePath] of Object.entries(keysToFetch)) {
-      if (filePath) {
-        const filename = filePath.split('/').pop();
-        const fileUrl = `/outputs/${filename}`;
-        try {
-          const res = await fetch(fileUrl);
-          if (res.ok) {
-            loadedReportTexts[tabKey] = await res.text();
-          }
-        } catch (e) {
-          console.warn(`Failed to fetch report ${filePath}`, e);
-        }
-      }
-    }
-  }
-
-  // Render Selected Tab Content
-  function renderReportTab(tabType) {
-    let rawContent = loadedReportTexts[tabType];
-
-    // Fallback to summary/markdown report if specific tab content is missing
-    if (!rawContent && (tabType === 'patient' || tabType === 'practitioner')) {
-      rawContent = loadedReportTexts['summary'];
-    }
-
-    btnDownloadCurrent.setAttribute('href', '#');
-
-    // Update download link for active tab
-    const fileKeyMap = {
-      patient: activeFiles.patient_report || activeFiles.markdown_report || activeFiles.summary_report,
-      practitioner: activeFiles.practitioner_report || activeFiles.markdown_report || activeFiles.summary_report,
-      summary: activeFiles.summary_report || activeFiles.markdown_report || activeFiles.medication_summary,
-      json: activeFiles.json_session || activeFiles.session || activeFiles.result || activeFiles.analysis_result
-    };
-    const currentPath = fileKeyMap[tabType];
-    if (currentPath) {
-      const filename = currentPath.split('/').pop();
-      btnDownloadCurrent.setAttribute('href', `/outputs/${filename}`);
-    }
-
-    if (!rawContent) {
-      markdownViewer.innerHTML = `<p style="color:var(--text-muted); padding:2rem; text-align:center;">No report content available for <strong>${tabType}</strong>.</p>`;
-      return;
-    }
-
-    if (tabType === 'json') {
-      try {
-        const parsedJson = JSON.parse(rawContent);
-        markdownViewer.innerHTML = `<pre><code>${escapeHtml(JSON.stringify(parsedJson, null, 2))}</code></pre>`;
-      } catch (e) {
-        markdownViewer.innerHTML = `<pre><code>${escapeHtml(rawContent)}</code></pre>`;
-      }
-    } else {
-      // Render Markdown using marked.js
-      if (window.marked) {
-        let renderedHtml = window.marked.parse(rawContent);
-        // Highlight hardcoded medical disclaimer
-        renderedHtml = renderedHtml.replace(
-          /(Disclaimer:[\s\S]*?)(?=<h|$)/gi, 
-          '<div class="disclaimer-box"><i class="fa-solid fa-triangle-exclamation"></i> <strong>Medical Disclaimer:</strong> $1</div>'
-        );
-        markdownViewer.innerHTML = renderedHtml;
-      } else {
-        markdownViewer.innerText = rawContent;
-      }
-    }
-  }
-
-  // 9. Reset Form
   function resetForm() {
     queryInput.value = '';
-    removeParsedDocument();
+    removeUploadedDocument();
     placeholderState.classList.remove('hidden');
     jobProgressCard.classList.add('hidden');
     routeResultCard.classList.add('hidden');
     filesContainer.classList.add('hidden');
     reportPreviewCard.classList.add('hidden');
-    activeAgentBadge.textContent = 'Ready';
-    showToast('Workbench reset', 'info');
+    activeAgentBadge.classList.add('hidden');
+    currentJob = null;
+    showToast('Workbench reset.', 'info');
   }
 
-  // Utility Helpers
-  function showToast(msg, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    let icon = 'fa-circle-info';
-    if (type === 'error') icon = 'fa-circle-xmark';
-    if (type === 'success') icon = 'fa-circle-check';
-
-    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${msg}</span>`;
-    toastContainer.appendChild(toast);
-
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(10px)';
-      setTimeout(() => toast.remove(), 300);
-    }, 4000);
-  }
-
-  function escapeHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  // 10. Slack Notifications Modal Logic
+  // Slack Modal Handlers
   function openSlackModal() {
-    const savedUrl = localStorage.getItem('slack_webhook_url') || '';
-    slackWebhookUrl.value = savedUrl;
     slackModal.classList.remove('hidden');
     loadSlackTasks();
   }
@@ -673,30 +1144,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadSlackTasks() {
-    slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row"><i class="fa-solid fa-spinner fa-spin"></i> Loading tasks...</td></tr>';
-    chkSelectAllSlack.checked = false;
-    updateSlackSendButtonState();
-
+    slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row"><i class="fa-solid fa-spinner fa-spin"></i> Loading completed tasks...</td></tr>';
     try {
       const res = await fetch('/jobs');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const tasks = await res.json();
 
-      if (!tasks || tasks.length === 0) {
-        slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row"><i class="fa-solid fa-folder-open"></i> No tasks found. Run an analysis first to generate tasks.</td></tr>';
+      if (tasks.length === 0) {
+        slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row">No tasks found. Run an analysis first!</td></tr>';
         return;
       }
 
       slackTasksTbody.innerHTML = '';
       tasks.forEach(task => {
         const tr = document.createElement('tr');
-        const statusClass = task.status === 'completed' ? 'success' : (task.status === 'failed' ? 'error' : '');
+        const statusClass = task.status === 'completed' ? 'success' : (task.status === 'failed' ? 'error' : 'pending');
+        const agentName = task.agent_id ? task.agent_id.replace('_agent', '').toUpperCase() : 'AUTO';
         const dateStr = task.created_at ? new Date(task.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A';
-        const agentName = task.agent_id ? task.agent_id.replace('_agent', '').replace('_', ' ') : 'Auto';
 
         tr.innerHTML = `
           <td><input type="checkbox" class="task-checkbox" data-id="${task.id}"></td>
-          <td><strong style="color:var(--text-bright);">${escapeHtml(task.query || 'Query')}</strong></td>
+          <td><strong>${escapeHtml(task.query || 'Untitled Query')}</strong></td>
           <td><span class="stat-badge">${escapeHtml(agentName)}</span></td>
           <td><span class="stat-badge ${statusClass}">${escapeHtml(task.status || 'unknown')}</span></td>
           <td style="color:var(--text-muted); font-size:0.75rem;">${dateStr}</td>
@@ -706,10 +1174,8 @@ document.addEventListener('DOMContentLoaded', () => {
         checkbox.addEventListener('change', updateSlackSendButtonState);
         slackTasksTbody.appendChild(tr);
       });
-
     } catch (err) {
-      console.error('Error fetching jobs:', err);
-      slackTasksTbody.innerHTML = `<tr><td colspan="5" class="empty-tasks-row" style="color:#fca5a5;"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load tasks: ${escapeHtml(err.message)}</td></tr>`;
+      slackTasksTbody.innerHTML = `<tr><td colspan="5" class="empty-tasks-row" style="color:#fca5a5;">Failed to load tasks: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
@@ -768,11 +1234,28 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       showToast(`Successfully sent ${data.sent_count} task(s) with descriptions to Slack!`, 'success');
       closeSlackModal();
-
     } catch (err) {
       showToast(`Slack dispatch failed: ${err.message}`, 'error');
     } finally {
       updateSlackSendButtonState();
     }
+  }
+
+  // Toast Banner Helper
+  function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
+    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 4500);
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
   }
 });

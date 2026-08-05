@@ -76,6 +76,9 @@ class User(Base):
     patient_data: Mapped[list["PatientData"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    patients: Mapped[list["Patient"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<User id={self.id!r} username={self.username!r}>"
@@ -212,3 +215,36 @@ class PatientData(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<PatientData id={self.id!r} source={self.source_type!r}>"
+
+
+class Patient(Base):
+    """A patient entity holding demographics, metadata, and clinical tables."""
+
+    __tablename__ = "patients"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    primary_condition: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True)
+    clinical_data: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="patients")
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return f"<Patient id={self.id!r} name={self.name!r}>"
+
