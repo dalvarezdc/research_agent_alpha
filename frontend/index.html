@@ -98,118 +98,125 @@
         <!-- Workbench Grid -->
         <div class="workbench-grid">
 
-          <!-- LEFT COLUMN: Input & Document Workbench -->
-          <section class="panel input-panel">
-            <div class="panel-header">
-              <h2><i class="fa-solid fa-pen-to-square"></i> New Analysis Query</h2>
-              <span class="badge">Workbench</span>
+          <!-- LEFT COLUMN: Minimal Command Bar & Workbench -->
+          <section class="panel input-panel minimal-panel">
+            <div class="panel-header compact-header">
+              <h2><i class="fa-solid fa-sparkles"></i> Medical AI Query & Intake</h2>
+              <span class="mode-badge direct" id="intakeModeBadge"><i class="fa-solid fa-bolt"></i> Direct Prompt</span>
             </div>
 
-            <!-- Query Input & Intake Chatbot Workbench -->
-            <div class="form-group">
-              <div class="label-with-badge">
-                <label for="queryInput">
-                  Medical Query or Clinical Subject <span class="required">*</span>
-                  <span class="info-bulb" data-tooltip="Submit a single query directly or chat with the intake assistant to ask clarifying questions and enrich your prompt before analysis.">
-                    <i class="fa-solid fa-circle-info"></i>
-                  </span>
-                </label>
-                <div class="mode-badge-container">
-                  <span class="mode-badge direct" id="intakeModeBadge"><i class="fa-solid fa-bolt"></i> Direct Prompt</span>
+            <!-- Intake Chat Stream Container -->
+            <div class="intake-chat-stream hidden" id="intakeChatStream"></div>
+
+            <!-- Sleek Modern Command Box (ChatGPT / Claude 2-Row Style) -->
+            <div class="command-bar-wrapper">
+              <div class="command-bar" id="commandBar">
+                
+                <!-- TOP ROW: Full-Width Textarea -->
+                <div class="command-bar-input-row">
+                  <textarea id="queryInput" rows="2" placeholder="What medical query or clinical subject is on your mind?"></textarea>
+                </div>
+
+                <!-- BOTTOM ROW: Controls, Plus Menu & Send Button -->
+                <div class="command-bar-footer-row">
+                  <div class="footer-left-tools">
+                    <!-- Plus / Options Dropdown Trigger -->
+                    <div class="dropdown-wrapper">
+                      <button type="button" class="bar-icon-btn" id="btnPlusMenu" title="Attach file or select options">
+                        <i class="fa-solid fa-plus"></i>
+                      </button>
+                      
+                      <!-- Plus Dropdown Menu -->
+                      <div class="command-dropdown hidden" id="plusMenuDropdown">
+                        <button type="button" class="dropdown-item" onclick="document.getElementById('fileInput').click()">
+                          <i class="fa-solid fa-paperclip"></i> Upload Medical Document
+                        </button>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-header-title">Quick Samples</div>
+                        <button type="button" class="dropdown-item sample-item" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
+                        <button type="button" class="dropdown-item sample-item" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
+                        <button type="button" class="dropdown-item sample-item" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
+                        <button type="button" class="dropdown-item sample-item" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
+                      </div>
+                    </div>
+
+                    <!-- Live Web Research Pill -->
+                    <div class="web-search-pill" title="Toggle Live Web Research">
+                      <i class="fa-solid fa-globe"></i>
+                      <span class="pill-label">Web</span>
+                      <span class="info-bulb" data-tooltip="Fetch real-time evidence & clinical guidelines from Tavily / DDG.">
+                        <i class="fa-solid fa-circle-info"></i>
+                      </span>
+                      <label class="switch switch-xs">
+                        <input type="checkbox" id="webSearchToggle" checked>
+                        <span class="slider round"></span>
+                      </label>
+                    </div>
+
+                    <!-- Model & Agent Selector Dropdown -->
+                    <div class="dropdown-wrapper">
+                      <button type="button" class="model-pill-btn" id="btnModelMenu">
+                        <i class="fa-solid fa-brain"></i>
+                        <span id="selectedModelLabel">grok-4.5</span>
+                        <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                      </button>
+
+                      <!-- Hidden Select Elements for JS compatibility -->
+                      <select id="modelSelect" class="hidden">
+                        <option value="grok-4.5" selected>grok-4.5</option>
+                        <option value="grok-4.3">grok-4.3</option>
+                        <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+                        <option value="claude-opus-4-8">claude-opus-4-8</option>
+                        <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+                        <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                        <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+                        <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                      </select>
+                      <select id="agentSelect" class="hidden">
+                        <option value="auto" selected>Auto-Route</option>
+                        <option value="procedure_agent">Procedure Specialist</option>
+                        <option value="medication_agent">Medication Specialist</option>
+                        <option value="diagnostic_agent">Diagnostic Specialist</option>
+                        <option value="general_agent">Fact-Checker Specialist</option>
+                      </select>
+
+                      <!-- Model & Agent Popup Menu -->
+                      <div class="command-dropdown model-dropdown hidden" id="modelMenuDropdown">
+                        <div class="dropdown-header-title">LLM Model <span class="info-bulb" data-tooltip="Select AI reasoning model."><i class="fa-solid fa-circle-info"></i></span></div>
+                        <button type="button" class="dropdown-item model-opt active" data-model="grok-4.5"><i class="fa-solid fa-bolt"></i> grok-4.5 (Default)</button>
+                        <button type="button" class="dropdown-item model-opt" data-model="grok-4.3"><i class="fa-solid fa-bolt-lightning"></i> grok-4.3</button>
+                        <button type="button" class="dropdown-item model-opt" data-model="claude-sonnet-4-6"><i class="fa-solid fa-brain"></i> claude-sonnet-4-6</button>
+                        <button type="button" class="dropdown-item model-opt" data-model="claude-opus-4-8"><i class="fa-solid fa-crown"></i> claude-opus-4-8</button>
+                        <button type="button" class="dropdown-item model-opt" data-model="gemini-3.6-flash"><i class="fa-solid fa-sparkles"></i> gemini-3.6-flash</button>
+                        <button type="button" class="dropdown-item model-opt" data-model="deepseek-v4-flash"><i class="fa-solid fa-microchip"></i> deepseek-v4-flash</button>
+
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-header-title">Target Specialist Agent <span class="info-bulb" data-tooltip="Auto-Route intelligently selects agent."><i class="fa-solid fa-circle-info"></i></span></div>
+                        <button type="button" class="dropdown-item agent-opt active" data-agent="auto"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Route (Recommended)</button>
+                        <button type="button" class="dropdown-item agent-opt" data-agent="procedure_agent">🏥 Procedure Specialist</button>
+                        <button type="button" class="dropdown-item agent-opt" data-agent="medication_agent">💊 Medication Specialist</button>
+                        <button type="button" class="dropdown-item agent-opt" data-agent="diagnostic_agent">🩺 Diagnostic Specialist</button>
+                        <button type="button" class="dropdown-item agent-opt" data-agent="general_agent">🔬 Fact-Checker Specialist</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="footer-right-tools">
+                    <!-- Send / Clarify Circle Button -->
+                    <button type="button" class="send-circle-btn" id="btnChatSend" title="Send to Intake Assistant to ask clarifying questions">
+                      <i class="fa-solid fa-arrow-up"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <!-- Intake Chat Stream Container -->
-              <div class="intake-chat-stream hidden" id="intakeChatStream"></div>
+              <!-- Hidden file input -->
+              <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden" style="display:none !important;">
 
-              <!-- Input Area & Chat Action Bar -->
-              <div class="intake-input-wrapper">
-                <textarea id="queryInput" rows="2" placeholder="Enter a surgery, medication, symptom list, or medical evidence question..."></textarea>
-                <div class="intake-input-actions">
-                  <button type="button" class="btn btn-secondary btn-chat-send" id="btnChatSend" title="Send message to Intake Assistant to ask clarifying questions">
-                    <i class="fa-solid fa-paper-plane"></i> Send / Clarify
-                  </button>
-                </div>
-              </div>
-
-              <!-- Preset Example Chips -->
-              <div class="example-chips">
-                <span class="chip-label">Quick samples:</span>
-                <button class="chip" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
-                <button class="chip" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
-                <button class="chip" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
-                <button class="chip" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
-              </div>
-            </div>
-
-            <!-- Configuration Bar -->
-            <div class="config-grid">
-              <div class="form-group">
-                <label for="modelSelect">
-                  <i class="fa-solid fa-brain"></i> LLM Model
-                  <span class="info-bulb" data-tooltip="Select the AI language model for analysis (xAI Grok, Anthropic Claude, Google Gemini, or DeepSeek).">
-                    <i class="fa-solid fa-circle-info"></i>
-                  </span>
-                </label>
-                <select id="modelSelect">
-                  <option value="grok-4.5" selected>grok-4.5 (xAI Flagship - Default)</option>
-                  <option value="grok-4.3">grok-4.3 (xAI)</option>
-                  <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
-                  <option value="claude-opus-4-8">claude-opus-4-8 (Anthropic)</option>
-                  <option value="gemini-3.6-flash">gemini-3.6-flash (Google Vertex)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (Google Vertex)</option>
-                  <option value="deepseek-v4-flash">deepseek-v4-flash (DeepSeek Flash)</option>
-                  <option value="deepseek-v4-pro">deepseek-v4-pro (DeepSeek Pro)</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="agentSelect">
-                  <i class="fa-solid fa-user-doctor"></i> Target Agent
-                  <span class="info-bulb" data-tooltip="Auto-Route intelligently selects between Procedure, Medication, Diagnostic, or Fact-Checker agent based on your query.">
-                    <i class="fa-solid fa-circle-info"></i>
-                  </span>
-                </label>
-                <select id="agentSelect">
-                  <option value="auto" selected>Auto-Route (Recommended)</option>
-                  <option value="procedure_agent">Procedure Specialist</option>
-                  <option value="medication_agent">Medication Specialist</option>
-                  <option value="diagnostic_agent">Diagnostic Specialist</option>
-                  <option value="general_agent">Fact-Checker Specialist</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Web Search Toggle -->
-            <div class="toggle-row">
-              <div class="toggle-info">
-                <i class="fa-solid fa-globe"></i>
-                <span class="toggle-title">
-                  Live Web Research
-                  <span class="info-bulb" data-tooltip="Fetch real-time evidence & clinical guidelines from medical literature databases (Tavily / DDG).">
-                    <i class="fa-solid fa-circle-info"></i>
-                  </span>
-                </span>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="webSearchToggle" checked>
-                <span class="slider round"></span>
-              </label>
-            </div>
-
-            <!-- Document Attachment & Parser Section -->
-            <div class="form-group">
-              <label>
-                <i class="fa-solid fa-paperclip"></i> Attach Medical Document (Optional)
-                <span class="info-bulb" data-tooltip="Supports PDF, DOCX, TXT, RTF, MD, Images (Max 25MB). Parsed document text will be included as background clinical context.">
-                  <i class="fa-solid fa-circle-info"></i>
-                </span>
-              </label>
-              
-              <div class="drop-zone drop-zone-compact" id="dropZone">
+              <!-- Upload Drag Zone & File Card (Dropzone container) -->
+              <div class="drop-zone drop-zone-minimal hidden" id="dropZone">
                 <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
-                <span class="drop-text">Drag & drop clinical report, lab PDF or <span class="browse-link" onclick="document.getElementById('fileInput').click()">Browse</span></span>
-                <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
+                <span class="drop-text">Drag & drop document or <span class="browse-link" onclick="document.getElementById('fileInput').click()">Browse</span></span>
               </div>
 
               <!-- Upload Error Banner -->
@@ -255,23 +262,32 @@
                 <div class="context-attach-option">
                   <label class="checkbox-label">
                     <input type="checkbox" id="attachContextCheck" checked>
-                    Include parsed document text as background clinical context for analysis
+                    Include parsed document text as clinical context for analysis
                   </label>
                 </div>
               </div>
-            </div>
 
-            <!-- Action Buttons Bar -->
-            <div class="action-bar">
-              <button class="btn btn-primary" id="btnAnalyze">
-                <i class="fa-solid fa-play"></i> Start Analysis Run
-              </button>
-              <button class="btn btn-secondary" id="btnRoute">
-                <i class="fa-solid fa-compass"></i> Route Only
-              </button>
-              <button class="btn btn-ghost" id="btnClear">
-                <i class="fa-solid fa-eraser"></i> Clear
-              </button>
+              <!-- Preset Example Chips -->
+              <div class="example-chips compact-chips">
+                <span class="chip-label">Quick samples:</span>
+                <button class="chip" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
+                <button class="chip" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
+                <button class="chip" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
+                <button class="chip" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
+              </div>
+
+              <!-- Action Bar (Start Analysis Run & Route Only) -->
+              <div class="action-bar minimal-action-bar">
+                <button class="btn btn-primary btn-run-pill" id="btnAnalyze">
+                  <i class="fa-solid fa-play"></i> Start Analysis Run
+                </button>
+                <button class="btn btn-secondary btn-route-pill" id="btnRoute">
+                  <i class="fa-solid fa-compass"></i> Route Only
+                </button>
+                <button class="btn btn-ghost btn-clear-pill" id="btnClear">
+                  <i class="fa-solid fa-eraser"></i> Clear
+                </button>
+              </div>
             </div>
           </section>
 

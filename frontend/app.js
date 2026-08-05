@@ -211,6 +211,76 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRefreshConversations.addEventListener('click', loadConversationsHistory);
     conversationSearchInput.addEventListener('input', renderConversationsList);
 
+    // Command Bar Plus & Model Menu Toggles
+    const btnPlusMenu = document.getElementById('btnPlusMenu');
+    const plusMenuDropdown = document.getElementById('plusMenuDropdown');
+    const btnModelMenu = document.getElementById('btnModelMenu');
+    const modelMenuDropdown = document.getElementById('modelMenuDropdown');
+    const selectedModelLabel = document.getElementById('selectedModelLabel');
+
+    if (btnPlusMenu && plusMenuDropdown) {
+      btnPlusMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        plusMenuDropdown.classList.toggle('hidden');
+        if (modelMenuDropdown) modelMenuDropdown.classList.add('hidden');
+      });
+    }
+
+    if (btnModelMenu && modelMenuDropdown) {
+      btnModelMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modelMenuDropdown.classList.toggle('hidden');
+        if (plusMenuDropdown) plusMenuDropdown.classList.add('hidden');
+      });
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      if (plusMenuDropdown) plusMenuDropdown.classList.add('hidden');
+      if (modelMenuDropdown) modelMenuDropdown.classList.add('hidden');
+    });
+
+    // Model dropdown item selection
+    document.querySelectorAll('.model-opt').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const modelVal = item.getAttribute('data-model');
+        if (modelSelect) modelSelect.value = modelVal;
+        if (selectedModelLabel) selectedModelLabel.textContent = modelVal;
+        document.querySelectorAll('.model-opt').forEach(opt => opt.classList.remove('active'));
+        item.classList.add('active');
+        if (modelMenuDropdown) modelMenuDropdown.classList.add('hidden');
+      });
+    });
+
+    // Agent dropdown item selection
+    document.querySelectorAll('.agent-opt').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const agentVal = item.getAttribute('data-agent');
+        if (agentSelect) agentSelect.value = agentVal;
+        document.querySelectorAll('.agent-opt').forEach(opt => opt.classList.remove('active'));
+        item.classList.add('active');
+        if (modelMenuDropdown) modelMenuDropdown.classList.add('hidden');
+      });
+    });
+
+    // Plus menu sample item selection
+    document.querySelectorAll('.sample-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        queryInput.value = item.getAttribute('data-query');
+        queryInput.focus();
+        if (plusMenuDropdown) plusMenuDropdown.classList.add('hidden');
+      });
+    });
+
+    // Auto-expand command bar textarea
+    queryInput.addEventListener('input', () => {
+      queryInput.style.height = 'auto';
+      queryInput.style.height = (queryInput.scrollHeight) + 'px';
+    });
+
     // Sample Chips
     document.querySelectorAll('.chip').forEach(chip => {
       chip.addEventListener('click', () => {
