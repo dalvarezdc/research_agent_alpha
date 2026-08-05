@@ -141,17 +141,14 @@
                     </div>
 
                     <!-- Live Web Research Pill -->
-                    <div class="web-search-pill" title="Toggle Live Web Research">
-                      <i class="fa-solid fa-globe"></i>
-                      <span class="pill-label">Web</span>
+                    <label class="web-search-pill" for="webSearchToggle" title="Toggle Live Web Research (Real-time clinical literature)">
+                      <input type="checkbox" id="webSearchToggle" checked class="hidden-checkbox">
+                      <i class="fa-solid fa-globe globe-icon"></i>
+                      <span class="pill-label">Web Search</span>
                       <span class="info-bulb" data-tooltip="Fetch real-time evidence & clinical guidelines from Tavily / DDG.">
                         <i class="fa-solid fa-circle-info"></i>
                       </span>
-                      <label class="switch switch-xs">
-                        <input type="checkbox" id="webSearchToggle" checked>
-                        <span class="slider round"></span>
-                      </label>
-                    </div>
+                    </label>
 
                     <!-- Model & Agent Selector Dropdown -->
                     <div class="dropdown-wrapper">
@@ -265,15 +262,6 @@
                     Include parsed document text as clinical context for analysis
                   </label>
                 </div>
-              </div>
-
-              <!-- Preset Example Chips -->
-              <div class="example-chips compact-chips">
-                <span class="chip-label">Quick samples:</span>
-                <button class="chip" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
-                <button class="chip" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
-                <button class="chip" data-query="fatigue, weight gain, cold intolerance">🩺 Diagnostic</button>
-                <button class="chip" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
               </div>
 
               <!-- Action Bar (Start Analysis Run & Route Only) -->

@@ -456,15 +456,15 @@ body {
 }
 
 .command-bar {
-  background: rgba(18, 26, 42, 0.95);
-  backdrop-filter: blur(16px);
+  background: rgba(14, 21, 35, 0.95);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  padding: 0.75rem 0.85rem 0.65rem 0.85rem;
+  border-radius: 18px;
+  padding: 0.85rem 1rem 0.65rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(6, 182, 212, 0.1);
+  gap: 0.65rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 20px rgba(6, 182, 212, 0.08);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   width: 100%;
@@ -473,7 +473,7 @@ body {
 
 .command-bar:focus-within {
   border-color: rgba(6, 182, 212, 0.5);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(6, 182, 212, 0.25);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.55), 0 0 25px rgba(6, 182, 212, 0.22);
 }
 
 .command-bar-input-row {
@@ -487,7 +487,7 @@ body {
   color: var(--text-bright);
   font-family: var(--font-sans);
   font-size: 0.925rem;
-  padding: 0.2rem 0;
+  padding: 0.15rem 0;
   resize: none;
   min-height: 52px;
   max-height: 160px;
@@ -507,8 +507,8 @@ body {
   justify-content: space-between;
   gap: 0.6rem;
   width: 100%;
-  padding-top: 0.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .footer-left-tools {
@@ -524,49 +524,90 @@ body {
   margin-left: auto;
 }
 
-.web-search-pill {
+.bar-icon-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.bar-icon-btn:hover {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--primary);
+  border-color: rgba(6, 182, 212, 0.35);
+}
+
+.hidden-checkbox {
+  display: none !important;
+}
+
+.web-search-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(6, 182, 212, 0.14);
+  border: 1px solid rgba(6, 182, 212, 0.35);
   border-radius: 20px;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.725rem;
-  color: var(--text-main);
+  padding: 0.28rem 0.7rem;
+  font-size: 0.75rem;
+  color: var(--primary);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
   white-space: nowrap;
 }
 
-.web-search-pill i.fa-globe {
+.web-search-pill:hover {
+  background: rgba(6, 182, 212, 0.22);
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+}
+
+/* Inactive State when unchecked */
+.web-search-pill:has(input:not(:checked)) {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+}
+
+.web-search-pill:has(input:not(:checked)) i.globe-icon {
+  color: var(--text-muted);
+}
+
+.web-search-pill i.globe-icon {
   color: var(--primary);
+  font-size: 0.775rem;
+  transition: color 0.2s ease;
 }
 
 .web-search-pill .pill-label {
   font-weight: 600;
+  font-size: 0.75rem;
 }
 
-/* Mini Switch */
-.switch-xs {
-  width: 28px;
-  height: 16px;
+.web-search-pill .info-bulb {
+  margin-left: 0.05rem;
+  opacity: 0.75;
 }
 
-.switch-xs .slider:before {
-  height: 12px;
-  width: 12px;
-  left: 2px;
-  bottom: 2px;
-}
-
-.switch-xs input:checked + .slider:before {
-  transform: translateX(12px);
+.web-search-pill:hover .info-bulb {
+  opacity: 1;
 }
 
 .model-pill-btn {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-bright);
-  padding: 0.25rem 0.65rem;
+  padding: 0.28rem 0.7rem;
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -580,6 +621,7 @@ body {
 
 .model-pill-btn:hover {
   background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .model-pill-btn .arrow-icon {
@@ -602,7 +644,7 @@ body {
   font-size: 0.85rem;
   cursor: pointer;
   transition: var(--transition);
-  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.18);
   flex-shrink: 0;
   padding: 0;
   line-height: 1;
@@ -611,7 +653,8 @@ body {
 .send-circle-btn:hover {
   background: var(--primary);
   color: #fff;
-  transform: scale(1.05);
+  transform: scale(1.06);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4);
 }
 
 .send-circle-btn:disabled {
