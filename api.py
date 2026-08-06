@@ -195,16 +195,42 @@ def load_json_result(agent_id: str, files: Dict[str, str]) -> Dict[str, Any]:
     return {"warning": f"JSON result file not found at {file_path}"}
 
 
+def _persist_conversation_update(job_id: str, **fields: Any) -> None:
+    """Best-effort write of conversation fields to the durable store."""
+    try:
+        ensure_initialized()
+        with session_scope() as session:
+            repository.update_conversation(session, job_id, **fields)
+    except Exception as e:
+        logger.warning(f"Failed to update conversation {job_id}: {e}")
+
+
+def _job_to_public_dict(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize an in-memory job for API responses (ISO dates + has_docs)."""
+    out = dict(job)
+    for key in ("created_at", "updated_at"):
+        val = out.get(key)
+        if isinstance(val, datetime):
+            out[key] = val.isoformat()
+    files = out.get("files") or {}
+    out["has_docs"] = repository._conversation_has_docs(files) if files else False
+    return out
+
+
 def execute_analysis_sync(
     query: str,
     model: str,
     implementation: str,
     web_search: bool,
     timeout: int,
-    agent_id_override: Optional[str] = None
+    agent_id_override: Optional[str] = None,
+    job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Runs the full routing and execution pipeline synchronously.
+
+    When ``job_id`` is provided, the Report row is keyed with the same id so
+    conversation delete can purge report + files in one shot.
     """
     # Map model name to provider name
     available_models_dict = get_available_models()
@@ -269,25 +295,29 @@ def execute_analysis_sync(
     # Load result data from file
     loaded_data = load_json_result(routed_agent_id, files)
 
-    # Persist report to DB (best-effort)
+    # Persist report to DB (best-effort). Use job_id as report PK when available.
+    report_id = None
     try:
         ensure_initialized()
         with session_scope() as session:
-            repository.persist_report(
+            report = repository.persist_report(
                 session=session,
                 agent_type=routed_agent_id,
                 subject_text=query,
                 files=files,
                 llm_provider=llm_provider,
                 implementation=implementation,
+                report_id=job_id,
             )
+            report_id = report.id
     except Exception as e:
         logger.warning(f"Failed to persist report to database: {e}")
 
     return {
         "agent_id": routed_agent_id,
         "files": files,
-        "result": loaded_data
+        "result": loaded_data,
+        "report_id": report_id,
     }
 
 
@@ -307,6 +337,7 @@ def run_background_job(
     with jobs_lock:
         jobs[job_id]["status"] = JobStatus.RUNNING
         jobs[job_id]["updated_at"] = datetime.now()
+    _persist_conversation_update(job_id, status=JobStatus.RUNNING)
 
     try:
         data = execute_analysis_sync(
@@ -315,14 +346,24 @@ def run_background_job(
             implementation=implementation,
             web_search=web_search,
             timeout=timeout,
-            agent_id_override=agent_id_override
+            agent_id_override=agent_id_override,
+            job_id=job_id,
         )
         with jobs_lock:
             jobs[job_id]["status"] = JobStatus.COMPLETED
             jobs[job_id]["agent_id"] = data["agent_id"]
             jobs[job_id]["files"] = data["files"]
             jobs[job_id]["result"] = data["result"]
+            jobs[job_id]["report_id"] = data.get("report_id")
             jobs[job_id]["updated_at"] = datetime.now()
+        _persist_conversation_update(
+            job_id,
+            status=JobStatus.COMPLETED,
+            agent_id=data["agent_id"],
+            files=data["files"],
+            result=data["result"] if isinstance(data.get("result"), dict) else None,
+            report_id=data.get("report_id") or job_id,
+        )
         logger.info(f"Successfully completed background job: {job_id}")
     except Exception as e:
         tb = traceback.format_exc()
@@ -331,6 +372,11 @@ def run_background_job(
             jobs[job_id]["status"] = JobStatus.FAILED
             jobs[job_id]["error"] = f"{e}\n{tb}"
             jobs[job_id]["updated_at"] = datetime.now()
+        _persist_conversation_update(
+            job_id,
+            status=JobStatus.FAILED,
+            error=f"{e}\n{tb}",
+        )
 
 
 
@@ -556,22 +602,46 @@ def analyze_query_sync_endpoint(req: AnalyzeRequest):
 def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: BackgroundTasks):
     """
     Asynchronously route and analyze a medical query. Returns a job ID to poll for status.
+    Conversation is persisted immediately so history survives restarts.
     """
     job_id = str(uuid.uuid4())
     now = datetime.now()
 
+    job_record = {
+        "id": job_id,
+        "query": req.query,
+        "agent_id": req.agent_id,
+        "status": JobStatus.PENDING,
+        "model": req.model,
+        "implementation": req.implementation,
+        "created_at": now,
+        "updated_at": now,
+        "error": None,
+        "files": None,
+        "result": None,
+        "report_id": None,
+        "parent_job_id": None,
+        "has_docs": False,
+    }
+
     with jobs_lock:
-        jobs[job_id] = {
-            "id": job_id,
-            "query": req.query,
-            "agent_id": req.agent_id,
-            "status": JobStatus.PENDING,
-            "created_at": now,
-            "updated_at": now,
-            "error": None,
-            "files": None,
-            "result": None
-        }
+        jobs[job_id] = job_record
+
+    # Durable cache — create conversation row before work starts.
+    try:
+        ensure_initialized()
+        with session_scope() as session:
+            repository.create_conversation(
+                session,
+                conversation_id=job_id,
+                query=req.query,
+                agent_id=req.agent_id,
+                status=JobStatus.PENDING,
+                model=req.model,
+                implementation=req.implementation,
+            )
+    except Exception as e:
+        logger.warning(f"Failed to persist conversation {job_id}: {e}")
 
     background_tasks.add_task(
         run_background_job,
@@ -594,45 +664,96 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
 @app.get("/jobs")
 def list_jobs_endpoint():
     """
-    List all background jobs and tasks sorted by creation date descending.
-    """
-    with jobs_lock:
-        job_list = list(jobs.values())
+    List all conversations/jobs sorted by creation date descending.
 
-    # Sort newest first
-    job_list.sort(key=lambda j: j.get("created_at", datetime.min), reverse=True)
+    Merges live in-memory jobs with durable DB conversations. Existing Report
+    rows without a Conversation are backfilled once so prior runs appear.
+    """
+    merged: Dict[str, Dict[str, Any]] = {}
+
+    # Durable store first (survives restarts).
+    try:
+        ensure_initialized()
+        with session_scope() as session:
+            repository.backfill_conversations_from_reports(session)
+            for conv in repository.list_conversations(session, limit=300):
+                merged[conv.id] = repository.conversation_to_job_dict(conv)
+    except Exception as e:
+        logger.warning(f"Failed to load conversations from DB: {e}")
+
+    # Overlay in-memory jobs (fresher status for running work).
+    with jobs_lock:
+        for jid, job in jobs.items():
+            merged[jid] = _job_to_public_dict(job)
+
+    job_list = list(merged.values())
+
+    def _sort_key(j: Dict[str, Any]):
+        created = j.get("created_at") or ""
+        if isinstance(created, datetime):
+            return created.isoformat()
+        return str(created)
+
+    job_list.sort(key=_sort_key, reverse=True)
     return job_list
 
 
 @app.get("/jobs/{job_id}")
 def get_job_status_endpoint(job_id: str):
     """
-    Retrieve status and result of a background job.
+    Retrieve status and result of a background job / cached conversation.
     """
     with jobs_lock:
         job = jobs.get(job_id)
 
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
-        )
+    if job:
+        return _job_to_public_dict(job)
 
-    return job
+    # Fall back to durable conversation cache.
+    try:
+        ensure_initialized()
+        with session_scope() as session:
+            conv = repository.get_conversation(session, job_id)
+            if conv:
+                return repository.conversation_to_job_dict(conv)
+            # Last resort: report row (pre-conversation era).
+            rep = repository.get_report(session, job_id)
+            if rep:
+                files = {rf.file_type: rf.file_path for rf in rep.files}
+                return {
+                    "id": rep.id,
+                    "query": rep.subject_text,
+                    "agent_id": rep.agent_type,
+                    "status": JobStatus.COMPLETED,
+                    "files": files or None,
+                    "result": None,
+                    "report_id": rep.id,
+                    "has_docs": repository._conversation_has_docs(files),
+                    "created_at": rep.created_at.isoformat() if rep.created_at else None,
+                    "updated_at": rep.created_at.isoformat() if rep.created_at else None,
+                }
+    except Exception as e:
+        logger.warning(f"Failed to load conversation {job_id} from DB: {e}")
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Job not found"
+    )
 
 
 @app.delete("/jobs/{job_id}")
 def delete_job_endpoint(job_id: str):
     """
-    Delete a conversation/job, purge its output files from disk, and remove database records & cache.
+    Delete a conversation with one action: in-memory job, DB conversation,
+    linked report rows, and all associated on-disk report files.
     """
-    removed_files = []
+    removed_files: list[str] = []
+
     with jobs_lock:
         job = jobs.pop(job_id, None)
 
     if job:
-        files = job.get("files") or {}
-        for ftype, fpath in files.items():
+        for fpath in (job.get("files") or {}).values():
             if fpath and os.path.exists(fpath):
                 try:
                     os.remove(fpath)
@@ -640,16 +761,26 @@ def delete_job_endpoint(job_id: str):
                 except Exception as e:
                     logger.warning(f"Could not remove file {fpath}: {e}")
 
-    # Check and delete from database as well
+    db_found = False
     try:
         ensure_initialized()
         with session_scope() as session:
-            db_removed = repository.delete_report_and_artifacts(session, job_id)
-            removed_files.extend(db_removed)
+            conv = repository.get_conversation(session, job_id)
+            rep = repository.get_report(session, job_id)
+            if conv is not None or rep is not None:
+                db_found = True
+            removed_files.extend(
+                repository.delete_conversation_and_artifacts(session, job_id)
+            )
+            # Orphan report with no conversation row (legacy).
+            if rep is not None and (conv is None or conv.report_id != job_id):
+                removed_files.extend(
+                    repository.delete_report_and_artifacts(session, job_id)
+                )
     except Exception as e:
-        logger.warning(f"Error purging database report {job_id}: {e}")
+        logger.warning(f"Error purging conversation/report {job_id}: {e}")
 
-    if not job and not removed_files:
+    if job is None and not db_found:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job {job_id} not found."
@@ -658,8 +789,11 @@ def delete_job_endpoint(job_id: str):
     return {
         "status": "success",
         "job_id": job_id,
-        "removed_files": list(set(removed_files)),
-        "message": f"Successfully deleted conversation {job_id} and cleared associated cache."
+        "removed_files": list(dict.fromkeys(removed_files)),
+        "message": (
+            f"Successfully deleted conversation {job_id} "
+            "and cleared associated reports & cache."
+        ),
     }
 
 
@@ -673,13 +807,17 @@ def regenerate_job_endpoint(job_id: str, req: RegenerateRequest, background_task
 
     query = old_job.get("query") if old_job else None
     if not query:
-        # Fallback: check database for report subject text
+        # Fallback: durable conversation, then report.
         try:
             ensure_initialized()
             with session_scope() as session:
-                rep = repository.get_report(session, job_id)
-                if rep:
-                    query = rep.subject_text
+                conv = repository.get_conversation(session, job_id)
+                if conv:
+                    query = conv.query
+                else:
+                    rep = repository.get_report(session, job_id)
+                    if rep:
+                        query = rep.subject_text
         except Exception:
             pass
 
@@ -698,13 +836,33 @@ def regenerate_job_endpoint(job_id: str, req: RegenerateRequest, background_task
             "query": query,
             "agent_id": req.agent_id,
             "status": JobStatus.PENDING,
+            "model": req.model,
+            "implementation": req.implementation,
             "created_at": now,
             "updated_at": now,
             "error": None,
             "files": None,
             "result": None,
-            "parent_job_id": job_id
+            "parent_job_id": job_id,
+            "report_id": None,
+            "has_docs": False,
         }
+
+    try:
+        ensure_initialized()
+        with session_scope() as session:
+            repository.create_conversation(
+                session,
+                conversation_id=new_job_id,
+                query=query,
+                agent_id=req.agent_id,
+                status=JobStatus.PENDING,
+                model=req.model,
+                implementation=req.implementation,
+                parent_job_id=job_id,
+            )
+    except Exception as e:
+        logger.warning(f"Failed to persist regenerate conversation {new_job_id}: {e}")
 
     background_tasks.add_task(
         run_background_job,

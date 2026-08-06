@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import os
-from .models import Patient, PatientData, Report, ReportFile, Subject, User
+from .models import Conversation, Patient, PatientData, Report, ReportFile, Subject, User
 from .users import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -60,11 +60,15 @@ def persist_report(
     llm_provider: Optional[str] = None,
     implementation: Optional[str] = None,
     cost_summary: Optional[dict] = None,
+    report_id: Optional[str] = None,
 ) -> Report:
     """Create a Report (+ Subject + ReportFile rows) within ``session``.
 
     The caller's session controls the transaction boundary. ``files`` is the
     orchestrator's {logical_type: path} dict; each entry becomes a ReportFile.
+
+    When ``report_id`` is provided (e.g. the async job UUID), it is used as the
+    Report primary key so conversation delete can cascade by the same id.
     """
     if user is None:
         user = get_current_user(session)
@@ -73,16 +77,19 @@ def persist_report(
 
     subject = get_or_create_subject(session, subject_text)
 
-    report = Report(
-        user_id=user.id,
-        subject_id=subject.id,
-        agent_type=agent_type,
-        subject_text=(subject_text or "").strip(),
-        llm_provider=llm_provider,
-        implementation=implementation,
-        cost_summary=cost_summary,
-        total_cost=_extract_total_cost(cost_summary),
-    )
+    kwargs: dict[str, Any] = {
+        "user_id": user.id,
+        "subject_id": subject.id,
+        "agent_type": agent_type,
+        "subject_text": (subject_text or "").strip(),
+        "llm_provider": llm_provider,
+        "implementation": implementation,
+        "cost_summary": cost_summary,
+        "total_cost": _extract_total_cost(cost_summary),
+    }
+    if report_id:
+        kwargs["id"] = report_id
+    report = Report(**kwargs)
     session.add(report)
     session.flush()
 
@@ -320,4 +327,202 @@ def delete_report_and_artifacts(session: Session, report_id: str) -> list[str]:
     session.delete(report)
     session.flush()
     return removed_paths
+
+
+# ── Conversation (persistent jobs) helpers ────────────────────────────────────
+
+
+def _conversation_has_docs(files: Optional[dict]) -> bool:
+    """True when at least one documentation artifact path is present."""
+    if not isinstance(files, dict) or not files:
+        return False
+    doc_keys = (
+        "patient_report",
+        "practitioner_report",
+        "summary",
+        "medication_summary",
+        "medication_detailed",
+        "diagnostic_report",
+        "patient_report_pdf",
+        "practitioner_report_pdf",
+        "summary_pdf",
+    )
+    for key in doc_keys:
+        path = files.get(key)
+        if path:
+            return True
+    # Fallback: any .md/.pdf path counts as documentation.
+    for path in files.values():
+        if isinstance(path, str) and (
+            path.endswith(".md") or path.endswith(".pdf")
+        ):
+            return True
+    return False
+
+
+def conversation_to_job_dict(conv: Conversation) -> dict[str, Any]:
+    """Serialize a Conversation row to the API job dict shape used by the UI."""
+    files = conv.files or {}
+    return {
+        "id": conv.id,
+        "query": conv.query,
+        "agent_id": conv.agent_id,
+        "status": conv.status,
+        "model": conv.model,
+        "implementation": conv.implementation,
+        "error": conv.error,
+        "files": files if files else None,
+        "result": conv.result,
+        "parent_job_id": conv.parent_job_id,
+        "report_id": conv.report_id,
+        "has_docs": _conversation_has_docs(files),
+        "created_at": conv.created_at.isoformat() if conv.created_at else None,
+        "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+    }
+
+
+def create_conversation(
+    session: Session,
+    *,
+    conversation_id: str,
+    query: str,
+    agent_id: Optional[str] = None,
+    status: str = "pending",
+    model: Optional[str] = None,
+    implementation: Optional[str] = None,
+    parent_job_id: Optional[str] = None,
+) -> Conversation:
+    """Insert a new Conversation row for a background job."""
+    conv = Conversation(
+        id=conversation_id,
+        query=(query or "").strip(),
+        agent_id=agent_id,
+        status=status,
+        model=model,
+        implementation=implementation,
+        parent_job_id=parent_job_id,
+    )
+    session.add(conv)
+    session.flush()
+    return conv
+
+
+def update_conversation(
+    session: Session,
+    conversation_id: str,
+    *,
+    status: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    error: Optional[str] = None,
+    files: Optional[dict] = None,
+    result: Optional[dict] = None,
+    report_id: Optional[str] = None,
+    model: Optional[str] = None,
+    implementation: Optional[str] = None,
+) -> Optional[Conversation]:
+    """Patch fields on an existing Conversation. Returns None if missing."""
+    conv = session.get(Conversation, conversation_id)
+    if conv is None:
+        return None
+    if status is not None:
+        conv.status = status
+    if agent_id is not None:
+        conv.agent_id = agent_id
+    if error is not None:
+        conv.error = error
+    if files is not None:
+        conv.files = files
+    if result is not None:
+        conv.result = result
+    if report_id is not None:
+        conv.report_id = report_id
+    if model is not None:
+        conv.model = model
+    if implementation is not None:
+        conv.implementation = implementation
+    from datetime import timezone
+
+    conv.updated_at = datetime.now(timezone.utc)
+    session.flush()
+    return conv
+
+
+def get_conversation(session: Session, conversation_id: str) -> Optional[Conversation]:
+    """Fetch a Conversation by id."""
+    return session.get(Conversation, conversation_id)
+
+
+def list_conversations(session: Session, *, limit: int = 200) -> list[Conversation]:
+    """List conversations newest first."""
+    stmt = select(Conversation).order_by(Conversation.created_at.desc()).limit(limit)
+    return list(session.scalars(stmt))
+
+
+def delete_conversation_and_artifacts(
+    session: Session, conversation_id: str
+) -> list[str]:
+    """Delete a conversation, its linked report, and all on-disk artifacts.
+
+    Returns the list of removed file paths.
+    """
+    removed: list[str] = []
+    conv = session.get(Conversation, conversation_id)
+
+    # Paths stored on the conversation itself.
+    if conv and isinstance(conv.files, dict):
+        for path in conv.files.values():
+            if path and isinstance(path, str) and os.path.exists(path):
+                try:
+                    os.remove(path)
+                    removed.append(path)
+                except Exception as e:
+                    logger.warning("Failed to remove conversation file %s: %s", path, e)
+
+    report_ids: set[str] = set()
+    if conv and conv.report_id:
+        report_ids.add(conv.report_id)
+    report_ids.add(conversation_id)
+
+    for rid in report_ids:
+        removed.extend(delete_report_and_artifacts(session, rid))
+
+    if conv is not None:
+        session.delete(conv)
+        session.flush()
+
+    return list(dict.fromkeys(removed))  # dedupe, preserve order
+
+
+def backfill_conversations_from_reports(session: Session) -> int:
+    """Create Conversation rows for Report records that have none yet.
+
+    Used so pre-existing DB reports appear in the conversations UI after
+    the persistence layer is introduced. Returns number of rows created.
+    """
+    existing_ids = set(session.scalars(select(Conversation.id)))
+    reports = list_reports(session, limit=500)
+    created = 0
+    for report in reports:
+        if report.id in existing_ids:
+            continue
+        files = {rf.file_type: rf.file_path for rf in report.files}
+        session.add(
+            Conversation(
+                id=report.id,
+                query=report.subject_text,
+                agent_id=report.agent_type,
+                status="completed",
+                model=report.llm_provider,
+                implementation=report.implementation,
+                files=files or None,
+                report_id=report.id,
+                created_at=report.created_at,
+                updated_at=report.created_at,
+            )
+        )
+        created += 1
+    if created:
+        session.flush()
+        logger.info("Backfilled %d conversations from existing reports", created)
+    return created
 

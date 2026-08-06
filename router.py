@@ -73,8 +73,16 @@ sample_agents = [
     AgentSpec(
         id="diagnostic_agent",
         name="Diagnostic Specialist",
-        description="Handles differential diagnosis, patient symptom presentation, and diagnostic workups",
-        routing_notes="Use ONLY when analyzing specific patient symptoms or clinical diagnostic presentations"
+        description=(
+            "Decision-support differential diagnosis from free-text symptom "
+            "presentations (ranked relative likelihood + severity, cannot-miss, "
+            "next steps). Not a final diagnosis and not multi-perspective fact-checking"
+        ),
+        routing_notes=(
+            "Use ONLY for specific patient symptom clusters or clinical diagnostic "
+            "presentations. Do NOT use for named drugs, named procedures, or open "
+            "evidence/claim questions (those go to medication, procedure, or general)"
+        ),
     ),
     AgentSpec(
         id="general_agent",

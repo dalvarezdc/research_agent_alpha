@@ -50,6 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRefreshConversations = document.getElementById('btnRefreshConversations');
   const conversationSearchInput = document.getElementById('conversationSearchInput');
   const conversationsList = document.getElementById('conversationsList');
+  const sidebarConversationsList = document.getElementById('sidebarConversationsList');
+  const sidebarConversationSearch = document.getElementById('sidebarConversationSearch');
+  const btnNewConversation = document.getElementById('btnNewConversation');
+  let activeConversationId = null;
 
   // Workbench Form & Intake Elements
   const apiStatusBadge = document.getElementById('apiStatusBadge');
@@ -209,7 +213,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Refresh Conversations
     btnRefreshConversations.addEventListener('click', loadConversationsHistory);
-    conversationSearchInput.addEventListener('input', renderConversationsList);
+    if (conversationSearchInput) {
+      conversationSearchInput.addEventListener('input', renderConversationsList);
+    }
+    if (sidebarConversationSearch) {
+      sidebarConversationSearch.addEventListener('input', renderConversationsList);
+    }
+    if (btnNewConversation) {
+      btnNewConversation.addEventListener('click', () => {
+        activeConversationId = null;
+        resetForm();
+        switchView('viewConversations');
+        renderConversationsList();
+      });
+    }
 
     // Command Bar Plus & Model Menu Toggles
     const btnPlusMenu = document.getElementById('btnPlusMenu');
@@ -438,13 +455,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 5. Conversations History Management
+  // 5. Conversations History Management (persistent + sidebar)
+  function conversationHasDocs(job) {
+    if (job.has_docs === true) return true;
+    const files = job.files || {};
+    return Object.keys(files).some(k => {
+      const p = files[k];
+      return typeof p === 'string' && (p.endsWith('.md') || p.endsWith('.pdf'));
+    });
+  }
+
+  function truncateQuery(q, n = 42) {
+    const s = (q || 'Untitled').replace(/\s+/g, ' ').trim();
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  }
+
+  function formatConvDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function groupConversations(list) {
+    const groups = { Today: [], Earlier: [] };
+    const today = new Date().toDateString();
+    list.forEach(job => {
+      const d = job.created_at ? new Date(job.created_at) : null;
+      if (d && !Number.isNaN(d.getTime()) && d.toDateString() === today) {
+        groups.Today.push(job);
+      } else {
+        groups.Earlier.push(job);
+      }
+    });
+    return groups;
+  }
+
+  function docsDotClass(job) {
+    if (job.status === 'running' || job.status === 'pending') return 'docs-dot running';
+    if (job.status === 'failed') return 'docs-dot failed';
+    if (conversationHasDocs(job)) return 'docs-dot has-docs';
+    return 'docs-dot';
+  }
+
   async function loadConversationsHistory() {
     try {
       const res = await fetch('/jobs');
       if (res.ok) {
         conversationsCache = await res.json();
-        conversationsCountTag.textContent = conversationsCache.length;
+        if (conversationsCountTag) {
+          conversationsCountTag.textContent = conversationsCache.length;
+        }
         renderConversationsList();
       }
     } catch (err) {
@@ -452,53 +516,127 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function getConversationFilter() {
+    const side = (sidebarConversationSearch && sidebarConversationSearch.value) || '';
+    const main = (conversationSearchInput && conversationSearchInput.value) || '';
+    return (side || main).toLowerCase().trim();
+  }
+
   function renderConversationsList() {
-    const filter = (conversationSearchInput.value || '').toLowerCase().trim();
-    const filtered = conversationsCache.filter(j => 
+    const filter = getConversationFilter();
+    const filtered = conversationsCache.filter(j =>
       (j.query || '').toLowerCase().includes(filter) ||
       (j.agent_id || '').toLowerCase().includes(filter) ||
       (j.status || '').toLowerCase().includes(filter)
     );
 
+    renderSidebarConversations(filtered);
+    renderMainConversationsStrip(filtered);
+  }
+
+  function renderSidebarConversations(filtered) {
+    if (!sidebarConversationsList) return;
+
     if (filtered.length === 0) {
-      conversationsList.innerHTML = '<div class="empty-conversations">No matching conversations found.</div>';
+      sidebarConversationsList.innerHTML =
+        '<div class="sidebar-conv-empty">No conversations yet</div>';
+      return;
+    }
+
+    const groups = groupConversations(filtered);
+    sidebarConversationsList.innerHTML = '';
+
+    Object.entries(groups).forEach(([label, items]) => {
+      if (!items.length) return;
+      const groupLabel = document.createElement('div');
+      groupLabel.className = 'sidebar-conv-group-label';
+      groupLabel.textContent = label;
+      sidebarConversationsList.appendChild(groupLabel);
+
+      items.forEach(job => {
+        const row = document.createElement('div');
+        row.className = 'sidebar-conv-item' + (job.id === activeConversationId ? ' active' : '');
+        row.dataset.id = job.id;
+        row.title = job.query || 'Conversation';
+
+        const agentLabel = job.agent_id
+          ? job.agent_id.replace(/_agent$/, '').replace(/_/g, ' ')
+          : 'auto';
+        const dateStr = formatConvDate(job.created_at);
+
+        row.innerHTML = `
+          <span class="${docsDotClass(job)}" title="${conversationHasDocs(job) ? 'Documentation ready' : (job.status || 'pending')}"></span>
+          <div class="conv-text">
+            <span class="conv-title">${escapeHtml(truncateQuery(job.query))}</span>
+            <span class="conv-meta"><span>${escapeHtml(agentLabel)}</span>${dateStr ? `<span>· ${dateStr}</span>` : ''}</span>
+          </div>
+          <button type="button" class="btn-conv-delete" title="Delete conversation &amp; reports" data-id="${job.id}">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        `;
+
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.btn-conv-delete')) return;
+          loadConversationDetails(job.id);
+        });
+        row.querySelector('.btn-conv-delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteConversation(job.id);
+        });
+
+        sidebarConversationsList.appendChild(row);
+      });
+    });
+  }
+
+  function renderMainConversationsStrip(filtered) {
+    if (!conversationsList) return;
+
+    // Show only the most recent few in the main strip (full list is in sidebar).
+    const recent = filtered.slice(0, 8);
+
+    if (recent.length === 0) {
+      conversationsList.innerHTML =
+        '<div class="empty-conversations">Select a conversation from the left menu, or start a new analysis.</div>';
       return;
     }
 
     conversationsList.innerHTML = '';
-    filtered.forEach(job => {
+    recent.forEach(job => {
       const card = document.createElement('div');
       card.className = 'conversation-card';
+      if (job.id === activeConversationId) card.classList.add('active');
 
       const agentLabel = job.agent_id ? job.agent_id.replace('_agent', '').toUpperCase() : 'AUTO';
       const statusColor = job.status === 'completed' ? '#34d399' : (job.status === 'failed' ? '#f87171' : '#fbbf24');
-      const dateStr = job.created_at ? new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+      const dateStr = formatConvDate(job.created_at);
+      const hasDocs = conversationHasDocs(job);
 
       card.innerHTML = `
         <div class="conversation-main">
-          <span class="conversation-title">${escapeHtml(job.query || 'Untitled Query')}</span>
+          <span class="conversation-title">
+            <span class="docs-dot ${hasDocs ? 'has-docs' : ''}" title="${hasDocs ? 'Docs generated' : 'No docs yet'}"></span>
+            ${escapeHtml(truncateQuery(job.query, 64))}
+          </span>
           <div class="conversation-meta">
             <span class="agent-tag">${escapeHtml(agentLabel)}</span>
-            <span style="color: ${statusColor}; font-weight:600;"><i class="fa-solid fa-circle" style="font-size:0.5rem;"></i> ${escapeHtml(job.status || 'pending')}</span>
+            <span style="color: ${statusColor}; font-weight:600;">${escapeHtml(job.status || 'pending')}</span>
             <span>${dateStr}</span>
           </div>
         </div>
         <div class="conversation-actions">
-          <button class="btn-icon-sm btn-view-job" title="View Results" data-id="${job.id}">
+          <button class="btn-icon-sm btn-view-job" title="Open" data-id="${job.id}">
             <i class="fa-solid fa-eye"></i>
           </button>
-          <button class="btn-icon-sm btn-regen-job" title="Regenerate with Agent..." data-id="${job.id}" data-query="${escapeHtml(job.query || '')}">
-            <i class="fa-solid fa-arrows-rotate"></i>
-          </button>
-          <button class="btn-icon-sm danger btn-delete-job" title="Delete & Clear Cache" data-id="${job.id}">
+          <button class="btn-icon-sm danger btn-delete-job" title="Delete conversation &amp; reports" data-id="${job.id}">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>
       `;
 
       card.querySelector('.btn-view-job').addEventListener('click', () => loadConversationDetails(job.id));
-      card.querySelector('.btn-regen-job').addEventListener('click', () => openRegenModal(job.id, job.query));
       card.querySelector('.btn-delete-job').addEventListener('click', () => deleteConversation(job.id));
+      card.addEventListener('dblclick', () => loadConversationDetails(job.id));
 
       conversationsList.appendChild(card);
     });
@@ -510,22 +648,30 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const job = await res.json();
       currentJob = job;
+      activeConversationId = jobId;
+      switchView('viewConversations');
       displayJobResults(job);
-      showToast(`Loaded conversation result for: "${job.query || jobId}"`, 'info');
+      if (job.query) queryInput.value = job.query;
+      renderConversationsList();
+      showToast(`Loaded: "${truncateQuery(job.query || jobId, 48)}"`, 'info');
     } catch (err) {
-      showToast(`Failed to load conversation details: ${err.message}`, 'error');
+      showToast(`Failed to load conversation: ${err.message}`, 'error');
     }
   }
 
   async function deleteConversation(jobId) {
-    if (!confirm('Are you sure you want to delete this conversation and purge its cached files?')) return;
+    if (!confirm('Delete this conversation and all associated reports?')) return;
     try {
       const res = await fetch(`/jobs/${jobId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      showToast('Conversation and cached output files purged.', 'success');
+      if (activeConversationId === jobId) {
+        activeConversationId = null;
+        resetForm({ silent: true });
+      }
+      showToast('Conversation and reports deleted.', 'success');
       loadConversationsHistory();
     } catch (err) {
-      showToast(`Failed to delete conversation: ${err.message}`, 'error');
+      showToast(`Failed to delete: ${err.message}`, 'error');
     }
   }
 
@@ -1122,6 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const data = await res.json();
       currentJob = data;
+      activeConversationId = data.job_id;
       showToast(`Analysis job submitted (ID: ${data.job_id.substring(0, 8)}...)`, 'info');
 
       placeholderState.classList.add('hidden');
@@ -1350,7 +1497,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function resetForm() {
+  function resetForm(opts = {}) {
     queryInput.value = '';
     intakeChatHistory = [];
     isIntakeChatLoading = false;
@@ -1363,7 +1510,9 @@ document.addEventListener('DOMContentLoaded', () => {
     reportPreviewCard.classList.add('hidden');
     activeAgentBadge.classList.add('hidden');
     currentJob = null;
-    showToast('Workbench reset.', 'info');
+    activeConversationId = null;
+    renderConversationsList();
+    if (!opts.silent) showToast('Workbench reset.', 'info');
   }
 
   // Slack Modal Handlers

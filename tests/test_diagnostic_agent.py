@@ -188,3 +188,69 @@ def test_knee_pain_not_mapped_to_respiratory_priors(monkeypatch):
     assert any("knee" in r["name"].lower() or "menisc" in r["name"].lower()
                or "patello" in r["name"].lower() or "arthritis" in r["name"].lower()
                for r in result["probabilities"])
+
+
+def test_clinical_framing_is_diagnostic_specialist_not_factchecker():
+    """Prompt contract: differential specialist, not multi-perspective fact-check."""
+    from medical_diagnostic_analyzer import diagnostic_agent as da
+
+    framing = da._CLINICAL_COMMON_SENSE.lower()
+    assert "diagnostic specialist" in framing
+    assert "decision-support" in framing or "decision support" in framing
+    assert "not" in framing and "fact-check" in framing
+    assert "relative" in framing
+    assert "cannot-miss" in framing or "cannot miss" in framing
+
+
+def test_fallback_differential_is_fail_closed():
+    agent = _make_agent()
+    fb = agent._fallback_differential()
+    assert len(fb.candidates) == 1
+    c = fb.candidates[0]
+    assert c.name.startswith("Undifferentiated presentation")
+    assert c.probability == 1.0
+    assert c.severity == 2
+    assert fb.recommended_exams == ["In-person clinical assessment"]
+    assert fb.differentiating_symptoms == []
+
+
+def test_level2_empty_candidates_uses_fallback(monkeypatch):
+    agent = _make_agent()
+
+    def fake_call(*args, **kwargs):
+        step = kwargs.get("audit_step", "")
+        if step == "diagnostic_level2_differential":
+            return json.dumps(
+                {
+                    "candidates": [],
+                    "differentiating_symptoms": [],
+                    "recommended_exams": [],
+                    "clinical_summary": "empty",
+                }
+            )
+        return _fake_llm_router()(*args, **kwargs)
+
+    monkeypatch.setattr(agent, "_call_llm", fake_call)
+    result = agent.run_diagnostic_pipeline("vague knee discomfort after a hike")
+    assert result["probabilities"][0]["name"].startswith("Undifferentiated")
+    assert result["probabilities"][0]["severity"] == 2
+
+
+def test_noninteractive_skips_level3_question(monkeypatch):
+    """API mode: interactive=False should not call Level 3 question phrasing."""
+    agent = _make_agent()
+    assert agent.interactive is False
+    steps: list[str] = []
+
+    base = _fake_llm_router()
+
+    def tracking_call(*args, **kwargs):
+        steps.append(kwargs.get("audit_step", ""))
+        return base(*args, **kwargs)
+
+    monkeypatch.setattr(agent, "_call_llm", tracking_call)
+    agent.run_diagnostic_pipeline("right knee pain after hiking")
+    assert "diagnostic_level3_question" not in steps
+    assert "diagnostic_level1_extraction" in steps
+    assert "diagnostic_level2_differential" in steps
+    assert "diagnostic_level5_report" in steps

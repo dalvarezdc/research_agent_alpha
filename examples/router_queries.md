@@ -135,20 +135,31 @@ Total knee replacement (TKR) in a 68-year-old male with osteoarthritis and contr
 
 ---
 
-## Agent 3 — `diagnostic_agent` → `MedicalDiagnosticAgent` (LLM clinical differential)
+## Agent 3 — `diagnostic_agent` → `MedicalDiagnosticAgent` (Diagnostic Specialist)
 
-**Routes here when:** The query describes symptoms, a suspected diagnosis, or a
-medical condition to investigate.
+**Routes here when:** The query describes **specific patient symptoms** or a
+clinical diagnostic presentation (not a named drug, named procedure, or open
+evidence claim).
 
-**What it produces:** A 5-level LLM diagnostic pipeline (no fixed symptom/disease list):
-1. Free-form symptom extraction (LLM NLP → structured list in clinical language)
-2. Common-sense differential with relative likelihood + severity estimates
-3. Differentiating history points and recommended exams
-4. Iterative refinement from extra symptoms / exam results (interactive mode)
-5. Final report: ranked conditions, most-probable, most-serious, next steps, and a
-   suggested follow-up agent (`medication_agent` or `procedure_agent`)
+**What it produces:** A 5-level LLM **differential diagnosis** pipeline (no fixed
+symptom/disease list) — **not** the fact-checker multi-perspective pipeline:
+1. Free-form symptom extraction (positive + denied + context)
+2. Common-sense differential with **relative** likelihood + independent severity;
+   cannot-miss included; host normalizes probabilities
+3–4. One clarifying question + optional re-differential (**interactive CLI only**;
+   API uses `interactive=False`)
+5. Structured report: ranked conditions, **most probable** vs **most serious**,
+   next steps, references, and follow-up hint (`medication_agent` or
+   `procedure_agent`)
+6. Layered patient (conclusions → reasoning) + practitioner (+ deterministic
+   likelihood Statistical Appendix) reports
 
-Output files: `{query}_diagnostic_{timestamp}.json`, `{query}_diagnostic_report_{timestamp}.md+pdf`
+If Level 2 fails: fail-closed fallback
+“Undifferentiated presentation — clinician evaluation needed” (severity 2).
+
+Output files: `{query}_diagnostic_{timestamp}.json`,
+`{query}_diagnostic_report_{timestamp}.md+pdf`, plus layered patient/practitioner
+reports when produced.
 
 ---
 
@@ -158,23 +169,18 @@ Output files: `{query}_diagnostic_{timestamp}.json`, `{query}_diagnostic_report_
 Patient has fatigue, unexplained weight gain, cold intolerance, dry skin, constipation, and brain fog for 6 months
 ```
 
-**Why this routes to `diagnostic_agent`:** A cluster of symptoms pointing to a
-condition, no drug or procedure named.
+**Why this routes to `diagnostic_agent`:** A symptom cluster, no drug or procedure
+named — needs a presentation-grounded differential.
 
 **What to expect:**
-- Official narrative: TSH screening → hypothyroidism → levothyroxine replacement
-- Counter-narrative: subclinical hypothyroidism debate; T3/T4 ratio; Hashimoto's
-  autoimmune triggers (gluten, iodine excess, selenium deficiency)
-- Mainstream view: TSH, free T4, anti-TPO antibodies; levothyroxine titration
-- Naturist view: selenium 200mcg/day (strong evidence); gluten elimination in
-  Hashimoto's (emerging); iodine modulation
-- Biohacker view: T3/T4 combination therapy; NDT (natural desiccated thyroid);
-  continuous CGM to detect metabolic effects
-- References: NHANES thyroid prevalence studies; Biesiekierski gluten-thyroid RCT;
-  Ventura selenium meta-analysis
-
-**Compare with 3-B to see:** A neurological symptom cluster vs. endocrine — the
-three perspectives diverge much more dramatically for neurological conditions.
+- Extraction of the fatigue / weight-gain / cold-intolerance cluster + duration
+- Ranked differential (e.g. primary hypothyroidism, depression, anemia, sleep
+  apnea) with relative likelihoods and severity; cannot-miss items retained
+- Differentiating history (e.g. goiter, postpartum, meds) and recommended tests
+  (TSH, free T4, etc.)
+- Report highlights most probable vs most serious; next steps (who to see / labs)
+- Follow-up hint often `medication_agent` if replacement therapy is central
+- Patient report in plain language; practitioner appendix with likelihood table
 
 ---
 
@@ -184,36 +190,29 @@ three perspectives diverge much more dramatically for neurological conditions.
 Recurring unilateral headaches with visual aura, photophobia, and nausea lasting 4-72 hours, 3-4 episodes per month
 ```
 
-**Why this routes to `diagnostic_agent`:** Classic migraine symptom description
-seeking investigation of condition and management options.
+**Why this routes to `diagnostic_agent`:** Classic symptom description seeking a
+differential and workup framing — not an open “does X cause Y” claim.
 
 **What to expect:**
-- Official narrative: ICHD-3 migraine with aura criteria; triptans for acute
-  treatment; topiramate or propranolol prophylaxis
-- Counter-narrative: mitochondrial dysfunction hypothesis; CGRP pathway;
-  magnesium deficiency; hormonal triggers underweighted in standard guidelines
-- Mainstream view: neurologist referral; triptan efficacy (NNT ~2.5); preventive
-  threshold at ≥4 days/month
-- Naturist view: magnesium glycinate 400mg/day (Level A evidence); riboflavin
-  400mg/day; CoQ10 300mg; elimination of trigger foods
-- Biohacker view: CGRP monoclonal antibodies (erenumab, fremanezumab); continuous
-  heart rate variability monitoring for trigger prediction; ketogenic diet for
-  mitochondrial support
-- Debunked: "Migraines are purely vascular" — contradicted by CGRP and cortical
-  spreading depression research
+- Extraction of unilateral headache + aura + photophobia + nausea + frequency
+- Differential centered on migraine-with-aura and relevant cannot-miss secondary
+  headache causes (not unrelated systems)
+- Differentiating history (thunderclap onset, neuro deficits, red flags) and
+  exam/imaging guidance when appropriate
+- Most probable vs most serious called out separately
+- Next steps and follow-up agent hint (`medication_agent` for abortive/preventive
+  discussion, or `procedure_agent` if interventional workup is primary)
 
 ---
 
 ## Agent 4 — `general_agent` → `MedicalFactChecker`
 
 **Routes here when:** The query is a health, nutrition, or biology topic that
-doesn't name a specific drug, procedure, or symptom cluster — open questions,
-lifestyle interventions, or evidence reviews.
+doesn't name a specific drug, procedure, or **symptom cluster** — open questions,
+lifestyle interventions, claims, or evidence reviews.
 
-**What it produces:** Same multi-perspective pipeline as `diagnostic_agent` — the
-router sends both to `MedicalFactChecker`. The difference is the framing: general
-queries tend to produce more lifestyle-focused recommendations and a wider spread
-between the Mainstream and Naturist/Biohacker perspectives.
+**What it produces:** Multi-phase evidence pipeline with parallel **Mainstream /
+Naturist / Biohacker** perspectives (distinct from `diagnostic_agent`).
 
 ---
 

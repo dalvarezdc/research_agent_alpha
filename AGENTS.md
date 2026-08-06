@@ -56,7 +56,7 @@ pending.md                   # Known gaps and planned work
 |-----------|---------------------|--------------|
 | `medication_agent` | `LangChainMedicationAnalyzer` | Drug pharmacology, interactions, safety, monitoring |
 | `procedure_agent` | `LangChainMedicalReasoningAgent` | Organ-by-organ procedure analysis, peri-op care |
-| `diagnostic_agent` | `MedicalDiagnosticAgent` | LLM common-sense differential (free-form symptoms, no fixed DB) |
+| `diagnostic_agent` | `MedicalDiagnosticAgent` | Diagnostic Specialist: free-form LLM differential (relative likelihood + severity, cannot-miss); not multi-perspective fact-check |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
 
 All four agents extend `LangChainAgentBase` and share cost tracking, audit

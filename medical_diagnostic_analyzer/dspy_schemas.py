@@ -48,8 +48,9 @@ class ConditionCandidate(BaseModel):
     name: str = Field(description="Condition name in clinical language")
     probability: float = Field(
         description=(
-            "Estimated relative likelihood among the listed candidates (0–1). "
-            "Values across candidates should sum to approximately 1.0"
+            "Relative likelihood among the listed candidates only (0–1), not a "
+            "calibrated population posterior. Values across candidates should "
+            "sum to approximately 1.0 (host may renormalize)"
         ),
         ge=0.0,
         le=1.0,
@@ -57,13 +58,17 @@ class ConditionCandidate(BaseModel):
     severity: int = Field(
         description=(
             "Clinical seriousness if this condition is present (1=benign/self-limited, "
-            "5=life- or limb-threatening emergency)"
+            "5=life- or limb-threatening emergency). Independent of probability — "
+            "cannot-miss items may be high severity and low probability"
         ),
         ge=1,
         le=5,
     )
     rationale: str = Field(
-        description="Brief clinical reason this condition fits (or remains on the list)"
+        description=(
+            "Brief clinical reason this condition fits the stated presentation "
+            "(or remains on the cannot-miss list)"
+        )
     )
 
 
@@ -100,16 +105,22 @@ class DifferentialAssessment(BaseModel):
 
 
 class DiagnosticReport(BaseModel):
-    """The final structured diagnostic report."""
+    """The final structured diagnostic report (Level 5)."""
 
     top_5_candidates: List[str] = Field(
-        description="The top 5 most likely or serious conditions"
+        description="Up to five leading conditions from the ranked differential"
     )
     most_probable: str = Field(
-        description="The condition with the highest estimated probability"
+        description=(
+            "Condition with the highest relative likelihood among candidates "
+            "(decision-support only — not a definitive diagnosis)"
+        )
     )
     most_serious: str = Field(
-        description="The most severe condition that cannot yet be ruled out"
+        description=(
+            "Highest-severity condition among top candidates that cannot yet "
+            "be ruled out (cannot-miss / red-flag focus)"
+        )
     )
     reasoning_summary: str = Field(
         description=(
@@ -118,11 +129,15 @@ class DiagnosticReport(BaseModel):
         )
     )
     recommended_next_steps: List[str] = Field(
-        description="Clinical next steps (e.g. see GP, go to ER, specific tests)"
+        description=(
+            "Concrete clinical next steps (urgency, who to see, key exams/tests)"
+        )
     )
     suggested_agent: str = Field(
         description=(
-            "The next agent to route to: 'medication_agent' or 'procedure_agent'"
+            "Follow-up specialist hint only: 'medication_agent' if next focus is "
+            "mainly pharmacologic management, or 'procedure_agent' if "
+            "interventional/procedural workup or treatment is central"
         )
     )
     routing_rationale: str = Field(
@@ -130,5 +145,8 @@ class DiagnosticReport(BaseModel):
     )
     references: List[str] = Field(
         default_factory=list,
-        description="APA 7 citations (with DOI/PMID/URL) supporting the reasoning",
+        description=(
+            "3–6 APA 7 citations (each with DOI, PMID, or URL) supporting "
+            "reasoning for THIS presentation"
+        ),
     )

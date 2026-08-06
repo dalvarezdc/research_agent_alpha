@@ -1,11 +1,15 @@
 """
-LangChain-based medical diagnostic agent.
+LangChain-based medical diagnostic agent (Diagnostic Specialist).
+
+Router ID: ``diagnostic_agent``.
 
 A 5-level pipeline that uses LLM clinical reasoning (free-form symptom
 extraction + common-sense differential diagnosis) rather than a fixed
-symptom/disease database. Shares cost tracking, audit logging, robust JSON
-parsing, web research, and the layered/lossless report helpers used by the
-other agents.
+symptom/disease database. Not a multi-perspective fact-checker: no
+Mainstream/Naturist/Biohacker assembly.
+
+Shares cost tracking, audit logging, robust JSON parsing, web research, and
+the layered/lossless report helpers used by the other agents.
 """
 
 from __future__ import annotations
@@ -24,23 +28,33 @@ from .dspy_schemas import (
     SymptomExtraction,
 )
 
-# Shared system framing for clinical reasoning steps.
+# Shared system framing for clinical reasoning steps (Levels 2 and 5).
+# Identity: Diagnostic Specialist — decision-support differential only.
 _CLINICAL_COMMON_SENSE = (
-    "You are an experienced clinician forming a differential diagnosis for "
-    "decision-support (not a final diagnosis).\n"
+    "You are the Diagnostic Specialist (router id: diagnostic_agent), an "
+    "experienced clinician forming a differential for decision-support "
+    "(NOT a final diagnosis, NOT a medication review, NOT a procedure plan, "
+    "and NOT multi-perspective fact-checking).\n"
     "Rules:\n"
-    "1. Ground EVERY conclusion in the patient's ACTUAL stated symptoms and "
-    "context. Do not invent a presentation they did not describe.\n"
-    "2. Use free-form clinical language — there is NO fixed symptom or disease "
-    "list. Apply medical common sense for the body system involved "
-    "(e.g. knee pain → MSK/rheum/vascular/infectious causes of the knee, "
-    "NOT respiratory infections or migraine).\n"
-    "3. Rank by estimated likelihood for THIS presentation; still include "
-    "important cannot-miss diagnoses even when less likely.\n"
-    "4. Label uncertainty honestly. Never claim certainty or that this "
-    "replaces a clinician evaluation.\n"
-    "5. Probabilities are rough relative estimates among the candidates you "
-    "list; they should sum to approximately 1.0.\n"
+    "1. GROUNDING — Ground EVERY conclusion in the patient's ACTUAL stated "
+    "positive findings, explicitly denied findings, and stated context. "
+    "Do not invent symptoms, timeline, or exam findings they did not describe.\n"
+    "2. FREE-FORM — Use free-form clinical language; there is NO fixed symptom "
+    "or disease list. Record what the patient actually describes.\n"
+    "3. PRESENTATION FIDELITY — Keep the differential anatomically and "
+    "pathophysiologically relevant to THIS presentation "
+    "(e.g. knee pain → MSK/rheum/vascular/joint-infectious causes; "
+    "NOT primary respiratory infection or migraine).\n"
+    "4. DUAL METRICS — Rank by estimated relative likelihood for THIS "
+    "presentation; still include important cannot-miss diagnoses even when "
+    "less likely. Severity (1=benign/self-limited … 5=life- or limb-threatening) "
+    "is separate from probability.\n"
+    "5. HONEST UNCERTAINTY — Never claim certainty or that this replaces a "
+    "clinician evaluation. Prefer 'most likely among considered options', "
+    "'cannot exclude', 'consider evaluation for…'.\n"
+    "6. RELATIVE PROBABILITIES — Scores are rough relative estimates among "
+    "the candidates you list (not calibrated population posteriors). They "
+    "should sum to approximately 1.0; the host system may renormalize.\n"
 )
 
 
@@ -94,16 +108,15 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         assessment = self._level2_differential(user_query, extraction)
         results = self._candidates_to_probabilities(assessment.candidates)
 
-        # --- Level 3: Differentiating questions & exams (from assessment) ---
-        intervention_prompt = self._format_intervention_question(
-            assessment.differentiating_symptoms,
-            assessment.recommended_exams,
-        )
-
-        # --- Level 4: Iterative update (interactive) ---
+        # --- Levels 3–4: clarifying question + iterative update (interactive only) ---
+        # API / batch runs set interactive=False and skip these LLM/user steps.
         if self.interactive and (
             assessment.differentiating_symptoms or assessment.recommended_exams
         ):
+            intervention_prompt = self._format_intervention_question(
+                assessment.differentiating_symptoms,
+                assessment.recommended_exams,
+            )
             print(f"\n[Diagnostic Agent] {intervention_prompt}")
             print("Options:")
             print("  - Answer about symptoms (e.g., 'I have X but not Y')")
@@ -166,11 +179,12 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
     @track_cost("Level 1: Symptom Extraction (Diagnostic)")
     def _level1_extract_symptoms(self, query: str) -> SymptomExtraction:
         system_prompt = (
-            "You are a medical NLP specialist. Extract symptoms and clinical "
-            "context from the user query using free-form clinical language.\n"
-            "There is NO fixed symptom vocabulary — record what the patient "
-            "actually describes (e.g. 'right knee pain', 'locking', 'giving way', "
-            "'fever', 'unilateral throbbing headache').\n"
+            "You are the Diagnostic Specialist's extraction step (Level 1). "
+            "Extract symptoms and clinical context using free-form clinical "
+            "language — there is NO fixed symptom vocabulary.\n"
+            "Record what the patient actually describes "
+            "(e.g. 'right knee pain', 'locking', 'giving way', 'fever', "
+            "'unilateral throbbing headache').\n"
             "Do not add symptoms that were not stated or clearly implied.\n"
             "Return ONLY valid JSON matching the schema."
         )
@@ -178,9 +192,12 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             "User Query: {query}\n"
             "Schema: {schema}\n"
             "If a symptom is mentioned as absent, put it in negative_symptoms.\n"
+            "Capture duration, severity (patient's words), and clinical_context "
+            "(age, sex, trauma, meds, comorbidities, occupation, etc.) only when stated.\n"
             "Set is_vague=true only when the query is too non-specific to form "
             "any differential (e.g. 'I feel bad'). A focused complaint like "
-            "'knee pain' is NOT vague."
+            "'knee pain' is NOT vague. If is_vague is true, provide one polite "
+            "clarification_question."
         )
         try:
             response = self._call_llm(
@@ -221,6 +238,7 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
     ) -> DifferentialAssessment:
         system_prompt = (
             f"{_CLINICAL_COMMON_SENSE}\n"
+            "This is Level 2: Differential Assessment. "
             "Return ONLY valid JSON matching the schema."
         )
         user_prompt = (
@@ -232,6 +250,15 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             "- Severity: {severity}\n"
             "- Other context: {clinical_context}\n\n"
             "Build a differential diagnosis for THIS presentation only.\n"
+            "Include 3–8 plausible candidates. For each: name, relative "
+            "probability (0–1 among the list, roughly sum to 1.0), severity "
+            "1–5 (independent of probability), and a brief rationale.\n"
+            "Always include important cannot-miss items even if less likely.\n"
+            "Also provide differentiating_symptoms (short history items that "
+            "would best narrow the list), recommended_exams (focused maneuvers/"
+            "tests), and clinical_summary (ranking logic + key uncertainties).\n"
+            "If you cannot produce a reliable differential, return an empty "
+            "candidates list rather than inventing unrelated conditions.\n"
             "Schema:\n{schema}"
         )
         try:
@@ -257,7 +284,12 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         except Exception as e:
             self.logger.error(f"Level 2 differential failed: {e}")
 
-        # Safe fallback: do not invent unrelated conditions.
+        # Safe fallback: fail closed — do not invent unrelated conditions.
+        return self._fallback_differential()
+
+    @staticmethod
+    def _fallback_differential() -> DifferentialAssessment:
+        """Fail-closed Level 2 result when the model cannot build a differential."""
         return DifferentialAssessment(
             candidates=[
                 ConditionCandidate(
@@ -279,21 +311,25 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             ),
         )
 
-    # ── Level 3: intervention question phrasing ───────────────────────────────
+    # ── Level 3: intervention question phrasing (interactive only in practice) ─
     @track_cost("Level 3: Differentiation (Diagnostic)")
     def _format_intervention_question(
         self, diff_symptoms: List[str], exams: List[str]
     ) -> str:
         if not diff_symptoms and not exams:
             return "Is there anything else you would like to add?"
-        system_prompt = "You are a helpful medical assistant."
+        system_prompt = (
+            "You are the Diagnostic Specialist writing one short clarifying "
+            "question for a patient. Be polite, plain-language, and non-alarmist. "
+            "Do not diagnose. Do not list more than one combined question."
+        )
         user_prompt = (
-            "I have calculated that the following history points and exams would "
-            "help differentiate the diagnosis:\n"
+            "The following history points and exams would help narrow the "
+            "differential (decision-support only):\n"
             "History / symptoms to clarify: {symptoms}\n"
             "Exams / tests: {exams}\n\n"
-            "Create a single, polite, patient-friendly question asking if they have "
-            "these symptoms or results."
+            "Write a single, polite, patient-friendly question asking whether "
+            "they have any of these symptoms or already know any of these results."
         )
         try:
             response = self._call_llm(
@@ -336,26 +372,38 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
 
         system_prompt = (
             f"{_CLINICAL_COMMON_SENSE}\n"
-            "Generate a structured report based on the provided differential data "
-            "and the original patient presentation. Return ONLY valid JSON."
+            "This is Level 5: Structured Diagnostic Report. "
+            "Generate JSON from the provided differential and presentation only. "
+            "Do not invent new conditions or unstated findings. "
+            "Return ONLY valid JSON matching the schema."
         )
         user_prompt = (
             "Original patient query (must stay faithful to this):\n{query}\n\n"
-            "Diagnostic Data:\n"
+            "Diagnostic data (host-ranked; probabilities already relative/"
+            "normalized among candidates):\n"
             "Top candidates: {top_candidates}\n"
-            "Most Probable: {most_probable} ({most_probable_pct})\n"
-            "Most Serious: {most_serious} (Severity: {most_serious_sev}/5)\n"
+            "Most Probable (highest relative likelihood): {most_probable} "
+            "({most_probable_pct})\n"
+            "Most Serious (highest severity among top candidates): {most_serious} "
+            "(Severity: {most_serious_sev}/5)\n"
             "Clinical summary from differential: {clinical_summary}\n\n"
-            "Extracted Symptoms: {symptoms}\n"
+            "Extracted symptoms: {symptoms}\n"
             "Denied findings: {negative_symptoms}\n"
             "Duration: {duration}\n"
             "Context: {clinical_context}\n\n"
-            "Generate a report following the schema:\n{schema}\n\n"
-            "For 'references': provide 3-6 APA 7 citations supporting the reasoning "
-            "for THIS presentation, each MUST include a DOI, PMID, or direct URL.\n"
-            "Ensure 'suggested_agent' is 'medication_agent' if the solution is "
-            "mainly drug-based, or 'procedure_agent' if it requires interventional "
-            "or procedural treatment."
+            "Fill the schema fields carefully:\n"
+            "- top_5_candidates: names from the ranked list\n"
+            "- most_probable / most_serious: use the host-provided labels above "
+            "unless the list is empty\n"
+            "- reasoning_summary: how THIS presentation drove the ranking\n"
+            "- recommended_next_steps: concrete actions (urgency, who to see, tests)\n"
+            "- suggested_agent: 'medication_agent' if follow-up is mainly "
+            "pharmacologic, or 'procedure_agent' if interventional/procedural "
+            "workup or treatment is central (routing hint only)\n"
+            "- routing_rationale: one short justification for suggested_agent\n"
+            "- references: 3–6 APA 7 citations for THIS presentation; each MUST "
+            "include a DOI, PMID, or direct URL\n\n"
+            "Schema:\n{schema}"
         )
         try:
             response = self._call_llm(
@@ -455,9 +503,11 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             f"({report.routing_rationale})\n"
         )
         framing = (
-            "reassuring, clear tone. Explain what the most likely and most serious "
-            "possibilities are and what to do next, in plain words. Stay faithful "
-            "to the conditions listed — do not introduce unrelated diagnoses."
+            "reassuring, clear decision-support tone (not a final diagnosis). "
+            "Conclusions first: most likely possibility, most serious cannot-miss "
+            "to rule out, and what to do next. Then brief reasoning. Stay faithful "
+            "to the conditions listed — do not introduce unrelated diagnoses. "
+            "Do not invent multi-perspective (mainstream/naturist/biohacker) sections."
         )
         try:
             plain_layers = self._layer_plain_language(

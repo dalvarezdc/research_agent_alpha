@@ -6,24 +6,34 @@ from fastapi.testclient import TestClient
 
 from api import app, jobs, jobs_lock
 from database.session import reset_initialized_flag, session_scope, init_db
-from database.models import Base
-from database.config import get_engine
-
-client = TestClient(app)
+from database.config import reset_engine_cache
 
 
 @pytest.fixture(autouse=True)
-def setup_test_db():
-    """Ensure database schema is reset for each test run."""
-    engine = get_engine()
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+def setup_test_db(tmp_path, monkeypatch):
+    """Isolated SQLite per test so production data/app.db is never wiped."""
+    db_path = tmp_path / "test_conversations.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.delenv("DB_PERSISTENCE_ENABLED", raising=False)
+    reset_engine_cache()
     reset_initialized_flag()
     init_db(seed=True)
+    # Clear in-memory jobs between tests
+    with jobs_lock:
+        jobs.clear()
     yield
+    with jobs_lock:
+        jobs.clear()
+    reset_engine_cache()
+    reset_initialized_flag()
 
 
-def test_patient_crud_flow():
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+def test_patient_crud_flow(client):
     """Test full Patient CRUD lifecycle via API endpoints."""
     # 1. Create Patient
     create_payload = {
@@ -88,9 +98,9 @@ def test_patient_crud_flow():
     assert get_again.status_code == 404
 
 
-def test_delete_and_regenerate_job_endpoints():
+def test_delete_and_regenerate_job_endpoints(client):
     """Test DELETE /jobs/{job_id} and POST /jobs/{job_id}/regenerate endpoints."""
-    # 1. Create a dummy job in memory
+    # 1. Create a dummy job in memory + durable conversation
     job_id = "test-job-uuid-123"
     with jobs_lock:
         jobs[job_id] = {
@@ -101,6 +111,18 @@ def test_delete_and_regenerate_job_endpoints():
             "files": {},
             "result": {"summary": "Metformin is well tolerated."}
         }
+
+    from database.session import session_scope
+    from database import repository
+
+    with session_scope() as session:
+        repository.create_conversation(
+            session,
+            conversation_id=job_id,
+            query="Metformin side effects",
+            agent_id="medication_agent",
+            status="completed",
+        )
 
     # 2. Test Regenerate Endpoint
     regen_res = client.post(f"/jobs/{job_id}/regenerate", json={
@@ -113,15 +135,105 @@ def test_delete_and_regenerate_job_endpoints():
     assert regen_data["parent_job_id"] == job_id
     assert new_job_id in jobs
 
-    # 3. Test Delete Job Endpoint
+    # 3. Test Delete Job Endpoint (memory + DB conversation)
     del_job_res = client.delete(f"/jobs/{job_id}")
     assert del_job_res.status_code == 200
     assert job_id not in jobs
 
+    with session_scope() as session:
+        assert repository.get_conversation(session, job_id) is None
+
+
+def test_conversation_persistence_survives_memory_clear(client):
+    """GET /jobs and GET /jobs/{id} fall back to durable conversation cache."""
+    from database.session import session_scope
+    from database import repository
+
+    job_id = "persisted-conv-uuid-456"
+    with session_scope() as session:
+        repository.create_conversation(
+            session,
+            conversation_id=job_id,
+            query="Vitamin D optimal dosing",
+            agent_id="general_agent",
+            status="completed",
+            model="grok-4.5",
+        )
+        repository.update_conversation(
+            session,
+            job_id,
+            files={
+                "patient_report": "outputs/fake_patient.md",
+                "practitioner_report": "outputs/fake_prac.md",
+            },
+            report_id=None,
+        )
+
+    # Ensure not in memory
+    with jobs_lock:
+        jobs.pop(job_id, None)
+
+    list_res = client.get("/jobs")
+    assert list_res.status_code == 200
+    ids = [j["id"] for j in list_res.json()]
+    assert job_id in ids
+
+    get_res = client.get(f"/jobs/{job_id}")
+    assert get_res.status_code == 200
+    data = get_res.json()
+    assert data["query"] == "Vitamin D optimal dosing"
+    assert data["status"] == "completed"
+    assert data["has_docs"] is True
+
+    del_res = client.delete(f"/jobs/{job_id}")
+    assert del_res.status_code == 200
+    assert client.get(f"/jobs/{job_id}").status_code == 404
+
+
+def test_delete_conversation_removes_linked_report_and_files(client, tmp_path):
+    """One-button delete purges conversation, report row, and on-disk artifacts."""
+    from database.session import session_scope
+    from database import repository
+
+    job_id = "delete-cascade-uuid-789"
+    report_md = tmp_path / "patient_report.md"
+    report_md.write_text("# Patient report\n", encoding="utf-8")
+
+    with session_scope() as session:
+        repository.create_conversation(
+            session,
+            conversation_id=job_id,
+            query="Warfarin interactions",
+            agent_id="medication_agent",
+            status="completed",
+        )
+        report = repository.persist_report(
+            session=session,
+            agent_type="medication_agent",
+            subject_text="Warfarin interactions",
+            files={"patient_report": str(report_md)},
+            report_id=job_id,
+        )
+        repository.update_conversation(
+            session,
+            job_id,
+            files={"patient_report": str(report_md)},
+            report_id=report.id,
+        )
+
+    assert report_md.exists()
+    del_res = client.delete(f"/jobs/{job_id}")
+    assert del_res.status_code == 200
+    assert not report_md.exists()
+
+    with session_scope() as session:
+        assert repository.get_conversation(session, job_id) is None
+        assert repository.get_report(session, job_id) is None
+
 
 @patch("api.categorize_medical_markdown")
 @patch("api.parse_document")
-def test_parse_patient_report_endpoint(mock_parse_doc, mock_categorize):
+def test_parse_patient_report_endpoint(mock_parse_doc, mock_categorize, client):
     """Test POST /patients/parse-report parses document and categorizes metrics."""
     mock_parse = MagicMock()
     mock_parse.status.value = "success"
@@ -151,7 +263,7 @@ def test_parse_patient_report_endpoint(mock_parse_doc, mock_categorize):
 
 
 @patch("api.execute_analysis_sync")
-def test_agent_override_in_analyze_async(mock_exec):
+def test_agent_override_in_analyze_async(mock_exec, client):
     """Test POST /analyze/async correctly respects explicit agent_id override."""
     mock_exec.return_value = {
         "agent_id": "general_agent",

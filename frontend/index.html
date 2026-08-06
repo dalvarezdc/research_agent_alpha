@@ -37,6 +37,23 @@
           <span>Conversations</span>
           <span class="badge-count" id="conversationsCountTag">0</span>
         </button>
+
+        <!-- Persistent conversation list (grouped under Conversations) -->
+        <div class="sidebar-conversations" id="sidebarConversations">
+          <div class="sidebar-conv-toolbar">
+            <button type="button" class="btn-sidebar-new" id="btnNewConversation" title="New conversation">
+              <i class="fa-solid fa-plus"></i> New
+            </button>
+            <div class="sidebar-conv-search">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="sidebarConversationSearch" placeholder="Search..." autocomplete="off">
+            </div>
+          </div>
+          <div class="sidebar-conv-list" id="sidebarConversationsList">
+            <div class="sidebar-conv-empty">No conversations yet</div>
+          </div>
+        </div>
+
         <button class="nav-item" id="navBtnPatients" data-view="viewPatients">
           <i class="fa-solid fa-user-group"></i>
           <span>Patients</span>
@@ -80,18 +97,17 @@
           </button>
         </div>
 
-        <!-- Conversations History Drawer / Top Section -->
-        <div class="conversations-panel" id="conversationsPanel">
+        <!-- Compact recent strip (full history lives in the left sidebar) -->
+        <div class="conversations-panel conversations-panel-compact" id="conversationsPanel">
           <div class="conversations-header">
-            <span class="panel-subtitle"><i class="fa-solid fa-clock-rotate-left"></i> Recent Conversations & Jobs</span>
+            <span class="panel-subtitle"><i class="fa-solid fa-clock-rotate-left"></i> Active &amp; Recent</span>
             <div class="conversations-search-box">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="conversationSearchInput" placeholder="Filter conversations...">
+              <input type="text" id="conversationSearchInput" placeholder="Filter...">
             </div>
           </div>
-
           <div class="conversations-list" id="conversationsList">
-            <div class="empty-conversations">Loading conversations...</div>
+            <div class="empty-conversations">Select a conversation from the left menu, or start a new analysis.</div>
           </div>
         </div>
 
