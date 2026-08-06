@@ -660,7 +660,7 @@ Schema:
             + _doc_ctx_block
             + "Structure the output with EXACTLY these two layers, in this order:\n\n"
             "# [topic from content]\n\n"
-            "## ✅ Conclusions\n"
+            "## ✅ Report Summary\n"
             "[The bottom line first: what the reader should take away, plus the top "
             "practical recommendations. Plain language.]\n\n"
             "## 🧠 The Reasoning\n"

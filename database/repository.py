@@ -346,6 +346,7 @@ def _conversation_has_docs(files: Optional[dict]) -> bool:
         "patient_report_pdf",
         "practitioner_report_pdf",
         "summary_pdf",
+        "context_report",
     )
     for key in doc_keys:
         path = files.get(key)

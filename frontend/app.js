@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let loadedReportTexts = {};// cached report markdown strings
   let conversationsCache = []; // list of past background jobs
   let patientsCache = [];      // list of patient records
+  let selectedPatient = null;  // patient selected as chat/analysis context
   let currentPatientMeta = {}; // key-value metadata object for editing patient
   let currentPatientClinicalData = {
     heart: [],
@@ -139,6 +140,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const patientFileInput = document.getElementById('patientFileInput');
   const patientParseStatusBox = document.getElementById('patientParseStatusBox');
   const btnAddCatRow = document.getElementById('btnAddCatRow');
+  const plusMenuPatientsList = document.getElementById('plusMenuPatientsList');
+  const selectedPatientChip = document.getElementById('selectedPatientChip');
+  const selectedPatientNameEl = document.getElementById('selectedPatientName');
+  const selectedPatientMetaEl = document.getElementById('selectedPatientMeta');
+  const btnClearSelectedPatient = document.getElementById('btnClearSelectedPatient');
 
   // Regenerate Modal Elements
   const regenerateModal = document.getElementById('regenerateModal');
@@ -156,10 +162,31 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCloseSlackModal = document.getElementById('btnCloseSlackModal');
   const btnCancelSlackModal = document.getElementById('btnCancelSlackModal');
   const slackWebhookUrl = document.getElementById('slackWebhookUrl');
+  const slackWebhookSelect = document.getElementById('slackWebhookSelect');
   const btnSlackSelectAll = document.getElementById('btnSlackSelectAll');
   const chkSelectAllSlack = document.getElementById('chkSelectAllSlack');
   const slackTasksTbody = document.getElementById('slackTasksTbody');
   const btnSendSlackNotify = document.getElementById('btnSendSlackNotify');
+  const btnOpenConfigFromSlack = document.getElementById('btnOpenConfigFromSlack');
+
+  // Configuration Modal Elements
+  const btnOpenConfigModal = document.getElementById('btnOpenConfigModal');
+  const configModal = document.getElementById('configModal');
+  const btnCloseConfigModal = document.getElementById('btnCloseConfigModal');
+  const btnCloseConfigModalFooter = document.getElementById('btnCloseConfigModalFooter');
+  const configTabSlack = document.getElementById('configTabSlack');
+  const configTabKeys = document.getElementById('configTabKeys');
+  const configPanelSlack = document.getElementById('configPanelSlack');
+  const configPanelKeys = document.getElementById('configPanelKeys');
+  const cfgWebhookName = document.getElementById('cfgWebhookName');
+  const cfgWebhookUrl = document.getElementById('cfgWebhookUrl');
+  const btnAddSlackWebhook = document.getElementById('btnAddSlackWebhook');
+  const slackWebhooksList = document.getElementById('slackWebhooksList');
+  const apiKeysList = document.getElementById('apiKeysList');
+
+  // Cached config state for Slack picker + settings UI
+  let slackWebhooksCache = [];
+  let apiKeysCache = [];
 
   // Initialize
   checkApiHealth();
@@ -167,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   loadConversationsHistory();
   loadPatients();
+  refreshConfigCache();
 
   // 1. API Health Check
   async function checkApiHealth() {
@@ -239,8 +267,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnPlusMenu && plusMenuDropdown) {
       btnPlusMenu.addEventListener('click', (e) => {
         e.stopPropagation();
+        const opening = plusMenuDropdown.classList.contains('hidden');
         plusMenuDropdown.classList.toggle('hidden');
         if (modelMenuDropdown) modelMenuDropdown.classList.add('hidden');
+        if (opening) renderPlusMenuPatients();
+      });
+    }
+
+    if (btnClearSelectedPatient) {
+      btnClearSelectedPatient.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearSelectedPatient({ toast: true });
       });
     }
 
@@ -434,10 +472,34 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSlackSelectAll.addEventListener('click', toggleSelectAllSlackTasks);
     chkSelectAllSlack.addEventListener('change', toggleSelectAllSlackTasks);
     btnSendSlackNotify.addEventListener('click', sendSlackNotification);
+    if (btnOpenConfigFromSlack) {
+      btnOpenConfigFromSlack.addEventListener('click', () => {
+        closeSlackModal();
+        openConfigModal('slack');
+      });
+    }
 
-    // Restore saved webhook url
+    // Restore last custom webhook URL (fallback when no saved webhook selected)
     const savedUrl = localStorage.getItem('slack_webhook_url');
-    if (savedUrl) slackWebhookUrl.value = savedUrl;
+    if (savedUrl && slackWebhookUrl) slackWebhookUrl.value = savedUrl;
+
+    // Configuration Modal Handlers
+    if (btnOpenConfigModal) {
+      btnOpenConfigModal.addEventListener('click', () => openConfigModal());
+    }
+    if (btnCloseConfigModal) btnCloseConfigModal.addEventListener('click', closeConfigModal);
+    if (btnCloseConfigModalFooter) btnCloseConfigModalFooter.addEventListener('click', closeConfigModal);
+    if (configTabSlack) configTabSlack.addEventListener('click', () => switchConfigTab('slack'));
+    if (configTabKeys) configTabKeys.addEventListener('click', () => switchConfigTab('keys'));
+    if (btnAddSlackWebhook) btnAddSlackWebhook.addEventListener('click', addSlackWebhookFromForm);
+    if (cfgWebhookUrl) {
+      cfgWebhookUrl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addSlackWebhookFromForm();
+        }
+      });
+    }
   }
 
   // 4. View Switching
@@ -794,10 +856,330 @@ document.addEventListener('DOMContentLoaded', () => {
         patientsCountTag.textContent = patientsCache.length;
         patientTotalBadge.textContent = `Total Patients: ${patientsCache.length}`;
         renderPatientsTable();
+        // Keep selected patient in sync if still present; clear if deleted remotely.
+        if (selectedPatient) {
+          const refreshed = patientsCache.find(p => p.id === selectedPatient.id);
+          if (refreshed) {
+            selectedPatient = refreshed;
+            updateSelectedPatientChip();
+          } else {
+            clearSelectedPatient({ toast: false });
+          }
+        }
+        renderPlusMenuPatients();
       }
     } catch (err) {
       console.warn('Failed to load patients:', err);
     }
+  }
+
+  function renderPlusMenuPatients() {
+    if (!plusMenuPatientsList) return;
+
+    if (!patientsCache || patientsCache.length === 0) {
+      plusMenuPatientsList.innerHTML = `
+        <div class="dropdown-empty-patients">No saved patients yet</div>
+        <button type="button" class="dropdown-item" id="plusMenuGoPatients">
+          <i class="fa-solid fa-user-plus"></i> Manage Patients
+        </button>
+      `;
+      const goBtn = document.getElementById('plusMenuGoPatients');
+      if (goBtn) {
+        goBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (plusMenuDropdown) plusMenuDropdown.classList.add('hidden');
+          switchView('viewPatients');
+        });
+      }
+      return;
+    }
+
+    plusMenuPatientsList.innerHTML = '';
+    patientsCache.forEach(p => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isActive = selectedPatient && selectedPatient.id === p.id;
+      btn.className = 'dropdown-item patient-select-item' + (isActive ? ' active' : '');
+      btn.setAttribute('data-patient-id', p.id);
+
+      const condition = p.primary_condition || 'No primary condition';
+      const demoBits = [];
+      if (p.age != null) demoBits.push(`${p.age}y`);
+      if (p.gender) demoBits.push(p.gender);
+      const demo = demoBits.length ? demoBits.join(' · ') : '';
+
+      btn.innerHTML = `
+        <i class="fa-solid fa-user-injured"></i>
+        <span class="patient-select-text">
+          <span class="patient-select-name">${escapeHtml(p.name || 'Unnamed')}</span>
+          <span class="patient-select-sub">${escapeHtml(condition)}${demo ? ' · ' + escapeHtml(demo) : ''}</span>
+        </span>
+        ${isActive ? '<i class="fa-solid fa-check patient-select-check"></i>' : ''}
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectPatientForContext(p.id);
+        if (plusMenuDropdown) plusMenuDropdown.classList.add('hidden');
+      });
+
+      plusMenuPatientsList.appendChild(btn);
+    });
+  }
+
+  function selectPatientForContext(patientId) {
+    const patient = patientsCache.find(p => p.id === patientId);
+    if (!patient) {
+      showToast('Patient not found. Refresh the patient list and try again.', 'error');
+      return;
+    }
+    selectedPatient = patient;
+    updateSelectedPatientChip();
+    renderPlusMenuPatients();
+    showToast(`Using ${patient.name} as chat context.`, 'success');
+  }
+
+  function clearSelectedPatient(opts = {}) {
+    selectedPatient = null;
+    updateSelectedPatientChip();
+    renderPlusMenuPatients();
+    if (opts.toast) showToast('Patient context cleared.', 'info');
+  }
+
+  function updateSelectedPatientChip() {
+    if (!selectedPatientChip) return;
+    if (!selectedPatient) {
+      selectedPatientChip.classList.add('hidden');
+      if (selectedPatientNameEl) selectedPatientNameEl.textContent = '—';
+      if (selectedPatientMetaEl) selectedPatientMetaEl.textContent = '';
+      return;
+    }
+
+    const bits = [];
+    if (selectedPatient.age != null) bits.push(`${selectedPatient.age} yrs`);
+    if (selectedPatient.gender) bits.push(selectedPatient.gender);
+    if (selectedPatient.primary_condition) bits.push(selectedPatient.primary_condition);
+
+    if (selectedPatientNameEl) selectedPatientNameEl.textContent = selectedPatient.name || 'Unnamed patient';
+    if (selectedPatientMetaEl) selectedPatientMetaEl.textContent = bits.join(' · ');
+    selectedPatientChip.classList.remove('hidden');
+  }
+
+  /**
+   * Serialize a patient record into plain-text clinical context for chat / analysis.
+   */
+  function formatPatientContext(patient) {
+    if (!patient) return '';
+
+    const lines = [];
+    lines.push(`Patient: ${patient.name || 'Unnamed'}`);
+    if (patient.age != null) lines.push(`Age: ${patient.age}`);
+    if (patient.gender) lines.push(`Gender: ${patient.gender}`);
+    if (patient.primary_condition) lines.push(`Primary condition: ${patient.primary_condition}`);
+    if (patient.contact_email) lines.push(`Contact email: ${patient.contact_email}`);
+    if (patient.contact_phone) lines.push(`Contact phone: ${patient.contact_phone}`);
+
+    const meta = patient.metadata_json || {};
+    const metaKeys = Object.keys(meta);
+    if (metaKeys.length > 0) {
+      lines.push('');
+      lines.push('Metadata:');
+      metaKeys.forEach(k => {
+        lines.push(`  - ${k}: ${meta[k]}`);
+      });
+    }
+
+    const clinical = patient.clinical_data || {};
+    const catOrder = ['heart', 'liver', 'pancreas', 'nutrients', 'overall_health', 'medications'];
+    let hasClinical = false;
+    catOrder.forEach(cat => {
+      const rows = Array.isArray(clinical[cat]) ? clinical[cat] : [];
+      if (rows.length === 0) return;
+      if (!hasClinical) {
+        lines.push('');
+        lines.push('Clinical data:');
+        hasClinical = true;
+      }
+      const title = CAT_TITLES[cat] || cat;
+      lines.push(`  ${title}:`);
+      rows.forEach(row => {
+        if (!row || typeof row !== 'object') return;
+        const marker = row.marker || row.name || row.medication || 'Item';
+        const value = row.value || row.dose || row.dosage || '';
+        const range = row.reference_range || row.range || '';
+        const notes = row.notes || '';
+        let entry = `    - ${marker}`;
+        if (value) entry += `: ${value}`;
+        if (range) entry += ` (ref: ${range})`;
+        if (notes) entry += ` — ${notes}`;
+        lines.push(entry);
+      });
+    });
+
+    // Any extra clinical keys not in the standard categories
+    Object.keys(clinical).forEach(cat => {
+      if (catOrder.includes(cat)) return;
+      const rows = clinical[cat];
+      if (Array.isArray(rows) && rows.length > 0) {
+        lines.push(`  ${cat}:`);
+        rows.forEach(row => {
+          lines.push(`    - ${typeof row === 'object' ? JSON.stringify(row) : String(row)}`);
+        });
+      } else if (rows && typeof rows === 'object' && !Array.isArray(rows)) {
+        lines.push(`  ${cat}: ${JSON.stringify(rows)}`);
+      }
+    });
+
+    return lines.join('\n').trim();
+  }
+
+  /**
+   * Build combined background context from selected patient + optional attached document.
+   */
+  function buildBackgroundContext() {
+    const parts = [];
+
+    if (selectedPatient) {
+      const patientText = formatPatientContext(selectedPatient);
+      if (patientText) {
+        parts.push(`--- SELECTED PATIENT CONTEXT ---\n${patientText}`);
+      }
+    }
+
+    if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
+      const filename = parsedDocument.filename || 'document';
+      parts.push(`--- ATTACHED CLINICAL DOCUMENT (${filename}) ---\n${parsedDocument.markdown}`);
+    }
+
+    return parts.length ? parts.join('\n\n') : null;
+  }
+
+  /**
+   * Build a small markdown audit of the context assembled for the agent.
+   * Saved server-side as context_report.md with the analysis artifacts.
+   */
+  function buildContextReportMarkdown(opts = {}) {
+    const finalQuery = opts.finalQuery || '';
+    const model = opts.model || (modelSelect && modelSelect.value) || 'unknown';
+    const agentChoice = opts.agentChoice || (agentSelect && agentSelect.value) || 'auto';
+    const webSearch = opts.webSearch != null
+      ? opts.webSearch
+      : !!(webSearchToggle && webSearchToggle.checked);
+    const usedIntakeChat = opts.usedIntakeChat === true;
+    const intakeTurns = opts.intakeTurns != null
+      ? opts.intakeTurns
+      : (intakeChatHistory ? intakeChatHistory.length : 0);
+
+    const lines = [];
+    lines.push('# Agent Context Report');
+    lines.push('');
+    lines.push('Audit of the clinical context assembled in the UI and sent to the specialized agent.');
+    lines.push('');
+    lines.push('## Composition summary');
+    lines.push('');
+    lines.push(`- **Assembled at (client):** ${new Date().toISOString()}`);
+    lines.push(`- **Model selected:** \`${model}\``);
+    lines.push(`- **Agent routing:** \`${agentChoice}\`${agentChoice === 'auto' ? ' (server will auto-route)' : ' (explicit override)'}`);
+    lines.push(`- **Web search:** ${webSearch ? 'enabled' : 'disabled'}`);
+    lines.push(`- **Intake chat used:** ${usedIntakeChat ? `yes (${intakeTurns} turns)` : 'no'}`);
+    lines.push(`- **Patient context attached:** ${selectedPatient ? 'yes' : 'no'}`);
+    lines.push(
+      `- **Document context attached:** ${
+        parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked
+          ? 'yes'
+          : 'no'
+      }`
+    );
+    lines.push(`- **Final prompt length:** ${finalQuery.length} characters`);
+    lines.push('');
+
+    // Patient section
+    lines.push('## Selected patient');
+    lines.push('');
+    if (selectedPatient) {
+      lines.push(`- **ID:** \`${selectedPatient.id}\``);
+      lines.push(`- **Name:** ${selectedPatient.name || 'Unnamed'}`);
+      if (selectedPatient.age != null) lines.push(`- **Age:** ${selectedPatient.age}`);
+      if (selectedPatient.gender) lines.push(`- **Gender:** ${selectedPatient.gender}`);
+      if (selectedPatient.primary_condition) {
+        lines.push(`- **Primary condition:** ${selectedPatient.primary_condition}`);
+      }
+      lines.push('');
+      lines.push('### Patient record (serialized)');
+      lines.push('');
+      lines.push('```text');
+      lines.push(formatPatientContext(selectedPatient) || '(empty)');
+      lines.push('```');
+    } else {
+      lines.push('_No patient selected for this run._');
+    }
+    lines.push('');
+
+    // Document section
+    lines.push('## Attached medical document');
+    lines.push('');
+    if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
+      const md = parsedDocument.markdown || '';
+      lines.push(`- **Filename:** ${parsedDocument.filename || 'document'}`);
+      if (parsedDocument.metadata) {
+        const meta = parsedDocument.metadata;
+        if (meta.format) lines.push(`- **Format:** ${meta.format}`);
+        if (meta.page_count != null) lines.push(`- **Pages:** ${meta.page_count}`);
+      }
+      lines.push(`- **Characters included:** ${md.length}`);
+      lines.push('');
+      lines.push('### Document text included as context');
+      lines.push('');
+      lines.push('```text');
+      // Keep the report readable if the doc is huge, but still show full payload size above.
+      const maxDocChars = 12000;
+      if (md.length > maxDocChars) {
+        lines.push(md.slice(0, maxDocChars));
+        lines.push('');
+        lines.push(`[... truncated in report for readability; full ${md.length} chars were sent to the agent ...]`);
+      } else {
+        lines.push(md);
+      }
+      lines.push('```');
+    } else if (parsedDocument && parsedDocument.markdown) {
+      lines.push(
+        `_Document "${parsedDocument.filename || 'document'}" is parsed but ` +
+        `**not** included (attach-context checkbox off)._`
+      );
+    } else {
+      lines.push('_No medical document attached for this run._');
+    }
+    lines.push('');
+
+    // Intake chat section
+    lines.push('## Intake chat');
+    lines.push('');
+    if (usedIntakeChat && intakeChatHistory && intakeChatHistory.length > 0) {
+      lines.push(`_Transcript (${intakeChatHistory.length} messages) used to synthesize the clinical query:_`);
+      lines.push('');
+      intakeChatHistory.forEach((msg, idx) => {
+        const role = (msg.role || 'user').toUpperCase();
+        lines.push(`**${idx + 1}. ${role}**`);
+        lines.push('');
+        lines.push(msg.content || '');
+        lines.push('');
+      });
+    } else {
+      lines.push('_No intake chat turns — direct prompt mode._');
+      lines.push('');
+    }
+
+    // Final payload
+    lines.push('## Final prompt sent to agent');
+    lines.push('');
+    lines.push('This is the complete string delivered as the agent `query` / subject payload:');
+    lines.push('');
+    lines.push('```text');
+    lines.push((finalQuery || '').trim() || '(empty)');
+    lines.push('```');
+    lines.push('');
+
+    return lines.join('\n');
   }
 
   function renderPatientsTable() {
@@ -1083,6 +1465,9 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch(`/patients/${patientId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (selectedPatient && selectedPatient.id === patientId) {
+        clearSelectedPatient({ toast: false });
+      }
       showToast('Patient record deleted successfully.', 'info');
       loadPatients();
     } catch (err) {
@@ -1217,18 +1602,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btnChatSend.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
 
     try {
-      let docContext = null;
-      if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked) {
-        docContext = parsedDocument.markdown;
-      }
-
       const res = await fetch('/intake/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: intakeChatHistory,
           model: modelSelect.value,
-          document_context: docContext
+          document_context: buildBackgroundContext()
         })
       });
 
@@ -1252,9 +1632,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // 9. Submit Asynchronous Analysis Run
   async function submitAsyncAnalysis() {
     let query = queryInput.value.trim();
+    const usedIntakeChat = intakeChatHistory.length > 0;
+    const intakeTurnsAtSubmit = intakeChatHistory.length;
 
     // If chat turns exist, summarize conversation context
-    if (intakeChatHistory.length > 0) {
+    if (usedIntakeChat) {
       if (query) {
         intakeChatHistory.push({ role: 'user', content: query });
         queryInput.value = '';
@@ -1265,18 +1647,13 @@ document.addEventListener('DOMContentLoaded', () => {
       btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Summarizing Intake Chat...';
 
       try {
-        let docContext = null;
-        if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked) {
-          docContext = parsedDocument.markdown;
-        }
-
         const sumRes = await fetch('/intake/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: intakeChatHistory,
             model: modelSelect.value,
-            document_context: docContext
+            document_context: buildBackgroundContext()
           })
         });
 
@@ -1290,6 +1667,18 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Summary endpoint error, using transcript fallback:', err);
         query = intakeChatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
       }
+
+      // Re-attach structured patient context after synthesis so clinical tables
+      // are never silently dropped by the summarizer LLM.
+      if (selectedPatient) {
+        const patientText = formatPatientContext(selectedPatient);
+        if (patientText) {
+          query += `\n\n--- SELECTED PATIENT CONTEXT ---\n${patientText}`;
+        }
+      }
+      if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
+        query += `\n\n--- ATTACHED CLINICAL DOCUMENT (${parsedDocument.filename || 'document'}) ---\n${parsedDocument.markdown}`;
+      }
     }
 
     if (!query) {
@@ -1300,16 +1689,30 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (parsedDocument && parsedDocument.markdown && attachContextCheck.checked && intakeChatHistory.length === 0) {
-      query += `\n\n--- ATTACHED MEDICAL DOCUMENT (${parsedDocument.filename}) ---\n` + parsedDocument.markdown;
+    // When no intake chat, attach patient + document context directly onto the query.
+    if (!usedIntakeChat) {
+      const bg = buildBackgroundContext();
+      if (bg) {
+        query += `\n\n${bg}`;
+      }
     }
+
+    const contextReportMd = buildContextReportMarkdown({
+      finalQuery: query,
+      model: modelSelect.value,
+      agentChoice: agentSelect.value,
+      webSearch: webSearchToggle.checked,
+      usedIntakeChat: usedIntakeChat,
+      intakeTurns: intakeChatHistory.length || intakeTurnsAtSubmit,
+    });
 
     const payload = {
       query: query,
       model: modelSelect.value,
       implementation: 'langchain',
       web_search: webSearchToggle.checked,
-      timeout: 300
+      timeout: 300,
+      context_report: contextReportMd,
     };
 
     const targetAgentOverride = agentSelect.value;
@@ -1469,13 +1872,19 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadReportText('patient', activeFiles['patient_report']);
     await loadReportText('practitioner', activeFiles['practitioner_report']);
     await loadReportText('summary', activeFiles['summary'] || activeFiles['medication_summary']);
+    await loadReportText('context', activeFiles['context_report']);
 
     if (job.result) {
       loadedReportTexts['json'] = JSON.stringify(job.result, null, 2);
     }
 
-    const patientTabBtn = document.querySelector('.report-tabs .tab-btn[data-tab="patient"]');
-    if (patientTabBtn) patientTabBtn.click();
+    // Prefer Context tab when patient/doc context was part of the run and no patient report exists yet.
+    const preferredTab = loadedReportTexts['context'] && !loadedReportTexts['patient']
+      ? 'context'
+      : 'patient';
+    const tabBtn = document.querySelector(`.report-tabs .tab-btn[data-tab="${preferredTab}"]`)
+      || document.querySelector('.report-tabs .tab-btn[data-tab="patient"]');
+    if (tabBtn) tabBtn.click();
   }
 
   async function loadReportText(tabKey, filePath) {
@@ -1494,7 +1903,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderReportTab(tabKey) {
     const text = loadedReportTexts[tabKey];
     if (!text) {
-      markdownViewer.innerHTML = '<p class="text-muted">No content available for this report view.</p>';
+      markdownViewer.innerHTML = tabKey === 'context'
+        ? '<p class="text-muted">No context report for this run. Newer analyses write a small <code>context_report.md</code> listing patient, document, intake chat, and the final agent prompt.</p>'
+        : '<p class="text-muted">No content available for this report view.</p>';
       btnDownloadCurrent.style.display = 'none';
       return;
     }
@@ -1569,6 +1980,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isIntakeChatLoading = false;
     try { updateIntakeChatUI(); } catch (_) { /* ignore */ }
     try { removeUploadedDocument({ silent: true }); } catch (_) { /* ignore */ }
+    try { clearSelectedPatient({ toast: false }); } catch (_) { /* ignore */ }
     if (placeholderState) placeholderState.classList.remove('hidden');
     if (jobProgressCard) jobProgressCard.classList.add('hidden');
     if (routeResultCard) routeResultCard.classList.add('hidden');
@@ -1583,9 +1995,272 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!opts.silent) showToast('Workbench reset.', 'info');
   }
 
-  // Slack Modal Handlers
-  function openSlackModal() {
+  // ── Configuration Menu ───────────────────────────────────────────────────
+
+  async function refreshConfigCache() {
+    try {
+      const res = await fetch('/config');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      slackWebhooksCache = data.slack_webhooks || [];
+      apiKeysCache = data.api_keys || [];
+      populateSlackWebhookSelect();
+      return data;
+    } catch (err) {
+      console.warn('Could not load /config:', err);
+      return null;
+    }
+  }
+
+  function openConfigModal(tab = 'slack') {
+    if (!configModal) return;
+    configModal.classList.remove('hidden');
+    switchConfigTab(tab);
+    loadConfigPanels();
+  }
+
+  function closeConfigModal() {
+    if (configModal) configModal.classList.add('hidden');
+  }
+
+  function switchConfigTab(tab) {
+    const isSlack = tab === 'slack';
+    if (configTabSlack) configTabSlack.classList.toggle('active', isSlack);
+    if (configTabKeys) configTabKeys.classList.toggle('active', !isSlack);
+    if (configPanelSlack) configPanelSlack.classList.toggle('hidden', !isSlack);
+    if (configPanelKeys) configPanelKeys.classList.toggle('hidden', isSlack);
+  }
+
+  async function loadConfigPanels() {
+    const data = await refreshConfigCache();
+    if (!data) {
+      if (slackWebhooksList) {
+        slackWebhooksList.innerHTML = '<div class="config-empty" style="color:#fca5a5;">Failed to load configuration.</div>';
+      }
+      if (apiKeysList) {
+        apiKeysList.innerHTML = '<div class="config-empty" style="color:#fca5a5;">Failed to load API key status.</div>';
+      }
+      return;
+    }
+    renderSlackWebhooksList(data.slack_webhooks || []);
+    renderApiKeysList(data.api_keys || []);
+  }
+
+  function populateSlackWebhookSelect() {
+    if (!slackWebhookSelect) return;
+    const prev = slackWebhookSelect.value;
+    const lastId = localStorage.getItem('slack_webhook_id') || '';
+    slackWebhookSelect.innerHTML = '<option value="">— Select a saved webhook —</option>';
+    slackWebhooksCache.forEach((wh) => {
+      const opt = document.createElement('option');
+      opt.value = wh.id;
+      opt.textContent = wh.name || 'Webhook';
+      slackWebhookSelect.appendChild(opt);
+    });
+    const prefer = prev || lastId;
+    if (prefer && Array.from(slackWebhookSelect.options).some((o) => o.value === prefer)) {
+      slackWebhookSelect.value = prefer;
+    } else if (slackWebhooksCache.length === 1) {
+      slackWebhookSelect.value = slackWebhooksCache[0].id;
+    }
+  }
+
+  function renderSlackWebhooksList(webhooks) {
+    if (!slackWebhooksList) return;
+    if (!webhooks.length) {
+      slackWebhooksList.innerHTML = '<div class="config-empty">No webhooks saved yet. Add one above.</div>';
+      return;
+    }
+    slackWebhooksList.innerHTML = '';
+    webhooks.forEach((wh) => {
+      const item = document.createElement('div');
+      item.className = 'config-item';
+      const urlPreview = wh.url && wh.url.length > 48
+        ? `${wh.url.slice(0, 28)}…${wh.url.slice(-12)}`
+        : (wh.url || '');
+      item.innerHTML = `
+        <div class="config-item-main">
+          <div class="config-item-title">
+            <i class="fa-brands fa-slack" style="color:#e01e5a;"></i>
+            ${escapeHtml(wh.name || 'Webhook')}
+          </div>
+          <div class="config-item-meta">${escapeHtml(urlPreview)}</div>
+        </div>
+        <div class="config-item-actions">
+          <button type="button" class="btn-icon-danger" title="Delete webhook" data-delete-webhook="${escapeHtml(wh.id)}">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      `;
+      const delBtn = item.querySelector('[data-delete-webhook]');
+      delBtn.addEventListener('click', () => deleteSlackWebhook(wh.id, wh.name));
+      slackWebhooksList.appendChild(item);
+    });
+  }
+
+  function renderApiKeysList(keys) {
+    if (!apiKeysList) return;
+    if (!keys.length) {
+      apiKeysList.innerHTML = '<div class="config-empty">No provider credential slots defined.</div>';
+      return;
+    }
+    apiKeysList.innerHTML = '';
+    keys.forEach((key) => {
+      const item = document.createElement('div');
+      item.className = 'config-item';
+      const statusBadge = key.configured
+        ? '<span class="config-badge ok"><i class="fa-solid fa-check"></i> Configured</span>'
+        : '<span class="config-badge missing"><i class="fa-solid fa-xmark"></i> Missing</span>';
+      const sourceBadge = key.source
+        ? `<span class="config-badge source">${escapeHtml(key.source === 'config' ? 'Saved in app' : 'From environment')}</span>`
+        : '';
+      const preview = key.preview
+        ? `<div class="config-item-meta"><code>${escapeHtml(key.preview)}</code></div>`
+        : '';
+      const canDelete = key.source === 'config';
+
+      item.innerHTML = `
+        <div class="config-item-main">
+          <div class="config-item-title">
+            ${escapeHtml(key.label || key.env_var)}
+            ${statusBadge}
+            ${sourceBadge}
+          </div>
+          <div class="config-item-meta">${escapeHtml(key.description || '')} · <code>${escapeHtml(key.env_var)}</code></div>
+          ${preview}
+          <div class="config-key-form">
+            <input
+              type="password"
+              class="input-text api-key-input"
+              data-env-var="${escapeHtml(key.env_var)}"
+              placeholder="${escapeHtml(key.placeholder || 'Paste key…')}"
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <button type="button" class="btn btn-xs btn-primary btn-save-key" data-env-var="${escapeHtml(key.env_var)}">
+              <i class="fa-solid fa-floppy-disk"></i> Save
+            </button>
+            ${canDelete ? `<button type="button" class="btn btn-xs btn-outline btn-clear-key" data-env-var="${escapeHtml(key.env_var)}"><i class="fa-solid fa-trash"></i> Clear</button>` : ''}
+          </div>
+        </div>
+      `;
+
+      const saveBtn = item.querySelector('.btn-save-key');
+      saveBtn.addEventListener('click', () => {
+        const input = item.querySelector('.api-key-input');
+        saveApiKey(key.env_var, input ? input.value : '');
+      });
+      const clearBtn = item.querySelector('.btn-clear-key');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => clearApiKey(key.env_var, key.label));
+      }
+      const input = item.querySelector('.api-key-input');
+      if (input) {
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            saveApiKey(key.env_var, input.value);
+          }
+        });
+      }
+      apiKeysList.appendChild(item);
+    });
+  }
+
+  async function addSlackWebhookFromForm() {
+    const name = (cfgWebhookName && cfgWebhookName.value || '').trim();
+    const url = (cfgWebhookUrl && cfgWebhookUrl.value || '').trim();
+    if (!url || !url.startsWith('https://')) {
+      showToast('Enter a valid Slack webhook URL (starts with https://)', 'error');
+      if (cfgWebhookUrl) cfgWebhookUrl.focus();
+      return;
+    }
+    btnAddSlackWebhook.disabled = true;
+    try {
+      const res = await fetch('/config/slack-webhooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name || 'Slack Webhook', url })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const detail = typeof errData.detail === 'string'
+          ? errData.detail
+          : (errData.detail ? JSON.stringify(errData.detail) : `HTTP ${res.status}`);
+        throw new Error(detail);
+      }
+      if (cfgWebhookName) cfgWebhookName.value = '';
+      if (cfgWebhookUrl) cfgWebhookUrl.value = '';
+      showToast('Slack webhook saved.', 'success');
+      await loadConfigPanels();
+    } catch (err) {
+      showToast(`Failed to add webhook: ${err.message}`, 'error');
+    } finally {
+      btnAddSlackWebhook.disabled = false;
+    }
+  }
+
+  async function deleteSlackWebhook(id, name) {
+    if (!confirm(`Delete Slack webhook “${name || id}”?`)) return;
+    try {
+      const res = await fetch(`/config/slack-webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+      if (localStorage.getItem('slack_webhook_id') === id) {
+        localStorage.removeItem('slack_webhook_id');
+      }
+      showToast('Webhook deleted.', 'success');
+      await loadConfigPanels();
+    } catch (err) {
+      showToast(`Failed to delete webhook: ${err.message}`, 'error');
+    }
+  }
+
+  async function saveApiKey(envVar, value) {
+    const trimmed = (value || '').trim();
+    if (!trimmed) {
+      showToast('Paste an API key before saving.', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('/config/api-keys', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ env_var: envVar, value: trimmed })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+      showToast(`${envVar} saved. Models for this provider are now available.`, 'success');
+      await loadConfigPanels();
+    } catch (err) {
+      showToast(`Failed to save key: ${err.message}`, 'error');
+    }
+  }
+
+  async function clearApiKey(envVar, label) {
+    if (!confirm(`Remove the saved ${label || envVar} key from app config?`)) return;
+    try {
+      const res = await fetch(`/config/api-keys/${encodeURIComponent(envVar)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+      showToast(`${envVar} cleared from app config.`, 'success');
+      await loadConfigPanels();
+    } catch (err) {
+      showToast(`Failed to clear key: ${err.message}`, 'error');
+    }
+  }
+
+  // ── Slack Modal Handlers ─────────────────────────────────────────────────
+
+  async function openSlackModal() {
     slackModal.classList.remove('hidden');
+    await refreshConfigCache();
     loadSlackTasks();
   }
 
@@ -1646,10 +2321,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function sendSlackNotification() {
-    const webhookUrl = slackWebhookUrl.value.trim();
-    if (!webhookUrl || !webhookUrl.startsWith('https://')) {
-      showToast('Please enter a valid Slack Webhook URL (starts with https://)', 'error');
-      slackWebhookUrl.focus();
+    const webhookId = slackWebhookSelect ? slackWebhookSelect.value.trim() : '';
+    const webhookUrl = slackWebhookUrl ? slackWebhookUrl.value.trim() : '';
+
+    if (!webhookId && (!webhookUrl || !webhookUrl.startsWith('https://'))) {
+      showToast('Select a saved Slack webhook or paste a valid https:// webhook URL.', 'error');
+      if (!webhookId && slackWebhookSelect) slackWebhookSelect.focus();
+      else if (slackWebhookUrl) slackWebhookUrl.focus();
       return;
     }
 
@@ -1661,23 +2339,25 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    localStorage.setItem('slack_webhook_url', webhookUrl);
+    if (webhookId) localStorage.setItem('slack_webhook_id', webhookId);
+    if (webhookUrl) localStorage.setItem('slack_webhook_url', webhookUrl);
 
     btnSendSlackNotify.disabled = true;
     btnSendSlackNotify.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+
+    const payload = { job_ids: selectedJobIds };
+    if (webhookId) payload.webhook_id = webhookId;
+    else payload.webhook_url = webhookUrl;
 
     try {
       const res = await fetch('/slack/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhook_url: webhookUrl,
-          job_ids: selectedJobIds
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.detail || `HTTP ${res.status}`);
       }
 

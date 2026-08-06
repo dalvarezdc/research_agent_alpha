@@ -126,7 +126,7 @@ def _fake_llm_router():
             )
         if step == "diagnostic_layering":
             return (
-                "## ✅ Conclusions\nPatellofemoral pain likely.\n\n"
+                "## ✅ Report Summary\nPatellofemoral pain likely.\n\n"
                 "## 🧠 The Reasoning\nBased on activity-related knee symptoms."
             )
         return "A friendly question?"

@@ -71,6 +71,9 @@
 
       <div class="sidebar-section-title">Quick Utilities</div>
       <div class="sidebar-actions">
+        <button type="button" class="btn btn-xs btn-outline btn-config-side" id="btnOpenConfigModal">
+          <i class="fa-solid fa-gear"></i> Configuration
+        </button>
         <button type="button" class="btn btn-xs btn-outline btn-slack-side" id="btnOpenSlackModal">
           <i class="fa-brands fa-slack"></i> Slack Notify
         </button>
@@ -156,6 +159,11 @@
                           <i class="fa-solid fa-paperclip"></i> Upload Medical Document
                         </button>
                         <div class="dropdown-divider"></div>
+                        <div class="dropdown-header-title">Patients</div>
+                        <div class="dropdown-patients-list" id="plusMenuPatientsList">
+                          <div class="dropdown-empty-patients">No saved patients yet</div>
+                        </div>
+                        <div class="dropdown-divider"></div>
                         <div class="dropdown-header-title">Quick Samples</div>
                         <button type="button" class="dropdown-item sample-item" data-query="Laparoscopic cholecystectomy">🏥 Procedure</button>
                         <button type="button" class="dropdown-item sample-item" data-query="Warfarin with Aspirin safety and dosage">💊 Medication</button>
@@ -233,6 +241,21 @@
 
               <!-- Hidden file input -->
               <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden" style="display:none !important;">
+
+              <!-- Selected Patient Context Chip -->
+              <div class="selected-patient-chip hidden" id="selectedPatientChip">
+                <div class="selected-patient-info">
+                  <i class="fa-solid fa-user-injured"></i>
+                  <div class="selected-patient-text">
+                    <span class="selected-patient-label">Patient context</span>
+                    <span class="selected-patient-name" id="selectedPatientName">—</span>
+                    <span class="selected-patient-meta" id="selectedPatientMeta"></span>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-xs btn-ghost" id="btnClearSelectedPatient" title="Remove patient context">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
 
               <!-- Upload Drag Zone & File Card (Dropzone container) -->
               <div class="drop-zone drop-zone-minimal hidden" id="dropZone">
@@ -363,6 +386,7 @@
                 <button class="tab-btn active" data-tab="patient"><i class="fa-solid fa-user"></i> Patient Report</button>
                 <button class="tab-btn" data-tab="practitioner"><i class="fa-solid fa-user-doctor"></i> Practitioner Report</button>
                 <button class="tab-btn" data-tab="summary"><i class="fa-solid fa-file-lines"></i> Summary</button>
+                <button class="tab-btn" data-tab="context"><i class="fa-solid fa-clipboard-list"></i> Context</button>
                 <button class="tab-btn" data-tab="json"><i class="fa-solid fa-code"></i> Raw JSON</button>
 
                 <div class="tab-actions">
@@ -426,6 +450,78 @@
 
   </div>
 
+  <!-- MODAL 0: CONFIGURATION (Slack webhooks + LLM API keys) -->
+  <div class="modal-overlay hidden" id="configModal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-gear config-icon"></i>
+          <div>
+            <h3>Configuration</h3>
+            <p>Manage Slack webhooks and LLM provider API keys for all supported models.</p>
+          </div>
+        </div>
+        <button class="modal-close" id="btnCloseConfigModal" type="button">&times;</button>
+      </div>
+
+      <div class="modal-body config-modal-body">
+        <div class="config-tabs" role="tablist">
+          <button type="button" class="config-tab active" data-config-tab="slack" id="configTabSlack">
+            <i class="fa-brands fa-slack"></i> Slack Webhooks
+          </button>
+          <button type="button" class="config-tab" data-config-tab="keys" id="configTabKeys">
+            <i class="fa-solid fa-key"></i> LLM API Keys
+          </button>
+        </div>
+
+        <!-- Tab: Slack Webhooks -->
+        <div class="config-tab-panel" id="configPanelSlack">
+          <p class="config-panel-intro">
+            Save multiple Incoming Webhooks (one per channel/workspace). Use them from
+            <strong>Slack Notify</strong> without pasting the URL each time.
+          </p>
+
+          <div class="config-add-row">
+            <div class="form-group flex-1">
+              <label for="cfgWebhookName">Name</label>
+              <input type="text" id="cfgWebhookName" class="input-text" placeholder="e.g. Clinical Alerts" autocomplete="off">
+            </div>
+            <div class="form-group flex-2">
+              <label for="cfgWebhookUrl">Webhook URL <span class="required">*</span></label>
+              <input type="url" id="cfgWebhookUrl" class="input-text" placeholder="https://hooks.slack.com/services/..." autocomplete="off">
+            </div>
+            <div class="form-group config-add-btn-wrap">
+              <label class="invisible">Add</label>
+              <button type="button" class="btn btn-sm btn-primary" id="btnAddSlackWebhook">
+                <i class="fa-solid fa-plus"></i> Add
+              </button>
+            </div>
+          </div>
+
+          <div class="config-list" id="slackWebhooksList">
+            <div class="config-empty">No webhooks saved yet.</div>
+          </div>
+        </div>
+
+        <!-- Tab: LLM API Keys -->
+        <div class="config-tab-panel hidden" id="configPanelKeys">
+          <p class="config-panel-intro">
+            Add API keys for each provider you want to use. Keys are stored in a local server
+            file (<code>data/app_config.json</code>) and applied at runtime — never shown in full after save.
+            Environment / <code>.env</code> keys also count as configured.
+          </p>
+          <div class="config-list" id="apiKeysList">
+            <div class="config-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading providers…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCloseConfigModalFooter" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL 1: SLACK NOTIFICATIONS -->
   <div class="modal-overlay hidden" id="slackModal">
     <div class="modal-card">
@@ -442,9 +538,18 @@
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Slack Incoming Webhook URL <span class="required">*</span></label>
+          <label for="slackWebhookSelect"><i class="fa-brands fa-slack"></i> Saved Webhook</label>
+          <select id="slackWebhookSelect" class="input-text">
+            <option value="">— Select a saved webhook —</option>
+          </select>
+          <span class="field-hint">
+            Manage webhooks in <button type="button" class="link-btn" id="btnOpenConfigFromSlack">Configuration</button>.
+            Or paste a one-off URL below.
+          </span>
+        </div>
+        <div class="form-group">
+          <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Or custom Webhook URL</label>
           <input type="url" id="slackWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="input-text">
-          <span class="field-hint">URL will be remembered locally in your browser.</span>
         </div>
 
         <div class="tasks-selection-container">

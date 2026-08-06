@@ -101,7 +101,8 @@ def test_analyze_sync_endpoint(mock_execute):
         implementation="langchain",
         web_search=True,
         timeout=300,
-        agent_id_override=None
+        agent_id_override=None,
+        context_report=None,
     )
 
 
@@ -295,3 +296,122 @@ def test_intake_summarize_endpoint(mock_llm_factory):
     data = response.json()
     assert "summary" in data
     assert "45yo male" in data["summary"]
+
+
+# ── /config endpoints (Slack webhooks + LLM API keys) ────────────────────────
+
+
+@pytest.fixture()
+def isolated_app_config(tmp_path, monkeypatch):
+    """Isolate UI config storage for API tests."""
+    import app_config
+
+    path = tmp_path / "api_app_config.json"
+    app_config.set_config_path(path)
+    for entry in app_config.KNOWN_API_KEY_VARS:
+        monkeypatch.delenv(entry["env_var"], raising=False)
+    app_config._managed_env_vars = set()  # noqa: SLF001
+    yield path
+    app_config.set_config_path(app_config._DEFAULT_CONFIG_PATH)  # noqa: SLF001
+    app_config._managed_env_vars = set()  # noqa: SLF001
+
+
+def test_get_config_endpoint(isolated_app_config):
+    res = client.get("/config")
+    assert res.status_code == 200
+    data = res.json()
+    assert "slack_webhooks" in data
+    assert "api_keys" in data
+    assert isinstance(data["api_keys"], list)
+    env_vars = {k["env_var"] for k in data["api_keys"]}
+    assert "GROK_API_KEY" in env_vars
+    assert "ANTHROPIC_API_KEY" in env_vars
+
+
+def test_slack_webhook_crud_via_api(isolated_app_config):
+    create = client.post(
+        "/config/slack-webhooks",
+        json={"name": "Team", "url": "https://hooks.slack.com/services/T/B/C"},
+    )
+    assert create.status_code == 201
+    wh = create.json()
+    assert wh["id"]
+    assert wh["name"] == "Team"
+
+    listed = client.get("/config/slack-webhooks")
+    assert listed.status_code == 200
+    assert len(listed.json()["webhooks"]) == 1
+
+    updated = client.put(
+        f"/config/slack-webhooks/{wh['id']}",
+        json={"name": "Renamed"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Renamed"
+
+    deleted = client.delete(f"/config/slack-webhooks/{wh['id']}")
+    assert deleted.status_code == 200
+    assert client.get("/config/slack-webhooks").json()["webhooks"] == []
+
+
+def test_api_key_upsert_and_clear(isolated_app_config):
+    put = client.put(
+        "/config/api-keys",
+        json={"env_var": "GROK_API_KEY", "value": "xai-api-test-key-abcdef"},
+    )
+    assert put.status_code == 200
+    body = put.json()
+    assert body["configured"] is True
+    assert body["source"] == "config"
+    assert "xai-api-test-key-abcdef" not in str(body)
+
+    # Full secret must not appear on GET /config
+    cfg = client.get("/config").json()
+    assert "xai-api-test-key-abcdef" not in str(cfg)
+
+    cleared = client.delete("/config/api-keys/GROK_API_KEY")
+    assert cleared.status_code == 200
+    statuses = cleared.json()["api_keys"]
+    grok = next(s for s in statuses if s["env_var"] == "GROK_API_KEY")
+    assert grok["configured"] is False
+
+
+def test_api_key_unknown_var_rejected(isolated_app_config):
+    res = client.put(
+        "/config/api-keys",
+        json={"env_var": "FAKE_KEY", "value": "nope"},
+    )
+    assert res.status_code == 400
+
+
+@patch("urllib.request.urlopen")
+def test_slack_notify_with_saved_webhook_id(mock_urlopen, isolated_app_config):
+    """POST /slack/notify accepts webhook_id from saved config."""
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.read.return_value = b"ok"
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    wh = client.post(
+        "/config/slack-webhooks",
+        json={"name": "Saved", "url": "https://hooks.slack.com/services/SAVED/B/C"},
+    ).json()
+
+    with patch("api.execute_analysis_sync") as mock_exec:
+        mock_exec.return_value = {
+            "agent_id": "general_agent",
+            "files": {},
+            "result": {"summary": "Fact check summary"},
+        }
+        job_id = client.post(
+            "/analyze/async",
+            json={"query": "Vitamin D evidence?", "model": "grok-4.3"},
+        ).json()["job_id"]
+
+    notify = client.post(
+        "/slack/notify",
+        json={"webhook_id": wh["id"], "job_ids": [job_id]},
+    )
+    assert notify.status_code == 200
+    assert notify.json()["sent_count"] == 1
+    assert mock_urlopen.called

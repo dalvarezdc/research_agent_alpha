@@ -222,3 +222,7 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+
+# UI-managed secrets & integration config (API keys, Slack webhooks)
+data/app_config.json
+data/app_config.json.tmp

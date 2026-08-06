@@ -3,6 +3,7 @@ FastAPI REST API service for the medical multi-agent system.
 Exposes query routing, synchronous analysis, and asynchronous background jobs.
 """
 
+import errno
 import os
 import sys
 import uuid
@@ -11,13 +12,15 @@ import logging
 import tempfile
 import threading
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Iterator
 
 from fastapi import FastAPI, BackgroundTasks, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -42,6 +45,7 @@ from run_analysis import AgentOrchestrator
 from llm_integrations import get_available_models, create_llm_manager
 from document_parser import parse_document
 from medical_report_categorizer import categorize_medical_markdown
+import app_config
 
 # Maximum upload size for document parsing (bytes). Default 25 MB; override via env.
 MAX_PARSE_UPLOAD_BYTES = int(os.getenv("MAX_PARSE_UPLOAD_BYTES", str(25 * 1024 * 1024)))
@@ -49,6 +53,13 @@ MAX_PARSE_UPLOAD_BYTES = int(os.getenv("MAX_PARSE_UPLOAD_BYTES", str(25 * 1024 *
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("medical_api")
+
+# Load UI-managed secrets/webhooks and apply API keys into the process environment
+# (after dotenv so .env remains the base; stored keys override for local UI setup).
+try:
+    app_config.load_and_apply()
+except Exception as _cfg_err:  # noqa: BLE001 — never block API startup on config I/O
+    logger.warning("Could not load app_config: %s", _cfg_err)
 
 app = FastAPI(
     title="Medical Multi-Agent API",
@@ -97,6 +108,12 @@ class AnalyzeRequest(BaseModel):
     web_search: bool = Field(True, description="Whether to enable web search for the agent.")
     timeout: int = Field(300, description="LLM API timeout in seconds.")
     agent_id: Optional[str] = Field(None, description="Target agent ID override (medication_agent, procedure_agent, diagnostic_agent, general_agent).")
+    # Optional pre-built markdown describing patient/document/intake context sent with the query.
+    # When provided, written to outputs as context_report.md; otherwise a minimal report is generated.
+    context_report: Optional[str] = Field(
+        None,
+        description="Markdown report of the clinical context assembled for the agent.",
+    )
 
 
 class IntakeChatMessage(BaseModel):
@@ -126,8 +143,28 @@ class RegenerateRequest(BaseModel):
 
 
 class SlackNotifyRequest(BaseModel):
-    webhook_url: str = Field(..., description="Slack Incoming Webhook URL")
+    webhook_url: Optional[str] = Field(
+        None, description="Slack Incoming Webhook URL (optional if webhook_id is set)"
+    )
+    webhook_id: Optional[str] = Field(
+        None, description="ID of a saved Slack webhook from /config/slack-webhooks"
+    )
     job_ids: List[str] = Field(..., description="List of task/job IDs to include in the notification")
+
+
+class SlackWebhookCreate(BaseModel):
+    name: str = Field("Slack Webhook", description="Friendly label for this webhook")
+    url: str = Field(..., description="Slack Incoming Webhook URL (https://...)")
+
+
+class SlackWebhookUpdate(BaseModel):
+    name: Optional[str] = Field(None, description="Friendly label for this webhook")
+    url: Optional[str] = Field(None, description="Slack Incoming Webhook URL (https://...)")
+
+
+class ApiKeyUpsert(BaseModel):
+    env_var: str = Field(..., description="Environment variable name, e.g. GROK_API_KEY")
+    value: str = Field(..., description="Secret value / API key / project id")
 
 
 class PatientCreate(BaseModel):
@@ -217,6 +254,103 @@ def _job_to_public_dict(job: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _slug_for_filename(text: str, max_len: int = 48) -> str:
+    """Make a filesystem-safe short slug from a query string.
+
+    Uses only the first non-empty line (before any attached context blocks)
+    so patient/document appendices do not bloat the filename.
+    """
+    import re
+
+    first_line = ""
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("---"):
+            if first_line:
+                break
+            continue
+        first_line = stripped
+        break
+
+    slug = re.sub(r"[^\w\s-]", "", first_line[:120], flags=re.UNICODE)
+    slug = re.sub(r"[-\s]+", "_", slug).strip("_").lower()
+    if not slug:
+        slug = "analysis"
+    return slug[:max_len]
+
+
+def write_context_report_md(
+    *,
+    query: str,
+    model: str,
+    agent_id: str,
+    web_search: bool,
+    implementation: str = "langchain",
+    context_report: Optional[str] = None,
+    job_id: Optional[str] = None,
+    output_dir: str = "outputs",
+) -> str:
+    """
+    Write a small markdown artifact documenting the exact context sent to the agent.
+
+    If the client supplied a pre-built ``context_report``, it is used as the body
+    and enriched with final routing metadata. Otherwise a minimal report is built
+    from the full query string (which already includes any patient/document text).
+
+    Returns the relative path of the written file.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = _slug_for_filename(query)
+    rel_path = f"{output_dir}/{base}_context_report_{timestamp}.md"
+
+    header_lines = [
+        "# Agent Context Report",
+        "",
+        "Small audit of the clinical context and final prompt payload delivered to the specialized agent.",
+        "",
+        "## Run metadata",
+        "",
+        f"- **Generated:** {datetime.now().isoformat(timespec='seconds')}",
+        f"- **Job ID:** `{job_id or 'n/a'}`",
+        f"- **Model:** `{model}`",
+        f"- **Implementation:** `{implementation}`",
+        f"- **Agent:** `{agent_id}`",
+        f"- **Web search:** {'enabled' if web_search else 'disabled'}",
+        f"- **Query length:** {len(query or '')} characters",
+        "",
+    ]
+
+    if context_report and context_report.strip():
+        body = context_report.strip()
+        # Avoid duplicating a top-level title if the client already included one.
+        if body.lstrip().startswith("#"):
+            # Client report is authoritative for composition details; append run metadata first.
+            content = "\n".join(header_lines) + "\n---\n\n" + body + "\n"
+        else:
+            content = "\n".join(header_lines) + "\n" + body + "\n"
+    else:
+        content = "\n".join(header_lines) + "\n".join(
+            [
+                "## Final prompt sent to agent",
+                "",
+                "The following text is the full `query` / subject string passed into the agent pipeline",
+                "(including any patient context, attached document text, and intake-chat synthesis).",
+                "",
+                "```text",
+                (query or "").rstrip() or "(empty)",
+                "```",
+                "",
+            ]
+        )
+
+    with open(rel_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+
+    logger.info("Wrote context report: %s", rel_path)
+    return rel_path
+
+
 def execute_analysis_sync(
     query: str,
     model: str,
@@ -225,6 +359,7 @@ def execute_analysis_sync(
     timeout: int,
     agent_id_override: Optional[str] = None,
     job_id: Optional[str] = None,
+    context_report: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Runs the full routing and execution pipeline synchronously.
@@ -250,12 +385,24 @@ def execute_analysis_sync(
         )
         logger.info(f"Routed query to agent: {routed_agent_id}")
 
+    # 1b. Write small context audit report (what is being sent to the agent)
+    context_path = write_context_report_md(
+        query=query,
+        model=model,
+        agent_id=routed_agent_id,
+        web_search=web_search,
+        implementation=implementation,
+        context_report=context_report,
+        job_id=job_id,
+        output_dir="outputs",
+    )
+
     # 2. Run the specialized agent via AgentOrchestrator
     orchestrator = AgentOrchestrator(output_dir="outputs")
-    files = {}
+    files: Dict[str, Any] = {"context_report": context_path}
 
     if routed_agent_id == "medication_agent":
-        _, files = orchestrator.run_medication_analyzer(
+        _, agent_files = orchestrator.run_medication_analyzer(
             medication=query,
             indication=None,
             other_medications=None,
@@ -264,8 +411,9 @@ def execute_analysis_sync(
             implementation=implementation,
             enable_web_research=web_search,
         )
+        files.update(agent_files or {})
     elif routed_agent_id == "procedure_agent":
-        _, files = orchestrator.run_procedure_analyzer(
+        _, agent_files = orchestrator.run_procedure_analyzer(
             procedure=query,
             details="API Request",
             llm_provider=llm_provider,
@@ -273,15 +421,17 @@ def execute_analysis_sync(
             implementation=implementation,
             enable_web_research=web_search,
         )
+        files.update(agent_files or {})
     elif routed_agent_id == "diagnostic_agent":
-        _, files = orchestrator.run_diagnostic_analyzer(
+        _, agent_files = orchestrator.run_diagnostic_analyzer(
             query=query,
             llm_provider=llm_provider,
             timeout=timeout,
             interactive=False,
         )
+        files.update(agent_files or {})
     elif routed_agent_id == "general_agent":
-        _, files = orchestrator.run_fact_checker(
+        _, agent_files = orchestrator.run_fact_checker(
             subject=query,
             context="",
             llm_provider=llm_provider,
@@ -289,8 +439,12 @@ def execute_analysis_sync(
             implementation=implementation,
             enable_web_research=web_search,
         )
+        files.update(agent_files or {})
     else:
         raise ValueError(f"Unknown routed agent: {routed_agent_id}")
+
+    # Ensure context report key survives agent file merges
+    files["context_report"] = context_path
 
     # Load result data from file
     loaded_data = load_json_result(routed_agent_id, files)
@@ -321,6 +475,60 @@ def execute_analysis_sync(
     }
 
 
+class _NonBrokenStream:
+    """Wrap stdout/stderr so CLI ``print()`` cannot raise BrokenPipeError.
+
+    Background analysis jobs run under uvicorn/FastAPI where the client pipe
+    may already be closed; orchestrator code still uses print for CLI banners.
+    """
+
+    __slots__ = ("_stream",)
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+
+    def write(self, data: Any) -> int:
+        try:
+            return self._stream.write(data)
+        except BrokenPipeError:
+            return len(data) if isinstance(data, (str, bytes, bytearray)) else 0
+        except OSError as exc:
+            if getattr(exc, "errno", None) in (errno.EPIPE, 32):
+                return len(data) if isinstance(data, (str, bytes, bytearray)) else 0
+            raise
+
+    def flush(self) -> None:
+        try:
+            self._stream.flush()
+        except BrokenPipeError:
+            pass
+        except OSError as exc:
+            if getattr(exc, "errno", None) not in (errno.EPIPE, 32):
+                raise
+
+    def isatty(self) -> bool:
+        try:
+            return bool(self._stream.isatty())
+        except Exception:
+            return False
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+
+@contextmanager
+def _shield_stdio_from_broken_pipe() -> Iterator[None]:
+    """Temporarily wrap process stdio so print() never aborts background work."""
+    old_out, old_err = sys.stdout, sys.stderr
+    sys.stdout = _NonBrokenStream(old_out)  # type: ignore[assignment]
+    sys.stderr = _NonBrokenStream(old_err)  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        sys.stdout = old_out
+        sys.stderr = old_err
+
+
 def run_background_job(
     job_id: str,
     query: str,
@@ -328,7 +536,8 @@ def run_background_job(
     implementation: str,
     web_search: bool,
     timeout: int,
-    agent_id_override: Optional[str] = None
+    agent_id_override: Optional[str] = None,
+    context_report: Optional[str] = None,
 ):
     """
     Worker task for executing an analysis asynchronously in the background.
@@ -340,15 +549,19 @@ def run_background_job(
     _persist_conversation_update(job_id, status=JobStatus.RUNNING)
 
     try:
-        data = execute_analysis_sync(
-            query=query,
-            model=model,
-            implementation=implementation,
-            web_search=web_search,
-            timeout=timeout,
-            agent_id_override=agent_id_override,
-            job_id=job_id,
-        )
+        # Orchestrator / agents still use print() for CLI progress. Under uvicorn
+        # a closed client pipe raises BrokenPipeError and would fail the job.
+        with _shield_stdio_from_broken_pipe():
+            data = execute_analysis_sync(
+                query=query,
+                model=model,
+                implementation=implementation,
+                web_search=web_search,
+                timeout=timeout,
+                agent_id_override=agent_id_override,
+                job_id=job_id,
+                context_report=context_report,
+            )
         with jobs_lock:
             jobs[job_id]["status"] = JobStatus.COMPLETED
             jobs[job_id]["agent_id"] = data["agent_id"]
@@ -402,6 +615,9 @@ def api_info_endpoint():
             "GET /jobs/{job_id}": "Check status of an async job",
             "POST /slack/notify": "Send task notifications & descriptions to a Slack webhook",
             "POST /parse": "Parse uploaded PDF/Word document to markdown",
+            "GET /config": "UI-safe app configuration (webhooks + masked API keys)",
+            "GET/POST/PUT/DELETE /config/slack-webhooks": "Manage saved Slack webhooks",
+            "GET/PUT/DELETE /config/api-keys": "Manage LLM provider API keys",
         }
     }
 
@@ -494,9 +710,11 @@ def intake_chat_endpoint(req: IntakeChatRequest):
             "Rules:\n"
             "1. Focus strictly on asking 1 to 2 high-yield, relevant clinical clarifying questions (e.g. patient demographics, "
             "symptom duration, specific drug dosages, medical history/comorbidities, contraindications, or primary objective).\n"
-            "2. If the user's information is already thorough and complete, state clearly: 'Your query is detailed and ready for analysis run! Feel free to press Start Analysis Run or provide any final details.'\n"
-            "3. Keep your response brief, professional, and directly actionable (2-4 sentences max).\n"
-            "4. Do NOT attempt to perform the full medical analysis yourself or give diagnostic recommendations—only ask clarifying questions."
+            "2. If selected patient context or an attached clinical document is provided, treat it as known background—"
+            "do not re-ask details already present there; use them to ask more targeted follow-ups.\n"
+            "3. If the user's information is already thorough and complete, state clearly: 'Your query is detailed and ready for analysis run! Feel free to press Start Analysis Run or provide any final details.'\n"
+            "4. Keep your response brief, professional, and directly actionable (2-4 sentences max).\n"
+            "5. Do NOT attempt to perform the full medical analysis yourself or give diagnostic recommendations—only ask clarifying questions."
         )
 
         formatted_convo = ""
@@ -505,7 +723,10 @@ def intake_chat_endpoint(req: IntakeChatRequest):
             formatted_convo += f"{role_label}: {msg.content}\n\n"
 
         if req.document_context and req.document_context.strip():
-            formatted_convo += f"--- ATTACHED CLINICAL DOCUMENT CONTEXT ---\n{req.document_context.strip()}\n\n"
+            formatted_convo += (
+                "--- CLINICAL CONTEXT (selected patient and/or attached document) ---\n"
+                f"{req.document_context.strip()}\n\n"
+            )
 
         prompt = f"Below is the current intake conversation transcript:\n\n{formatted_convo}Please review the clinical prompt above and respond with clarifying questions or confirmation."
 
@@ -552,7 +773,10 @@ def intake_summarize_endpoint(req: IntakeSummarizeRequest):
             formatted_convo += f"{role_label}: {msg.content}\n\n"
 
         if req.document_context and req.document_context.strip():
-            formatted_convo += f"--- ATTACHED CLINICAL DOCUMENT CONTEXT ---\n{req.document_context.strip()}\n\n"
+            formatted_convo += (
+                "--- CLINICAL CONTEXT (selected patient and/or attached document) ---\n"
+                f"{req.document_context.strip()}\n\n"
+            )
 
         prompt = f"Synthesize the following intake transcript into a single clinical query prompt:\n\n{formatted_convo}"
 
@@ -575,14 +799,16 @@ def analyze_query_sync_endpoint(req: AnalyzeRequest):
     Synchronously route and analyze a medical query. Blocks until analysis completes.
     """
     try:
-        res = execute_analysis_sync(
-            query=req.query,
-            model=req.model,
-            implementation=req.implementation,
-            web_search=req.web_search,
-            timeout=req.timeout,
-            agent_id_override=req.agent_id
-        )
+        with _shield_stdio_from_broken_pipe():
+            res = execute_analysis_sync(
+                query=req.query,
+                model=req.model,
+                implementation=req.implementation,
+                web_search=req.web_search,
+                timeout=req.timeout,
+                agent_id_override=req.agent_id,
+                context_report=req.context_report,
+            )
         return {
             "status": "success",
             "query": req.query,
@@ -651,7 +877,8 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
         implementation=req.implementation,
         web_search=req.web_search,
         timeout=req.timeout,
-        agent_id_override=req.agent_id
+        agent_id_override=req.agent_id,
+        context_report=req.context_report,
     )
 
     return {
@@ -1015,16 +1242,127 @@ async def parse_patient_report_endpoint(
 
 
 
+# ── Configuration (Slack webhooks + LLM API keys) ───────────────────────────
+# Dual-register with/without trailing slash so POSTs never fall through to the
+# frontend static handler (which only allows GET/HEAD → confusing 405s).
+
+
+@app.get("/config")
+@app.get("/config/")
+def get_config_endpoint():
+    """Return UI-safe app configuration (webhooks + masked API key status)."""
+    return app_config.get_public_config()
+
+
+@app.get("/config/slack-webhooks")
+@app.get("/config/slack-webhooks/")
+def list_slack_webhooks_endpoint():
+    """List saved Slack incoming webhooks."""
+    return {"webhooks": app_config.list_slack_webhooks()}
+
+
+@app.post("/config/slack-webhooks", status_code=status.HTTP_201_CREATED)
+@app.post("/config/slack-webhooks/", status_code=status.HTTP_201_CREATED)
+def create_slack_webhook_endpoint(req: SlackWebhookCreate):
+    """Add a named Slack incoming webhook."""
+    try:
+        entry = app_config.add_slack_webhook(req.name, req.url)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return entry
+
+
+@app.put("/config/slack-webhooks/{webhook_id}")
+@app.put("/config/slack-webhooks/{webhook_id}/")
+def update_slack_webhook_endpoint(webhook_id: str, req: SlackWebhookUpdate):
+    """Update a saved Slack webhook name and/or URL."""
+    if req.name is None and req.url is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one of: name, url",
+        )
+    try:
+        return app_config.update_slack_webhook(webhook_id, name=req.name, url=req.url)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Webhook not found: {webhook_id}",
+        ) from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@app.delete("/config/slack-webhooks/{webhook_id}")
+@app.delete("/config/slack-webhooks/{webhook_id}/")
+def delete_slack_webhook_endpoint(webhook_id: str):
+    """Remove a saved Slack webhook."""
+    if not app_config.delete_slack_webhook(webhook_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Webhook not found: {webhook_id}",
+        )
+    return {"status": "deleted", "id": webhook_id}
+
+
+@app.get("/config/api-keys")
+@app.get("/config/api-keys/")
+def list_api_keys_endpoint():
+    """List known LLM credential slots with configured status (values masked)."""
+    return {"api_keys": app_config.list_api_key_status()}
+
+
+@app.put("/config/api-keys")
+@app.put("/config/api-keys/")
+def upsert_api_key_endpoint(req: ApiKeyUpsert):
+    """Create or update an LLM provider API key / credential.
+
+    The value is stored in the local app config file and applied to the
+    process environment so subsequent LLM calls can use the provider.
+    """
+    try:
+        return app_config.set_api_key(req.env_var, req.value)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@app.delete("/config/api-keys/{env_var}")
+@app.delete("/config/api-keys/{env_var}/")
+def delete_api_key_endpoint(env_var: str):
+    """Remove a UI-managed API key (does not clear keys that only exist in the shell/.env)."""
+    if not app_config.delete_api_key(env_var):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No UI-managed key for '{env_var}'. "
+                "Keys set only via environment variables cannot be deleted here."
+            ),
+        )
+    return {"status": "deleted", "env_var": env_var, "api_keys": app_config.list_api_key_status()}
+
+
 @app.post("/slack/notify")
 def send_slack_notification_endpoint(req: SlackNotifyRequest):
     """
     Send selected task descriptions and reports to a Slack Webhook URL.
     Task descriptions are included as formatted text snippet attachments.
+
+    Provide either ``webhook_url`` directly or ``webhook_id`` of a saved webhook
+    from the configuration menu.
     """
-    if not req.webhook_url.startswith("https://"):
+    webhook_url = (req.webhook_url or "").strip()
+    if req.webhook_id and not webhook_url:
+        saved = app_config.get_slack_webhook(req.webhook_id)
+        if not saved:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Saved Slack webhook not found: {req.webhook_id}",
+            )
+        webhook_url = saved["url"]
+
+    if not webhook_url.startswith("https://"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Slack Webhook URL. Must start with 'https://'."
+            detail="Invalid Slack Webhook URL. Must start with 'https://' (or pass a valid webhook_id).",
         )
     if not req.job_ids:
         raise HTTPException(
@@ -1098,7 +1436,7 @@ def send_slack_notification_endpoint(req: SlackNotifyRequest):
         import urllib.request
         req_data = json.dumps(slack_payload).encode("utf-8")
         request = urllib.request.Request(
-            req.webhook_url,
+            webhook_url,
             data=req_data,
             headers={"Content-Type": "application/json"}
         )
@@ -1170,9 +1508,46 @@ async def parse_document_endpoint(file: UploadFile = File(...)):
     }
 
 
-# Ensure frontend directory exists and serve static Web UI
-os.makedirs("frontend", exist_ok=True)
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+# Serve the Web UI with GET-only handlers.
+# IMPORTANT: do NOT use ``app.mount("/", StaticFiles(...))`` — a catch-all Mount
+# intercepts unmatched POST/PUT/DELETE and returns 405 Method Not Allowed, which
+# masked missing/mismatched API routes (e.g. trailing-slash variants).
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+FRONTEND_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _safe_frontend_file(relative: str) -> Optional[Path]:
+    """Resolve a path under FRONTEND_DIR, or None if missing / path-escape."""
+    if not relative or relative.startswith("/") or ".." in Path(relative).parts:
+        return None
+    candidate = (FRONTEND_DIR / relative).resolve()
+    try:
+        candidate.relative_to(FRONTEND_DIR.resolve())
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+@app.get("/")
+def serve_frontend_index():
+    """Serve the SPA entry point."""
+    index = FRONTEND_DIR / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+    return FileResponse(index)
+
+
+@app.get("/{asset_path:path}")
+def serve_frontend_asset(asset_path: str):
+    """Serve static frontend assets (GET only). Registered last so API routes win."""
+    file_path = _safe_frontend_file(asset_path)
+    if file_path is not None:
+        return FileResponse(file_path)
+    # SPA-style fallback for unknown GET paths
+    index = FRONTEND_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(index)
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 def main():

@@ -4,12 +4,31 @@ Unified Analysis Runner for Medical AI Agents
 Orchestrates multiple medical analysis agents with a common interface.
 """
 
+import builtins
+import errno
 import os
 import sys
 import json
 import argparse
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, List
+
+
+def print(*args: Any, **kwargs: Any) -> None:  # noqa: A001 — CLI-safe module print
+    """Print for CLI banners without aborting when stdout is a closed pipe.
+
+    FastAPI/uvicorn background jobs often have a closed client pipe; a normal
+    ``print()`` then raises ``BrokenPipeError`` and fails the analysis. Swallow
+    EPIPE so analysis can finish and still write report files.
+    """
+    try:
+        builtins.print(*args, **kwargs)
+    except BrokenPipeError:
+        return
+    except OSError as exc:
+        if getattr(exc, "errno", None) in (errno.EPIPE, 32):
+            return
+        raise
 
 # Optional diagnostics
 from check_llms import print_llm_status
