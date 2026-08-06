@@ -1923,18 +1923,20 @@ input:checked + .slider:before {
   padding: 1.25rem 1rem;
   flex-shrink: 0;
   height: 100vh;
+  max-height: 100vh;
   position: sticky;
   top: 0;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .sidebar-menu {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .sidebar-header {
@@ -1987,6 +1989,7 @@ input:checked + .slider:before {
   transition: all 0.2s ease;
   width: 100%;
   text-align: left;
+  flex-shrink: 0;
 }
 
 .nav-item i {
@@ -2015,86 +2018,128 @@ input:checked + .slider:before {
   border-radius: 12px;
 }
 
-/* ── Sidebar conversation group ── */
-.sidebar-conversations {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  margin: 0.15rem 0 0.6rem 0;
-  max-height: min(48vh, 420px);
-  min-height: 120px;
-}
-
-.sidebar-conv-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0 0.15rem;
-}
-
-.btn-sidebar-new {
+/* ── Sidebar conversations (ChatGPT-style list) ── */
+.sidebar-section-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   width: 100%;
-  padding: 0.45rem 0.6rem;
-  border-radius: var(--radius-sm);
-  border: 1px dashed rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.06);
-  color: #7dd3fc;
-  font-size: 0.78rem;
-  font-weight: 600;
+}
+
+.sidebar-section-head .nav-item {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Plus button — same visual language as nav-item */
+.nav-item-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(0, 112, 243, 0.12);
+  color: #38bdf8;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  padding: 0;
+  font-size: 0.9rem;
 }
 
-.btn-sidebar-new:hover {
-  background: rgba(56, 189, 248, 0.14);
-  border-color: rgba(56, 189, 248, 0.55);
-  color: #e0f2fe;
+.nav-item-icon:hover {
+  background: rgba(0, 112, 243, 0.22);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #7dd3fc;
 }
 
-.sidebar-conv-search {
+.nav-item-icon:active {
+  transform: scale(0.96);
+}
+
+/* Search sits directly under Conversations header, above the list */
+.sidebar-search-wrap {
   position: relative;
+  display: block;
+  width: 100%;
+  margin: 0.15rem 0 0.35rem 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-.sidebar-conv-search i {
+.sidebar-search-wrap > i {
   position: absolute;
-  left: 0.55rem;
+  left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   pointer-events: none;
+  z-index: 1;
+  line-height: 1;
 }
 
-.sidebar-conv-search input {
+.sidebar-search-input,
+input.sidebar-search-input[type="text"] {
+  display: block;
   width: 100%;
-  padding: 0.4rem 0.5rem 0.4rem 1.7rem !important;
+  box-sizing: border-box;
+  height: 36px;
   margin: 0 !important;
-  font-size: 0.75rem !important;
-  background: rgba(0, 0, 0, 0.25) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 6px !important;
+  padding: 0 0.75rem 0 2.1rem !important;
+  font-size: 0.8rem !important;
+  font-family: var(--font-sans);
+  line-height: 1.2;
   color: var(--text-bright) !important;
+  background: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.sidebar-search-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.sidebar-search-input:focus {
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12) !important;
+}
+
+/* Conversation rows — take remaining sidebar space and scroll */
 .sidebar-conv-list {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
   overflow-y: auto;
-  padding: 0.15rem 0.1rem 0.35rem 0.1rem;
-  flex: 1;
-  min-height: 0;
+  overflow-x: hidden;
+  flex: 1 1 0;
+  min-height: 160px;
+  max-height: none;
+  padding: 0.15rem 0 0.55rem 0;
+  margin: 0 0 0.45rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  -webkit-overflow-scrolling: touch;
+}
+
+.sidebar-conv-list::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar-conv-list::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 4px;
 }
 
 .sidebar-conv-empty {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   text-align: center;
-  padding: 0.85rem 0.4rem;
+  padding: 1.25rem 0.5rem;
+  line-height: 1.4;
 }
 
 .sidebar-conv-group-label {
@@ -2102,49 +2147,52 @@ input:checked + .slider:before {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
-  padding: 0.55rem 0.45rem 0.2rem;
+  padding: 0.55rem 0.5rem 0.25rem;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .sidebar-conv-item {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
   width: 100%;
-  padding: 0.45rem 0.4rem 0.45rem 0.5rem;
+  box-sizing: border-box;
+  padding: 0.55rem 0.5rem;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-main, #cbd5e1);
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
   position: relative;
+  flex-shrink: 0;
 }
 
 .sidebar-conv-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-bright);
 }
 
 .sidebar-conv-item.active {
-  background: rgba(0, 112, 243, 0.12);
-  border-color: rgba(56, 189, 248, 0.28);
+  background: rgba(0, 112, 243, 0.14);
+  border-color: rgba(56, 189, 248, 0.3);
   color: var(--text-bright);
 }
 
 .sidebar-conv-item .docs-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.4);
   box-shadow: none;
 }
 
 .sidebar-conv-item .docs-dot.has-docs {
   background: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
 }
 
 .sidebar-conv-item .docs-dot.running {
@@ -2166,42 +2214,46 @@ input:checked + .slider:before {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.12rem;
 }
 
 .sidebar-conv-item .conv-title {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: inherit;
+  color: var(--text-bright);
 }
 
 .sidebar-conv-item .conv-meta {
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
   display: flex;
   gap: 0.35rem;
   align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-conv-item .btn-conv-delete {
   opacity: 0;
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  padding: 0;
 }
 
 .sidebar-conv-item:hover .btn-conv-delete,
@@ -2211,6 +2263,7 @@ input:checked + .slider:before {
 
 .sidebar-conv-item .btn-conv-delete:hover {
   background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.35);
   color: #f87171;
 }
 
@@ -2219,15 +2272,17 @@ input:checked + .slider:before {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  margin-top: 2rem;
-  margin-bottom: 0.6rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
   padding-left: 0.5rem;
+  flex-shrink: 0;
 }
 
 .sidebar-actions {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .btn-slack-side {

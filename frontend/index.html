@@ -32,26 +32,34 @@
       </div>
 
       <nav class="sidebar-menu">
-        <button class="nav-item active" id="navBtnConversations" data-view="viewConversations">
-          <i class="fa-solid fa-comments"></i>
-          <span>Conversations</span>
-          <span class="badge-count" id="conversationsCountTag">0</span>
-        </button>
+        <!-- Conversations section header -->
+        <div class="sidebar-section-head">
+          <button class="nav-item active" id="navBtnConversations" data-view="viewConversations">
+            <i class="fa-solid fa-comments"></i>
+            <span>Conversations</span>
+            <span class="badge-count" id="conversationsCountTag">0</span>
+          </button>
+          <button type="button" class="nav-item-icon" id="btnNewConversation" title="New conversation">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        </div>
 
-        <!-- Persistent conversation list (grouped under Conversations) -->
-        <div class="sidebar-conversations" id="sidebarConversations">
-          <div class="sidebar-conv-toolbar">
-            <button type="button" class="btn-sidebar-new" id="btnNewConversation" title="New conversation">
-              <i class="fa-solid fa-plus"></i> New
-            </button>
-            <div class="sidebar-conv-search">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="sidebarConversationSearch" placeholder="Search..." autocomplete="off">
-            </div>
-          </div>
-          <div class="sidebar-conv-list" id="sidebarConversationsList">
-            <div class="sidebar-conv-empty">No conversations yet</div>
-          </div>
+        <!-- Search on top of conversation list -->
+        <div class="sidebar-search-wrap">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input
+            type="text"
+            id="sidebarConversationSearch"
+            class="sidebar-search-input"
+            placeholder="Search conversations..."
+            autocomplete="off"
+            spellcheck="false"
+          >
+        </div>
+
+        <!-- Scrollable conversation list -->
+        <div class="sidebar-conv-list" id="sidebarConversationsList">
+          <div class="sidebar-conv-empty">No conversations yet</div>
         </div>
 
         <button class="nav-item" id="navBtnPatients" data-view="viewPatients">
