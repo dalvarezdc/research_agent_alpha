@@ -56,7 +56,7 @@ pending.md                   # Known gaps and planned work
 |-----------|---------------------|--------------|
 | `medication_agent` | `LangChainMedicationAnalyzer` | Drug pharmacology, interactions, safety, monitoring |
 | `procedure_agent` | `LangChainMedicalReasoningAgent` | Organ-by-organ procedure analysis, peri-op care |
-| `diagnostic_agent` | `MedicalDiagnosticAgent` | Bayesian + LLM symptom-to-condition pipeline |
+| `diagnostic_agent` | `MedicalDiagnosticAgent` | LLM common-sense differential (free-form symptoms, no fixed DB) |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
 
 All four agents extend `LangChainAgentBase` and share cost tracking, audit
@@ -86,7 +86,7 @@ Helpers (`langchain_agents/base.py`):
 
 Each agent emits a **patient report** (Layers 1-2) and a **practitioner report**
 (Layers 1-3). Critical safety content (e.g. medication black-box warnings,
-diagnostic Bayesian posteriors) is placed in the deterministic appendix so it is
+diagnostic likelihood estimates) is placed in the deterministic appendix so it is
 guaranteed present regardless of LLM phrasing.
 
 ---

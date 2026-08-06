@@ -607,7 +607,7 @@ class AgentOrchestrator:
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Diagnostic Analyzer"""
         print("=" * 80)
-        print("🩺 Medical Diagnostic Analyzer - Bayesian Hybrid Pipeline")
+        print("🩺 Medical Diagnostic Analyzer - LLM Clinical Differential")
         print("=" * 80)
         print()
 
@@ -622,7 +622,7 @@ class AgentOrchestrator:
         )
 
         print(f"📋 Investigating symptoms from query...")
-        print("⏳ Running 5-level diagnostic protocol...")
+        print("⏳ Running 5-level diagnostic protocol (free-form clinical reasoning)...")
         print()
 
         # Run analysis

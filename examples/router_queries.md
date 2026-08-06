@@ -135,16 +135,16 @@ Total knee replacement (TKR) in a 68-year-old male with osteoarthritis and contr
 
 ---
 
-## Agent 3 — `diagnostic_agent` → `MedicalDiagnosticAgent` (Bayesian + LLM)
+## Agent 3 — `diagnostic_agent` → `MedicalDiagnosticAgent` (LLM clinical differential)
 
 **Routes here when:** The query describes symptoms, a suspected diagnosis, or a
 medical condition to investigate.
 
-**What it produces:** A 5-level Bayesian + LLM diagnostic pipeline:
-1. Symptom extraction (LLM NLP → structured list)
-2. Naive Bayes probability scoring across all conditions in the symptom database
-3. Differentiating questions and recommended exams
-4. Iterative Bayesian update based on exam results (interactive mode)
+**What it produces:** A 5-level LLM diagnostic pipeline (no fixed symptom/disease list):
+1. Free-form symptom extraction (LLM NLP → structured list in clinical language)
+2. Common-sense differential with relative likelihood + severity estimates
+3. Differentiating history points and recommended exams
+4. Iterative refinement from extra symptoms / exam results (interactive mode)
 5. Final report: ranked conditions, most-probable, most-serious, next steps, and a
    suggested follow-up agent (`medication_agent` or `procedure_agent`)
 

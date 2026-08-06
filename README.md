@@ -43,7 +43,7 @@ Four specialized agents, each addressing a different clinical question type:
 |-------|---------|---------------|
 | **Procedure** | Surgeries, scans, interventions — organ-by-organ risk and peri-op care | "Laparoscopic cholecystectomy" |
 | **Medication** | Drug pharmacology, interactions, dosing, safety, monitoring | "Warfarin in a patient on Aspirin" |
-| **Diagnostic** | Symptom-to-condition pipeline (Bayesian + LLM) | "fatigue, weight gain, cold intolerance" |
+| **Diagnostic** | Symptom-to-condition pipeline (LLM clinical differential) | "fatigue, weight gain, cold intolerance" |
 | **Fact checker** | Open evidence questions, multi-perspective investigation | "Vitamin D supplementation — optimal dosing" |
 
 The interactive router automatically picks the right agent for each query. You
@@ -493,8 +493,8 @@ uv run python run_analysis.py factcheck \
 
 ### Diagnostic analyzer
 
-Bayesian + LLM five-level symptom-to-condition pipeline. Provide symptoms as
-the subject.
+LLM five-level clinical differential (free-form symptoms, no fixed disease list).
+Provide symptoms as the subject.
 
 ```bash
 uv run python run_analysis.py diagnostic \
