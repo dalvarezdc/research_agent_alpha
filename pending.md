@@ -9,14 +9,14 @@
 
 ### ~~1. `diagnostic_agent` is a phantom~~ ✅ Fixed
 `router.py` now dispatches `diagnostic_agent` to `orchestrator.run_diagnostic_analyzer()`,
-which uses `MedicalDiagnosticAgent` (Bayesian + LLM pipeline in `medical_diagnostic_analyzer/`).
+which uses `MedicalDiagnosticAgent` (LLM clinical differential in `medical_diagnostic_analyzer/`).
 The CLI also accepts `uv run python run_analysis.py diagnostic --subject "..."`.
 
 **Remaining gap:** ~~`MedicalDiagnosticAgent` does not use `CostTracker`, does not collect
 references, and is not wired to the LangChain stack.~~ ✅ Fixed — `MedicalDiagnosticAgent`
 now extends `LangChainAgentBase` (cost tracking via `@track_cost`, audit logging,
 `_parse_json`, web research), collects `references`, and emits layered patient +
-practitioner reports with a deterministic Bayesian-probability Statistical Appendix.
+practitioner reports with a deterministic likelihood Statistical Appendix.
 
 ---
 
@@ -165,7 +165,7 @@ Extended the fact-checker's layered/lossless approach to every agent:
 - **References** collected by procedure / medication / diagnostic agents and
   routed through the orchestrator URL-validation path (see item 3).
 - **Diagnostic agent migrated** onto `LangChainAgentBase` (see item 1): cost
-  tracking, audit, robust JSON parsing, references, and a deterministic Bayesian
+  tracking, audit, robust JSON parsing, references, and a deterministic likelihood
   Statistical Appendix so exact posteriors are guaranteed in the report.
 
 ### Layered, lossless fact-checker Phase 5 (`langchain_agents/factcheck_agent.py`)

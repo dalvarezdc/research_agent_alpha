@@ -2,16 +2,19 @@
 
 Entities
 --------
-User         -- an account. A seeded "developer" user enables no-login local use.
-Subject      -- a normalized analysis subject (e.g. "vitamin d"). Reports are
-                classified by subject.
-Report       -- one analysis run (medication/procedure/diagnostic/factcheck).
-                Holds metadata + cost; the generated artifacts live on disk and
-                are referenced by ReportFile rows (files-first design).
-ReportFile   -- one artifact produced by a run (markdown/pdf/json), by path.
-PatientData  -- structured patient information parsed from attached medical
-                reports. Schema is created now; population arrives with the
-                later medical-parsing spec.
+User           -- an account. A seeded "developer" user enables no-login local use.
+Subject        -- a normalized analysis subject (e.g. "vitamin d"). Reports are
+                  classified by subject.
+Report         -- one analysis run (medication/procedure/diagnostic/factcheck).
+                  Holds metadata + cost; the generated artifacts live on disk and
+                  are referenced by ReportFile rows (files-first design).
+ReportFile     -- one artifact produced by a run (markdown/pdf/json), by path.
+PatientData    -- structured patient information parsed from attached medical
+                  reports. Schema is created now; population arrives with the
+                  later medical-parsing spec.
+Patient        -- patient directory entity (demographics + clinical tables).
+Conversation   -- durable UI job/conversation history (query, status, files).
+                  Survives API restarts; delete cascades to report + artifacts.
 
 All primary keys are UUID4 strings for global uniqueness and safe exposure.
 """
@@ -74,6 +77,9 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     patient_data: Mapped[list["PatientData"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    patients: Mapped[list["Patient"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -212,3 +218,78 @@ class PatientData(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<PatientData id={self.id!r} source={self.source_type!r}>"
+
+
+class Patient(Base):
+    """A patient entity holding demographics, metadata, and clinical tables."""
+
+    __tablename__ = "patients"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    primary_condition: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True)
+    clinical_data: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="patients")
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return f"<Patient id={self.id!r} name={self.name!r}>"
+
+
+class Conversation(Base):
+    """A durable analysis job / conversation for the UI history panel.
+
+    Mirrors the in-memory job dict used by the API so conversations survive
+    process restarts. When analysis completes, ``files`` and ``report_id``
+    point at generated documentation (reports + on-disk artifacts).
+    """
+
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    agent_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    implementation: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Orchestrator {logical_type: path} map — used by the UI file grid.
+    files: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Lightweight result payload (full agent JSON); may be None for large runs.
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    parent_job_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    # Report row created for this job (usually same as id when linked).
+    report_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("reports.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    report: Mapped[Optional["Report"]] = relationship()
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return (
+            f"<Conversation id={self.id!r} status={self.status!r} "
+            f"query={self.query[:40]!r}>"
+        )
+

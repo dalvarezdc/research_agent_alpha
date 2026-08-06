@@ -25,6 +25,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+outputs_test/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -221,3 +222,7 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+
+# UI-managed secrets & integration config (API keys, Slack webhooks)
+data/app_config.json
+data/app_config.json.tmp

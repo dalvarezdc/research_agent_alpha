@@ -43,7 +43,7 @@ Four specialized agents, each addressing a different clinical question type:
 |-------|---------|---------------|
 | **Procedure** | Surgeries, scans, interventions — organ-by-organ risk and peri-op care | "Laparoscopic cholecystectomy" |
 | **Medication** | Drug pharmacology, interactions, dosing, safety, monitoring | "Warfarin in a patient on Aspirin" |
-| **Diagnostic** | Symptom-to-condition pipeline (Bayesian + LLM) | "fatigue, weight gain, cold intolerance" |
+| **Diagnostic** | Symptom-to-condition pipeline (LLM clinical differential) | "fatigue, weight gain, cold intolerance" |
 | **Fact checker** | Open evidence questions, multi-perspective investigation | "Vitamin D supplementation — optimal dosing" |
 
 The interactive router automatically picks the right agent for each query. You
@@ -242,6 +242,7 @@ Set at least one provider key. The default routing model is `grok-4.5` (xAI):
 XAI_API_KEY="your-xai-key"           # grok-4.5 (default), grok-4.3
 ANTHROPIC_API_KEY="your-key"          # Claude models
 OPENAI_API_KEY="your-key"             # GPT-4o
+DEEPSEEK_API_KEY="your-key"           # DeepSeek V4 Flash / Pro
 ```
 
 Optional integrations:
@@ -271,7 +272,7 @@ Using `make` shortcuts:
 make setup        # Automated environment setup
 make check-llms   # Check configured LLM provider keys
 make run          # Start interactive router (default)
-make api          # Start REST API server (port 8000)
+make api          # Start REST API server (port 8080)
 make test         # Run test suite
 ```
 
@@ -492,8 +493,8 @@ uv run python run_analysis.py factcheck \
 
 ### Diagnostic analyzer
 
-Bayesian + LLM five-level symptom-to-condition pipeline. Provide symptoms as
-the subject.
+LLM five-level clinical differential (free-form symptoms, no fixed disease list).
+Provide symptoms as the subject.
 
 ```bash
 uv run python run_analysis.py diagnostic \
@@ -518,22 +519,22 @@ Start the Web UI & API server:
 
 ```bash
 make api
-# or: uv run python api.py --port 8000
+# or: uv run python api.py --port 8080
 ```
 
-Open **http://localhost:8000** in your browser to access the Web Application Workbench:
+Open **http://localhost:8080** in your browser to access the Web Application Workbench:
 
 - **Interactive Query Workbench**: Enter queries, select target LLM models (`grok-4.5`, `claude-sonnet-4-6`, `gemini-3.6-flash`, etc.), pick specialized agents, and toggle live web research.
 - **Document & File Parser**: Upload PDFs, Word documents (`.docx`, `.doc`), TXT, Markdown, or RTF files. PDF/Word documents are automatically converted into markdown via the built-in parser and grounded as clinical context for the agent analysis.
 - **Format Validation**: Uploading an unsupported file format triggers an error alert displaying allowed extensions (`.pdf`, `.docx`, `.doc`, `.txt`, `.md`, `.rtf`).
 - **Live Report Previews & Downloads**: Preview rendered Patient Reports, Practitioner Reports, Summaries, and Raw JSON directly in the browser with tab navigation, markdown styling, and direct download buttons.
-- **OpenAPI / Swagger UI**: Interactive API documentation is available at **http://localhost:8000/docs**.
+- **OpenAPI / Swagger UI**: Interactive API documentation is available at **http://localhost:8080/docs**.
 
 ### Parse a document
 
 ```bash
 # Upload a file and receive markdown + metadata
-curl -X POST http://localhost:8000/parse \
+curl -X POST http://localhost:8080/parse \
   -F "file=@/path/to/report.pdf"
 ```
 
@@ -561,7 +562,7 @@ via `MAX_PARSE_UPLOAD_BYTES`) return HTTP 413. An unparseable file returns HTTP
 ### Route a query (no execution)
 
 ```bash
-curl -X POST http://localhost:8000/route \
+curl -X POST http://localhost:8080/route \
   -H "Content-Type: application/json" \
   -d '{"query": "What are the risks of Warfarin?"}'
 ```
@@ -569,7 +570,7 @@ curl -X POST http://localhost:8000/route \
 ### Run a full analysis (synchronous)
 
 ```bash
-curl -X POST http://localhost:8000/analyze \
+curl -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Vitamin D supplementation",
@@ -582,13 +583,13 @@ curl -X POST http://localhost:8000/analyze \
 
 ```bash
 # Start job
-curl -X POST http://localhost:8000/analyze/async \
+curl -X POST http://localhost:8080/analyze/async \
   -H "Content-Type: application/json" \
   -d '{"query": "Metformin interactions", "model": "grok-4.5"}'
 # → {"job_id": "abc-123", "status": "pending", "check_status_url": "/jobs/abc-123"}
 
 # Poll for result
-curl http://localhost:8000/jobs/abc-123
+curl http://localhost:8080/jobs/abc-123
 ```
 
 ### Other endpoints
