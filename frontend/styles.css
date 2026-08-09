@@ -182,6 +182,101 @@ body {
   width: 100%;
 }
 
+/* Workbench Subtabs Navigation (Safari & Cross-Browser WebKit Fix) */
+.workbench-subtabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(15, 23, 42, 0.85) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 14px;
+  width: fit-content;
+  max-width: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+button.workbench-subtab-btn,
+.workbench-subtab-btn {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1.35rem;
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 10px;
+  color: var(--text-muted, #94a3b8) !important;
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  outline: none;
+  box-sizing: border-box;
+}
+
+button.workbench-subtab-btn:hover,
+.workbench-subtab-btn:hover {
+  color: var(--text-bright, #f8fafc) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+button.workbench-subtab-btn.active,
+.workbench-subtab-btn.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(59, 130, 246, 0.25) 100%) !important;
+  background-color: rgba(14, 165, 233, 0.3) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.55) !important;
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.25), 0 0 10px rgba(56, 189, 248, 0.15) !important;
+}
+
+button.workbench-subtab-btn *,
+.workbench-subtab-btn * {
+  pointer-events: none;
+}
+
+.workbench-subtab-btn i {
+  font-size: 0.95rem;
+}
+
+.wtab-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+}
+
+/* Full Width Workbench Panels */
+.workbench-tab-content {
+  width: 100%;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.workbench-tab-content.hidden {
+  display: none !important;
+}
+
+.workbench-tab-content:not(.hidden) {
+  display: block !important;
+}
+
+.full-width-panel {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .workbench-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -349,16 +444,17 @@ body {
 }
 
 .intake-chat-stream {
-  background: rgba(11, 16, 26, 0.75);
+  background: rgba(11, 16, 26, 0.85);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-md);
-  padding: 0.75rem;
-  max-height: 220px;
+  padding: 1.1rem;
+  min-height: 360px;
+  max-height: 58vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
   scroll-behavior: smooth;
 }
 
@@ -480,20 +576,93 @@ body {
   width: 100%;
 }
 
+/* Collapsable Text Formatting Toolbar */
+.format-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  margin-bottom: 0.4rem;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.format-toolbar.hidden {
+  display: none !important;
+}
+
+.format-tools-group,
+.format-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.fmt-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.fmt-btn:hover {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+}
+
+.fmt-btn:active {
+  transform: scale(0.94);
+}
+
+.fmt-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 0.25rem;
+}
+
+.fmt-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.fmt-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-bright);
+}
+
+.bar-icon-btn.active-toggle {
+  background: rgba(6, 182, 212, 0.2) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(6, 182, 212, 0.4) !important;
+}
+
 .command-bar textarea {
   width: 100%;
   background: transparent;
   border: none;
   color: var(--text-bright);
   font-family: var(--font-sans);
-  font-size: 0.925rem;
-  padding: 0.15rem 0;
-  resize: none;
-  min-height: 52px;
-  max-height: 160px;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.25rem;
+  resize: vertical;
+  min-height: 180px;
+  max-height: 480px;
   outline: none;
   box-shadow: none !important;
-  line-height: 1.5;
+  line-height: 1.6;
   box-sizing: border-box;
 }
 
@@ -2282,6 +2451,184 @@ input.sidebar-search-input[type="text"] {
   flex-shrink: 0;
 }
 
+/* Sidebar Patient Group Accordions */
+.sidebar-patient-group {
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+}
+
+.patient-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.patient-group-header:hover {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.25);
+}
+
+.patient-group-header .patient-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.patient-group-header .group-toggle-icon {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.patient-group-header.collapsed .group-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.patient-group-header .patient-icon {
+  color: var(--primary);
+  font-size: 0.85rem;
+}
+
+.patient-group-header .patient-conv-count {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+  border-radius: 12px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.sidebar-patient-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-left: 0.75rem;
+  margin-top: 0.3rem;
+  border-left: 2px solid rgba(6, 182, 212, 0.2);
+}
+
+.sidebar-patient-group-items.collapsed {
+  display: none !important;
+}
+
+/* Past Conversations Context Box in Intake Tab */
+.selected-patient-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.selected-patient-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.past-conversations-context-box {
+  margin-top: 0.35rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  width: 100%;
+}
+
+.past-conv-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+}
+
+.past-conv-box-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.btn-text-xs {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  font-size: 0.725rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.btn-text-xs:hover {
+  opacity: 1;
+}
+
+.past-conversations-context-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.past-conv-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.past-conv-item:hover {
+  background: rgba(6, 182, 212, 0.08);
+}
+
+.past-conv-checkbox {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.past-conv-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.past-conv-title {
+  font-size: 0.775rem;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.past-conv-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
 .sidebar-conv-item {
   display: flex;
   align-items: center;
@@ -2833,11 +3180,59 @@ input.sidebar-search-input[type="text"] {
 }
 
 .agent-tag {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(56, 189, 248, 0.18);
   color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.28);
   padding: 0.1rem 0.45rem;
   border-radius: 4px;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.agent-tag-general {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+}
+
+.agent-tag-medication {
+  background: rgba(45, 212, 191, 0.18);
+  color: #2dd4bf;
+  border: 1px solid rgba(45, 212, 191, 0.28);
+}
+
+.agent-tag-procedure {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.28);
+}
+
+.agent-tag-diagnostic {
+  background: rgba(251, 146, 60, 0.18);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.28);
+}
+
+.agent-tag-auto {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.sidebar-conv-item .conv-meta .agent-tag {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.sidebar-conv-item .conv-meta .conv-date {
+  color: var(--text-muted);
+  font-size: 0.65rem;
 }
 
 .conversation-actions {

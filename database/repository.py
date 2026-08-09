@@ -376,6 +376,7 @@ def conversation_to_job_dict(conv: Conversation) -> dict[str, Any]:
         "result": conv.result,
         "parent_job_id": conv.parent_job_id,
         "report_id": conv.report_id,
+        "patient_id": conv.patient_id,
         "has_docs": _conversation_has_docs(files),
         "created_at": conv.created_at.isoformat() if conv.created_at else None,
         "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
@@ -392,6 +393,7 @@ def create_conversation(
     model: Optional[str] = None,
     implementation: Optional[str] = None,
     parent_job_id: Optional[str] = None,
+    patient_id: Optional[str] = None,
 ) -> Conversation:
     """Insert a new Conversation row for a background job."""
     conv = Conversation(
@@ -402,6 +404,7 @@ def create_conversation(
         model=model,
         implementation=implementation,
         parent_job_id=parent_job_id,
+        patient_id=patient_id,
     )
     session.add(conv)
     session.flush()
@@ -420,6 +423,7 @@ def update_conversation(
     report_id: Optional[str] = None,
     model: Optional[str] = None,
     implementation: Optional[str] = None,
+    patient_id: Optional[str] = None,
 ) -> Optional[Conversation]:
     """Patch fields on an existing Conversation. Returns None if missing."""
     conv = session.get(Conversation, conversation_id)
@@ -428,6 +432,9 @@ def update_conversation(
     if status is not None:
         conv.status = status
     if agent_id is not None:
+        conv.agent_id = agent_id
+    if patient_id is not None:
+        conv.patient_id = patient_id
         conv.agent_id = agent_id
     if error is not None:
         conv.error = error

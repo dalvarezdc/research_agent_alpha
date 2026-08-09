@@ -247,6 +247,9 @@ class Patient(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="patients")
+    conversations: Mapped[list["Conversation"]] = relationship(
+        back_populates="patient", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<Patient id={self.id!r} name={self.name!r}>"
@@ -274,6 +277,9 @@ class Conversation(Base):
     # Lightweight result payload (full agent JSON); may be None for large runs.
     result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     parent_job_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    patient_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("patients.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # Report row created for this job (usually same as id when linked).
     report_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("reports.id", ondelete="SET NULL"), nullable=True, index=True
@@ -286,6 +292,7 @@ class Conversation(Base):
     )
 
     report: Mapped[Optional["Report"]] = relationship()
+    patient: Mapped[Optional["Patient"]] = relationship(back_populates="conversations")
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return (

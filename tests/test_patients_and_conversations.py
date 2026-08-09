@@ -98,7 +98,8 @@ def test_patient_crud_flow(client):
     assert get_again.status_code == 404
 
 
-def test_delete_and_regenerate_job_endpoints(client):
+@patch("api.execute_analysis_sync")
+def test_delete_and_regenerate_job_endpoints(mock_exec, client):
     """Test DELETE /jobs/{job_id} and POST /jobs/{job_id}/regenerate endpoints."""
     # 1. Create a dummy job in memory + durable conversation
     job_id = "test-job-uuid-123"

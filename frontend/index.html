@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Marked.js for markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260809b">
 </head>
 <body>
 
@@ -101,34 +101,29 @@
         <div class="view-header">
           <div>
             <h2><i class="fa-solid fa-comments"></i> Medical Conversations & Analysis</h2>
-            <p>Select past runs to inspect outputs, clear cached files, or regenerate reports with specialized agents.</p>
+            <p>Select past conversations from the left sidebar to inspect outputs, clear cached files, or regenerate reports.</p>
           </div>
           <button class="btn btn-sm btn-outline" id="btnRefreshConversations">
             <i class="fa-solid fa-arrows-rotate"></i> Refresh History
           </button>
         </div>
 
-        <!-- Compact recent strip (full history lives in the left sidebar) -->
-        <div class="conversations-panel conversations-panel-compact" id="conversationsPanel">
-          <div class="conversations-header">
-            <span class="panel-subtitle"><i class="fa-solid fa-clock-rotate-left"></i> Active &amp; Recent</span>
-            <div class="conversations-search-box">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="conversationSearchInput" placeholder="Filter...">
-            </div>
-          </div>
-          <div class="conversations-list" id="conversationsList">
-            <div class="empty-conversations">Select a conversation from the left menu, or start a new analysis.</div>
-          </div>
+        <!-- Workbench Tab Navigation Bar -->
+        <div class="workbench-subtabs-bar">
+          <button type="button" class="workbench-subtab-btn active" id="btnTabIntake" data-wtab="intake">
+            <i class="fa-solid fa-sparkles"></i> Medical AI Query &amp; Intake
+          </button>
+          <button type="button" class="workbench-subtab-btn" id="btnTabOutput" data-wtab="output">
+            <i class="fa-solid fa-square-poll-vertical"></i> Clinical Analysis Output
+            <span class="wtab-indicator hidden" id="wtabOutputIndicator"></span>
+          </button>
         </div>
 
-        <!-- Workbench Grid -->
-        <div class="workbench-grid">
-
-          <!-- LEFT COLUMN: Minimal Command Bar & Workbench -->
-          <section class="panel input-panel minimal-panel">
+        <!-- TAB 1: MEDICAL AI QUERY & INTAKE (WIDE CHAT AREA) -->
+        <div class="workbench-tab-content active" id="workbenchTabIntake">
+          <section class="panel input-panel minimal-panel full-width-panel">
             <div class="panel-header compact-header">
-              <h2><i class="fa-solid fa-sparkles"></i> Medical AI Query & Intake</h2>
+              <h2><i class="fa-solid fa-sparkles"></i> Medical AI Query &amp; Intake</h2>
               <span class="mode-badge direct" id="intakeModeBadge"><i class="fa-solid fa-bolt"></i> Direct Prompt</span>
             </div>
 
@@ -139,9 +134,46 @@
             <div class="command-bar-wrapper">
               <div class="command-bar" id="commandBar">
                 
-                <!-- TOP ROW: Full-Width Textarea -->
+                <!-- COLLAPSABLE TEXT FORMATTING TOOLBAR -->
+                <div class="format-toolbar hidden" id="formatToolbar">
+                  <div class="format-tools-group">
+                    <button type="button" class="fmt-btn" data-fmt="bold" title="Bold (**text**)">
+                      <i class="fa-solid fa-bold"></i>
+                    </button>
+                    <button type="button" class="fmt-btn" data-fmt="italic" title="Italic (*text*)">
+                      <i class="fa-solid fa-italic"></i>
+                    </button>
+                    <span class="fmt-divider"></span>
+                    <button type="button" class="fmt-btn" data-fmt="heading" title="Heading (### Header)">
+                      <i class="fa-solid fa-heading"></i>
+                    </button>
+                    <button type="button" class="fmt-btn" data-fmt="bullet" title="Bullet List (- Item)">
+                      <i class="fa-solid fa-list-ul"></i>
+                    </button>
+                    <button type="button" class="fmt-btn" data-fmt="number" title="Numbered List (1. Item)">
+                      <i class="fa-solid fa-list-ol"></i>
+                    </button>
+                    <button type="button" class="fmt-btn" data-fmt="quote" title="Medical Note / Callout (> Note)">
+                      <i class="fa-solid fa-quote-left"></i>
+                    </button>
+                    <button type="button" class="fmt-btn" data-fmt="code" title="Lab Value / Code (`value`)">
+                      <i class="fa-solid fa-code"></i>
+                    </button>
+                    <span class="fmt-divider"></span>
+                    <button type="button" class="fmt-btn fmt-clear-btn" data-fmt="clear" title="Clear All Text">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                  <div class="format-tools-right">
+                    <button type="button" class="fmt-btn fmt-close-btn" id="btnCloseFormatToolbar" title="Hide Formatting Bar">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- TOP ROW: Full-Width Expanded Textarea -->
                 <div class="command-bar-input-row">
-                  <textarea id="queryInput" rows="2" placeholder="What medical query or clinical subject is on your mind?"></textarea>
+                  <textarea id="queryInput" rows="7" placeholder="What medical query or clinical subject is on your mind?"></textarea>
                 </div>
 
                 <!-- BOTTOM ROW: Controls, Plus Menu & Send Button -->
@@ -171,6 +203,11 @@
                         <button type="button" class="dropdown-item sample-item" data-query="Vitamin D supplementation optimal dosing">🔬 Fact Check</button>
                       </div>
                     </div>
+
+                    <!-- Text Formatting Toolbar Toggle Button -->
+                    <button type="button" class="bar-icon-btn" id="btnToggleFormatToolbar" title="Formatting Options (Bold, Lists, Headings)">
+                      <i class="fa-solid fa-font"></i>
+                    </button>
 
                     <!-- Live Web Research Pill -->
                     <label class="web-search-pill" for="webSearchToggle" title="Toggle Live Web Research (Real-time clinical literature)">
@@ -242,19 +279,35 @@
               <!-- Hidden file input -->
               <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" class="file-input-hidden" style="display:none !important;">
 
-              <!-- Selected Patient Context Chip -->
+              <!-- Selected Patient Context Chip & Past Conversations Context Picker -->
               <div class="selected-patient-chip hidden" id="selectedPatientChip">
-                <div class="selected-patient-info">
-                  <i class="fa-solid fa-user-injured"></i>
-                  <div class="selected-patient-text">
-                    <span class="selected-patient-label">Patient context</span>
-                    <span class="selected-patient-name" id="selectedPatientName">—</span>
-                    <span class="selected-patient-meta" id="selectedPatientMeta"></span>
+                <div class="selected-patient-top-row">
+                  <div class="selected-patient-info">
+                    <i class="fa-solid fa-user-injured"></i>
+                    <div class="selected-patient-text">
+                      <span class="selected-patient-label">Patient context</span>
+                      <span class="selected-patient-name" id="selectedPatientName">—</span>
+                      <span class="selected-patient-meta" id="selectedPatientMeta"></span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-xs btn-ghost" id="btnClearSelectedPatient" title="Remove patient context">
+                    <i class="fa-solid fa-xmark"></i> Clear
+                  </button>
+                </div>
+
+                <!-- Past Conversations Picker for this Patient -->
+                <div class="past-conversations-context-box" id="pastConversationsContextBox">
+                  <div class="past-conv-box-header">
+                    <span><i class="fa-solid fa-clock-rotate-left"></i> Include Past History Context:</span>
+                    <div class="past-conv-box-actions">
+                      <button type="button" class="btn-text-xs" id="btnSelectAllPastConvs">Select All</button>
+                      <button type="button" class="btn-text-xs" id="btnDeselectAllPastConvs">Deselect All</button>
+                    </div>
+                  </div>
+                  <div class="past-conversations-context-list" id="pastConversationsContextList">
+                    <!-- Populated dynamically with checkboxes of past conversations for this patient -->
                   </div>
                 </div>
-                <button type="button" class="btn btn-xs btn-ghost" id="btnClearSelectedPatient" title="Remove patient context">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
               </div>
 
               <!-- Upload Drag Zone & File Card (Dropzone container) -->
@@ -325,9 +378,11 @@
               </div>
             </div>
           </section>
+        </div>
 
-          <!-- RIGHT COLUMN: Output & Results Display -->
-          <section class="panel output-panel">
+        <!-- TAB 2: CLINICAL ANALYSIS OUTPUT -->
+        <div class="workbench-tab-content hidden" id="workbenchTabOutput">
+          <section class="panel output-panel full-width-panel">
             <div class="panel-header">
               <h2><i class="fa-solid fa-square-poll-vertical"></i> Clinical Analysis Output</h2>
               <div class="active-agent-badge hidden" id="activeAgentBadge">
@@ -339,7 +394,7 @@
             <div class="placeholder-state" id="placeholderState">
               <i class="fa-solid fa-notes-medical placeholder-icon"></i>
               <h3>No Analysis Run Active</h3>
-              <p>Enter a query or select a sample preset on the left, then click <strong>Start Analysis Run</strong> to execute multi-perspective medical reasoning.</p>
+              <p>Enter a query or select a sample preset in the Intake tab, then click <strong>Start Analysis Run</strong> to execute multi-perspective medical reasoning.</p>
             </div>
 
             <!-- Asynchronous Job Progress Card -->

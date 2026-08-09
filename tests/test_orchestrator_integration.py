@@ -105,8 +105,14 @@ def test_routing_only():
     return all_passed
 
 
+import pytest
+
+
+@pytest.mark.integration
 def test_full_execution():
     """Test full routing + execution flow"""
+    if not os.getenv("RUN_INTEGRATION_TESTS"):
+        pytest.skip("Skipping live LLM full execution test (set RUN_INTEGRATION_TESTS=1 to run)")
     print("\n" + "=" * 60)
     print("TEST 2: Full Execution (Routing + Agent)")
     print("=" * 60)

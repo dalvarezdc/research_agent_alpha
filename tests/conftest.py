@@ -33,6 +33,23 @@ def outputs_dir(tmp_path_factory):
     return output_dir
 
 
+@pytest.fixture(autouse=True, scope="session")
+def isolate_test_database(tmp_path_factory):
+    """Ensure pytest always uses an isolated temporary SQLite database and never pollutes production data/app.db."""
+    import os
+    from database.config import reset_engine_cache
+    from database.session import reset_initialized_flag
+
+    test_db = tmp_path_factory.mktemp("db") / "test_app.db"
+    os.environ["DATABASE_URL"] = f"sqlite:///{test_db}"
+    os.environ["DB_PERSISTENCE_ENABLED"] = "true"
+    reset_engine_cache()
+    reset_initialized_flag()
+    yield
+    reset_engine_cache()
+    reset_initialized_flag()
+
+
 @pytest.fixture(autouse=True)
 def cleanup_outputs(request):
     """Cleanup any test output files after each test"""

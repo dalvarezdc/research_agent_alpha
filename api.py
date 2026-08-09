@@ -108,6 +108,8 @@ class AnalyzeRequest(BaseModel):
     web_search: bool = Field(True, description="Whether to enable web search for the agent.")
     timeout: int = Field(300, description="LLM API timeout in seconds.")
     agent_id: Optional[str] = Field(None, description="Target agent ID override (medication_agent, procedure_agent, diagnostic_agent, general_agent).")
+    patient_id: Optional[str] = Field(None, description="Linked patient ID for grouping conversations.")
+    context_job_ids: Optional[List[str]] = Field(None, description="List of prior conversation/job IDs to include as context.")
     # Optional pre-built markdown describing patient/document/intake context sent with the query.
     # When provided, written to outputs as context_report.md; otherwise a minimal report is generated.
     context_report: Optional[str] = Field(
@@ -840,6 +842,7 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
         "status": JobStatus.PENDING,
         "model": req.model,
         "implementation": req.implementation,
+        "patient_id": req.patient_id,
         "created_at": now,
         "updated_at": now,
         "error": None,
@@ -865,6 +868,7 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
                 status=JobStatus.PENDING,
                 model=req.model,
                 implementation=req.implementation,
+                patient_id=req.patient_id,
             )
     except Exception as e:
         logger.warning(f"Failed to persist conversation {job_id}: {e}")

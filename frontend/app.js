@@ -56,6 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnNewConversation = document.getElementById('btnNewConversation');
   let activeConversationId = null;
 
+  // Workbench Subtabs Elements
+  const btnTabIntake = document.getElementById('btnTabIntake');
+  const btnTabOutput = document.getElementById('btnTabOutput');
+  const workbenchTabIntake = document.getElementById('workbenchTabIntake');
+  const workbenchTabOutput = document.getElementById('workbenchTabOutput');
+  const wtabOutputIndicator = document.getElementById('wtabOutputIndicator');
+
   // Workbench Form & Intake Elements
   const apiStatusBadge = document.getElementById('apiStatusBadge');
   const apiStatusText = document.getElementById('apiStatusText');
@@ -239,6 +246,32 @@ document.addEventListener('DOMContentLoaded', () => {
     navBtnConversations.addEventListener('click', () => switchView('viewConversations'));
     navBtnPatients.addEventListener('click', () => switchView('viewPatients'));
 
+    // Workbench Subtabs (Intake vs Output)
+    if (btnTabIntake) {
+      btnTabIntake.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchWorkbenchTab('intake');
+      });
+    }
+    if (btnTabOutput) {
+      btnTabOutput.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchWorkbenchTab('output');
+      });
+    }
+
+    const subtabsBar = document.querySelector('.workbench-subtabs-bar');
+    if (subtabsBar) {
+      subtabsBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.workbench-subtab-btn');
+        if (btn) {
+          e.preventDefault();
+          const targetTab = btn.getAttribute('data-wtab') || (btn.id === 'btnTabOutput' ? 'output' : 'intake');
+          switchWorkbenchTab(targetTab);
+        }
+      });
+    }
+
     // Refresh Conversations
     if (btnRefreshConversations) {
       btnRefreshConversations.addEventListener('click', loadConversationsHistory);
@@ -282,6 +315,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    const btnSelectAllPastConvs = document.getElementById('btnSelectAllPastConvs');
+    const btnDeselectAllPastConvs = document.getElementById('btnDeselectAllPastConvs');
+
+    if (btnSelectAllPastConvs) {
+      btnSelectAllPastConvs.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.querySelectorAll('#pastConversationsContextList .past-conv-checkbox').forEach(c => c.checked = true);
+      });
+    }
+
+    if (btnDeselectAllPastConvs) {
+      btnDeselectAllPastConvs.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.querySelectorAll('#pastConversationsContextList .past-conv-checkbox').forEach(c => c.checked = false);
+      });
+    }
+
     if (btnModelMenu && modelMenuDropdown) {
       btnModelMenu.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -289,6 +339,90 @@ document.addEventListener('DOMContentLoaded', () => {
         if (plusMenuDropdown) plusMenuDropdown.classList.add('hidden');
       });
     }
+
+    // Text Formatting Toolbar Toggle & Formatting Actions
+    const btnToggleFormatToolbar = document.getElementById('btnToggleFormatToolbar');
+    const btnCloseFormatToolbar = document.getElementById('btnCloseFormatToolbar');
+    const formatToolbar = document.getElementById('formatToolbar');
+
+    function toggleFormatToolbar(show) {
+      if (!formatToolbar) return;
+      const isHidden = formatToolbar.classList.contains('hidden');
+      const shouldShow = show !== undefined ? show : isHidden;
+      if (shouldShow) {
+        formatToolbar.classList.remove('hidden');
+        if (btnToggleFormatToolbar) btnToggleFormatToolbar.classList.add('active-toggle');
+      } else {
+        formatToolbar.classList.add('hidden');
+        if (btnToggleFormatToolbar) btnToggleFormatToolbar.classList.remove('active-toggle');
+      }
+    }
+
+    if (btnToggleFormatToolbar) {
+      btnToggleFormatToolbar.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFormatToolbar();
+      });
+    }
+
+    if (btnCloseFormatToolbar) {
+      btnCloseFormatToolbar.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFormatToolbar(false);
+      });
+    }
+
+    // Handle Formatting Buttons Insertion into queryInput
+    document.querySelectorAll('#formatToolbar .fmt-btn[data-fmt]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const fmtType = btn.getAttribute('data-fmt');
+        const textarea = queryInput;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        const selectedText = textarea.value.substring(start, end);
+        let replacement = '';
+
+        switch (fmtType) {
+          case 'bold':
+            replacement = selectedText ? `**${selectedText}**` : '**bold text**';
+            break;
+          case 'italic':
+            replacement = selectedText ? `*${selectedText}*` : '*italic text*';
+            break;
+          case 'heading':
+            replacement = selectedText ? `### ${selectedText}` : '### Clinical Header\n';
+            break;
+          case 'bullet':
+            replacement = selectedText ? selectedText.split('\n').map(line => `- ${line}`).join('\n') : '- List item\n';
+            break;
+          case 'number':
+            replacement = selectedText ? selectedText.split('\n').map((line, idx) => `${idx + 1}. ${line}`).join('\n') : '1. List item\n';
+            break;
+          case 'quote':
+            replacement = selectedText ? selectedText.split('\n').map(line => `> ${line}`).join('\n') : '> Clinical Note: ';
+            break;
+          case 'code':
+            replacement = selectedText ? `\`${selectedText}\`` : '`lab_value`';
+            break;
+          case 'clear':
+            if (textarea.value && confirm('Clear all text in writing area?')) {
+              textarea.value = '';
+              textarea.focus();
+              return;
+            }
+            return;
+        }
+
+        textarea.setRangeText(replacement, start, end, 'select');
+        textarea.focus();
+      });
+    });
 
     // Close dropdowns when clicking outside
     document.addEventListener('click', () => {
@@ -502,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 4. View Switching
+  // 4. View & Subtab Switching
   function switchView(viewId) {
     if (viewId === 'viewConversations') {
       navBtnConversations.classList.add('active');
@@ -515,6 +649,47 @@ document.addEventListener('DOMContentLoaded', () => {
       viewPatients.classList.remove('hidden');
       viewConversations.classList.add('hidden');
       loadPatients();
+    }
+  }
+
+  function switchWorkbenchTab(tabName) {
+    const intakeBtn = document.getElementById('btnTabIntake') || btnTabIntake;
+    const outputBtn = document.getElementById('btnTabOutput') || btnTabOutput;
+    const intakeTab = document.getElementById('workbenchTabIntake') || workbenchTabIntake;
+    const outputTab = document.getElementById('workbenchTabOutput') || workbenchTabOutput;
+    const outputIndicator = document.getElementById('wtabOutputIndicator') || wtabOutputIndicator;
+
+    if (!intakeBtn || !outputBtn || !intakeTab || !outputTab) return;
+
+    if (tabName === 'output') {
+      intakeBtn.classList.remove('active');
+      outputBtn.classList.add('active');
+
+      intakeTab.classList.remove('active');
+      intakeTab.classList.add('hidden');
+      intakeTab.style.setProperty('display', 'none', 'important');
+
+      outputTab.classList.remove('hidden');
+      outputTab.classList.add('active');
+      outputTab.style.setProperty('display', 'block', 'important');
+
+      if (outputIndicator) outputIndicator.classList.add('hidden');
+
+      // If switching to output tab and no current job active, auto-load the most recent conversation
+      if (!currentJob && Array.isArray(conversationsCache) && conversationsCache.length > 0) {
+        loadConversationDetails(conversationsCache[0].id || conversationsCache[0].job_id);
+      }
+    } else {
+      outputBtn.classList.remove('active');
+      intakeBtn.classList.add('active');
+
+      outputTab.classList.remove('active');
+      outputTab.classList.add('hidden');
+      outputTab.style.setProperty('display', 'none', 'important');
+
+      intakeTab.classList.remove('hidden');
+      intakeTab.classList.add('active');
+      intakeTab.style.setProperty('display', 'block', 'important');
     }
   }
 
@@ -574,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       resetForm({ silent: true });
       switchView('viewConversations');
+      switchWorkbenchTab('intake');
       if (sidebarConversationSearch) sidebarConversationSearch.value = '';
       if (conversationSearchInput) conversationSearchInput.value = '';
       renderConversationsList();
@@ -636,6 +812,128 @@ document.addEventListener('DOMContentLoaded', () => {
     renderMainConversationsStrip(mainFiltered);
   }
 
+  function getAgentTagInfo(agentId) {
+    if (!agentId) {
+      return { label: 'AUTO', className: 'agent-tag agent-tag-auto' };
+    }
+    const id = String(agentId).toLowerCase();
+    if (id.includes('medication')) {
+      return { label: 'MEDICATION', className: 'agent-tag agent-tag-medication' };
+    }
+    if (id.includes('procedure')) {
+      return { label: 'PROCEDURE', className: 'agent-tag agent-tag-procedure' };
+    }
+    if (id.includes('diagnost') || id.includes('diagnose')) {
+      return { label: 'DIAGNOSE', className: 'agent-tag agent-tag-diagnostic' };
+    }
+    if (id.includes('general') || id.includes('factcheck')) {
+      return { label: 'GENERAL', className: 'agent-tag agent-tag-general' };
+    }
+    const label = String(agentId).replace(/_agent$/, '').replace(/_/g, ' ').toUpperCase();
+    return { label, className: 'agent-tag' };
+  }
+
+  function formatQueryDisplayTitle(query) {
+    if (!query) return 'Untitled query';
+    let str = query.trim();
+
+    // If query starts with patient context header, extract main query part
+    if (str.includes('--- SELECTED PATIENT CONTEXT ---')) {
+      const parts = str.split('--- SELECTED PATIENT CONTEXT ---');
+      str = parts[0].trim();
+    }
+    // Remove "55-year-old male patient (Peter)..." preamble if present to extract core topic
+    str = str.replace(/^\d+-year-old\s+(male|female)\s+patient\s*\([^)]*\)\s*(with\s+[^ presenting]*\s*)?(presenting\s+with\s*)?/i, '');
+    str = str.replace(/^Provide comprehensive clinical analysis.*$/im, '');
+    str = str.trim();
+
+    if (!str) str = query;
+    return truncateQuery(str, 48);
+  }
+
+  function groupConversationsForSidebar(list) {
+    const patientMap = {};
+    const unrelatedList = [];
+
+    list.forEach(job => {
+      let matchedPatient = null;
+      if (job.patient_id && Array.isArray(patientsCache)) {
+        matchedPatient = patientsCache.find(p => p.id === job.patient_id);
+      }
+      if (!matchedPatient && Array.isArray(patientsCache) && job.query) {
+        const qLower = job.query.toLowerCase();
+        matchedPatient = patientsCache.find(p => p.name && p.name.length > 2 && qLower.includes(p.name.toLowerCase()));
+      }
+
+      if (matchedPatient) {
+        const pid = matchedPatient.id;
+        if (!patientMap[pid]) {
+          patientMap[pid] = {
+            id: pid,
+            name: matchedPatient.name,
+            items: []
+          };
+        }
+        patientMap[pid].items.push(job);
+      } else {
+        unrelatedList.push(job);
+      }
+    });
+
+    const patientGroups = Object.values(patientMap);
+    const unrelatedByDate = groupConversations(unrelatedList);
+
+    return { patientGroups, unrelatedByDate };
+  }
+
+  function createSidebarConvItemElement(job, isPatientTree = false) {
+    const id = job.id || job.job_id || '';
+    const row = document.createElement('div');
+    row.className = 'sidebar-conv-item' + (id && id === activeConversationId ? ' active' : '') + (isPatientTree ? ' in-tree' : '');
+    row.dataset.id = id;
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    row.title = job.query || 'Conversation';
+
+    const tagInfo = getAgentTagInfo(job.agent_id);
+    const dateStr = formatConvDate(job.created_at);
+    const displayTitle = formatQueryDisplayTitle(job.query);
+    const hasDocs = conversationHasDocs(job);
+    const titlePrefix = isPatientTree ? '--- ' : '';
+
+    row.innerHTML = `
+      <span class="${docsDotClass(job)}" title="${hasDocs ? 'Documentation ready' : escapeHtml(job.status || 'pending')}"></span>
+      <div class="conv-text">
+        <span class="conv-title">${titlePrefix}${escapeHtml(displayTitle)}</span>
+        <span class="conv-meta"><span class="${tagInfo.className}">${escapeHtml(tagInfo.label)}</span>${dateStr ? `<span class="conv-date">· ${dateStr}</span>` : ''}</span>
+      </div>
+      <button type="button" class="btn-conv-delete" title="Delete conversation &amp; reports" aria-label="Delete conversation">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    `;
+
+    const open = () => {
+      if (id) loadConversationDetails(id);
+    };
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-conv-delete')) return;
+      open();
+    });
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        open();
+      }
+    });
+    row.querySelector('.btn-conv-delete').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (id) deleteConversation(id);
+    });
+
+    return row;
+  }
+
   function renderSidebarConversations(filtered, filterText) {
     if (!sidebarConversationsList) return;
 
@@ -651,10 +949,52 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const groups = groupConversations(filtered);
+    const { patientGroups, unrelatedByDate } = groupConversationsForSidebar(filtered);
     const frag = document.createDocumentFragment();
 
-    Object.entries(groups).forEach(([label, items]) => {
+    // 1. Render Patient Tree View Menu (expandable folders per patient)
+    if (patientGroups.length > 0) {
+      patientGroups.forEach(grp => {
+        if (!grp.items.length) return;
+
+        const groupWrapper = document.createElement('div');
+        groupWrapper.className = 'sidebar-patient-group tree-node';
+
+        const header = document.createElement('div');
+        header.className = 'patient-group-header tree-header';
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+
+        header.innerHTML = `
+          <div class="patient-group-title">
+            <i class="fa-solid fa-chevron-down group-toggle-icon"></i>
+            <i class="fa-solid fa-user-injured patient-icon"></i>
+            <span class="patient-name">${escapeHtml(grp.name)}</span>
+          </div>
+          <span class="patient-conv-count">${grp.items.length}</span>
+        `;
+
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'sidebar-patient-group-items tree-branch';
+
+        header.addEventListener('click', () => {
+          header.classList.toggle('collapsed');
+          itemsContainer.classList.toggle('collapsed');
+        });
+
+        grp.items.forEach(job => {
+          const row = createSidebarConvItemElement(job, true);
+          itemsContainer.appendChild(row);
+        });
+
+        groupWrapper.appendChild(header);
+        groupWrapper.appendChild(itemsContainer);
+        frag.appendChild(groupWrapper);
+      });
+    }
+
+    // 2. Render Unrelated Conversations (flat list by standard date section headers)
+    Object.entries(unrelatedByDate).forEach(([label, items]) => {
       if (!items.length) return;
       const groupLabel = document.createElement('div');
       groupLabel.className = 'sidebar-conv-group-label';
@@ -662,51 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
       frag.appendChild(groupLabel);
 
       items.forEach(job => {
-        const id = job.id || job.job_id || '';
-        const row = document.createElement('div');
-        row.className = 'sidebar-conv-item' + (id && id === activeConversationId ? ' active' : '');
-        row.dataset.id = id;
-        row.setAttribute('role', 'button');
-        row.tabIndex = 0;
-        row.title = job.query || 'Conversation';
-
-        const agentLabel = job.agent_id
-          ? String(job.agent_id).replace(/_agent$/, '').replace(/_/g, ' ')
-          : 'auto';
-        const dateStr = formatConvDate(job.created_at);
-        const title = truncateQuery(job.query || 'Untitled query', 48);
-        const hasDocs = conversationHasDocs(job);
-
-        row.innerHTML = `
-          <span class="${docsDotClass(job)}" title="${hasDocs ? 'Documentation ready' : escapeHtml(job.status || 'pending')}"></span>
-          <div class="conv-text">
-            <span class="conv-title">${escapeHtml(title)}</span>
-            <span class="conv-meta"><span>${escapeHtml(agentLabel)}</span>${dateStr ? `<span>· ${dateStr}</span>` : ''}</span>
-          </div>
-          <button type="button" class="btn-conv-delete" title="Delete conversation &amp; reports" aria-label="Delete conversation">
-            <i class="fa-solid fa-trash-can"></i>
-          </button>
-        `;
-
-        const open = () => {
-          if (id) loadConversationDetails(id);
-        };
-        row.addEventListener('click', (e) => {
-          if (e.target.closest('.btn-conv-delete')) return;
-          open();
-        });
-        row.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            open();
-          }
-        });
-        row.querySelector('.btn-conv-delete').addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (id) deleteConversation(id);
-        });
-
+        const row = createSidebarConvItemElement(job, false);
         frag.appendChild(row);
       });
     });
@@ -777,7 +1073,8 @@ document.addEventListener('DOMContentLoaded', () => {
       currentJob = job;
       activeConversationId = jobId;
       switchView('viewConversations');
-      displayJobResults(job);
+      await displayJobResults(job);
+      switchWorkbenchTab('output');
       if (job.query) queryInput.value = job.query;
       renderConversationsList();
       showToast(`Loaded: "${truncateQuery(job.query || jobId, 48)}"`, 'info');
@@ -867,6 +1164,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
         renderPlusMenuPatients();
+        renderConversationsList();
       }
     } catch (err) {
       console.warn('Failed to load patients:', err);
@@ -938,7 +1236,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPlusMenuPatients();
     showToast(`Using ${patient.name} as chat context.`, 'success');
   }
-
   function clearSelectedPatient(opts = {}) {
     selectedPatient = null;
     updateSelectedPatientChip();
@@ -952,6 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedPatientChip.classList.add('hidden');
       if (selectedPatientNameEl) selectedPatientNameEl.textContent = '—';
       if (selectedPatientMetaEl) selectedPatientMetaEl.textContent = '';
+      renderPastConversationsContextPicker();
       return;
     }
 
@@ -963,6 +1261,59 @@ document.addEventListener('DOMContentLoaded', () => {
     if (selectedPatientNameEl) selectedPatientNameEl.textContent = selectedPatient.name || 'Unnamed patient';
     if (selectedPatientMetaEl) selectedPatientMetaEl.textContent = bits.join(' · ');
     selectedPatientChip.classList.remove('hidden');
+
+    renderPastConversationsContextPicker();
+  }
+
+  function renderPastConversationsContextPicker() {
+    const listEl = document.getElementById('pastConversationsContextList');
+    if (!listEl) return;
+
+    if (!selectedPatient) {
+      listEl.innerHTML = '';
+      return;
+    }
+
+    const patientConvs = (conversationsCache || []).filter(c => {
+      if (c.patient_id === selectedPatient.id) return true;
+      if (c.query && selectedPatient.name && c.query.toLowerCase().includes(selectedPatient.name.toLowerCase())) return true;
+      return false;
+    });
+
+    if (patientConvs.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.75rem; padding:0.25rem 0;">No prior conversations for this patient yet.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    patientConvs.forEach(conv => {
+      const item = document.createElement('div');
+      item.className = 'past-conv-item';
+
+      const tagInfo = getAgentTagInfo(conv.agent_id);
+      const dateStr = formatConvDate(conv.created_at);
+      const title = formatQueryDisplayTitle(conv.query);
+
+      item.innerHTML = `
+        <input type="checkbox" id="pastConv_${conv.id}" class="past-conv-checkbox" value="${conv.id}" checked>
+        <label for="pastConv_${conv.id}" class="past-conv-label">
+          <span class="past-conv-title">${escapeHtml(title)}</span>
+          <span class="past-conv-meta">
+            <span class="${tagInfo.className}">${escapeHtml(tagInfo.label)}</span>
+            <span class="past-conv-date">${dateStr}</span>
+          </span>
+        </label>
+      `;
+
+      item.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'LABEL') {
+          const chk = item.querySelector('.past-conv-checkbox');
+          if (chk) chk.checked = !chk.checked;
+        }
+      });
+
+      listEl.appendChild(item);
+    });
   }
 
   /**
@@ -1044,6 +1395,34 @@ document.addEventListener('DOMContentLoaded', () => {
       if (patientText) {
         parts.push(`--- SELECTED PATIENT CONTEXT ---\n${patientText}`);
       }
+
+      // Past selected conversations context for this patient
+      const checkedBoxes = document.querySelectorAll('#pastConversationsContextList .past-conv-checkbox:checked');
+      if (checkedBoxes.length > 0) {
+        const historyParts = [];
+        checkedBoxes.forEach(chk => {
+          const convId = chk.value;
+          const conv = (conversationsCache || []).find(c => c.id === convId);
+          if (conv) {
+            const dateStr = formatConvDate(conv.created_at);
+            const title = formatQueryDisplayTitle(conv.query);
+            let summary = '';
+            if (conv.result && typeof conv.result === 'object') {
+              if (conv.result.patient_report) summary = conv.result.patient_report;
+              else if (conv.result.summary) summary = conv.result.summary;
+              else if (conv.result.diagnostic) summary = JSON.stringify(conv.result.diagnostic);
+            }
+            if (!summary && loadedReportTexts && loadedReportTexts['patient']) {
+              summary = loadedReportTexts['patient'];
+            }
+            if (!summary) summary = conv.query;
+            historyParts.push(`• [${dateStr}] ${title}:\n${summary.substring(0, 1000)}`);
+          }
+        });
+        if (historyParts.length > 0) {
+          parts.push(`--- PRIOR CONVERSATION HISTORY (${selectedPatient.name}) ---\n${historyParts.join('\n\n')}`);
+        }
+      }
     }
 
     if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
@@ -1054,10 +1433,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return parts.length ? parts.join('\n\n') : null;
   }
 
-  /**
-   * Build a small markdown audit of the context assembled for the agent.
-   * Saved server-side as context_report.md with the analysis artifacts.
-   */
   function buildContextReportMarkdown(opts = {}) {
     const finalQuery = opts.finalQuery || '';
     const model = opts.model || (modelSelect && modelSelect.value) || 'unknown';
@@ -1713,6 +2088,7 @@ document.addEventListener('DOMContentLoaded', () => {
       web_search: webSearchToggle.checked,
       timeout: 300,
       context_report: contextReportMd,
+      patient_id: selectedPatient ? selectedPatient.id : null,
     };
 
     const targetAgentOverride = agentSelect.value;
@@ -1745,6 +2121,7 @@ document.addEventListener('DOMContentLoaded', () => {
       filesContainer.classList.add('hidden');
       reportPreviewCard.classList.add('hidden');
       jobProgressCard.classList.remove('hidden');
+      switchWorkbenchTab('output');
 
       jobIdTag.textContent = `Job ID: ${data.job_id}`;
       jobStatusHeading.textContent = 'Job Submitted — Processing...';
@@ -1815,6 +2192,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function loadReportText(tabKey, filePath) {
+    if (!filePath) return;
+    const cleanPath = String(filePath).replace(/^\/+/, '');
+    try {
+      const res = await fetch(`/${cleanPath}`);
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.trim()) {
+          loadedReportTexts[tabKey] = text;
+        }
+      } else {
+        console.warn(`Could not fetch report ${cleanPath}: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.warn(`Could not load report file ${cleanPath}:`, err);
+    }
+  }
+
   // 11. Display Job Results & Artifacts
   async function displayJobResults(job) {
     placeholderState.classList.add('hidden');
@@ -1841,10 +2236,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const filePath = activeFiles[fileKey];
         if (!filePath) return;
 
-        const fileName = filePath.split('/').pop();
+        const cleanPath = String(filePath).replace(/^\/+/, '');
+        const fileName = cleanPath.split('/').pop();
         const btn = document.createElement('a');
         btn.className = 'file-card-btn';
-        btn.href = `/${filePath}`;
+        btn.href = `/${cleanPath}`;
         btn.target = '_blank';
 
         const isPdf = fileName.endsWith('.pdf');
@@ -1869,16 +2265,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     reportPreviewCard.classList.remove('hidden');
 
-    await loadReportText('patient', activeFiles['patient_report']);
-    await loadReportText('practitioner', activeFiles['practitioner_report']);
-    await loadReportText('summary', activeFiles['summary'] || activeFiles['medication_summary']);
-    await loadReportText('context', activeFiles['context_report']);
+    const patientPath = activeFiles['patient_report'] || activeFiles['markdown_report'] || activeFiles['summary'];
+    const practitionerPath = activeFiles['practitioner_report'] || activeFiles['markdown_report'] || activeFiles['summary'];
+    const summaryPath = activeFiles['summary'] || activeFiles['medication_summary'] || activeFiles['markdown_report'];
+    const contextPath = activeFiles['context_report'];
 
-    if (job.result) {
+    await loadReportText('patient', patientPath);
+    await loadReportText('practitioner', practitionerPath);
+    await loadReportText('summary', summaryPath);
+    await loadReportText('context', contextPath);
+
+    // DB JSON inline result fallbacks if static file text missing
+    if (job.result && typeof job.result === 'object') {
+      if (!loadedReportTexts['patient']) {
+        if (job.result.patient_report) loadedReportTexts['patient'] = job.result.patient_report;
+        else if (job.result.summary) loadedReportTexts['patient'] = job.result.summary;
+      }
+      if (!loadedReportTexts['practitioner']) {
+        if (job.result.practitioner_report) loadedReportTexts['practitioner'] = job.result.practitioner_report;
+        else if (job.result.summary) loadedReportTexts['practitioner'] = job.result.summary;
+      }
       loadedReportTexts['json'] = JSON.stringify(job.result, null, 2);
     }
 
-    // Prefer Context tab when patient/doc context was part of the run and no patient report exists yet.
     const preferredTab = loadedReportTexts['context'] && !loadedReportTexts['patient']
       ? 'context'
       : 'patient';
@@ -1916,9 +2325,15 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       markdownViewer.innerHTML = marked.parse(text);
       
-      const filePath = activeFiles[`${tabKey}_report`] || activeFiles[tabKey];
+      const pdfKey = `${tabKey}_report_pdf`;
+      const mdKey = `${tabKey}_report`;
+      const filePath = activeFiles[pdfKey] || activeFiles['pdf_report'] || activeFiles[mdKey] || activeFiles[tabKey];
+
       if (filePath) {
-        btnDownloadCurrent.href = `/${filePath}`;
+        const cleanPath = String(filePath).replace(/^\/+/, '');
+        btnDownloadCurrent.href = `/${cleanPath}`;
+        btnDownloadCurrent.target = '_blank';
+        btnDownloadCurrent.innerHTML = `<i class="fa-solid fa-file-pdf"></i> View / Download PDF`;
         btnDownloadCurrent.style.display = 'inline-flex';
       } else {
         btnDownloadCurrent.style.display = 'none';
@@ -1963,6 +2378,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       routedAgentName.textContent = data.agent_name || data.agent_id;
       routedAgentDesc.textContent = `Query classified for ${data.agent_id}. Click "Start Analysis Run" to invoke reasoning pipeline.`;
+      routeResultCard.classList.remove('hidden');
+      switchWorkbenchTab('output');
 
       showToast(`Routed to: ${data.agent_name}`, 'success');
 
