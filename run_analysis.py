@@ -4,12 +4,31 @@ Unified Analysis Runner for Medical AI Agents
 Orchestrates multiple medical analysis agents with a common interface.
 """
 
+import builtins
+import errno
 import os
 import sys
 import json
 import argparse
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, List
+
+
+def print(*args: Any, **kwargs: Any) -> None:  # noqa: A001 — CLI-safe module print
+    """Print for CLI banners without aborting when stdout is a closed pipe.
+
+    FastAPI/uvicorn background jobs often have a closed client pipe; a normal
+    ``print()`` then raises ``BrokenPipeError`` and fails the analysis. Swallow
+    EPIPE so analysis can finish and still write report files.
+    """
+    try:
+        builtins.print(*args, **kwargs)
+    except BrokenPipeError:
+        return
+    except OSError as exc:
+        if getattr(exc, "errno", None) in (errno.EPIPE, 32):
+            return
+        raise
 
 # Optional diagnostics
 from check_llms import print_llm_status
@@ -607,7 +626,7 @@ class AgentOrchestrator:
     ) -> Tuple[Any, Dict[str, str]]:
         """Run the Medical Diagnostic Analyzer"""
         print("=" * 80)
-        print("🩺 Medical Diagnostic Analyzer - Bayesian Hybrid Pipeline")
+        print("🩺 Medical Diagnostic Analyzer - LLM Clinical Differential")
         print("=" * 80)
         print()
 
@@ -622,7 +641,7 @@ class AgentOrchestrator:
         )
 
         print(f"📋 Investigating symptoms from query...")
-        print("⏳ Running 5-level diagnostic protocol...")
+        print("⏳ Running 5-level diagnostic protocol (free-form clinical reasoning)...")
         print()
 
         # Run analysis
@@ -2039,17 +2058,24 @@ Examples:
             "claude-opus",
             "openai",
             "ollama",
+            "grok-4.5",
             "grok-4.3",
+            "gemini-vertex",
+            "claude-vertex",
+            "deepseek",
+            "deepseek-v4-flash",
+            "deepseek-v4-pro",
+            "deepseek-chat",
+            "deepseek-reasoner",
             "grok-4-1-fast",
             "grok-4-1-code",
             "grok-4-1-reasoning",
         ],
         help=(
             "LLM provider to use (default: claude-sonnet). Options: "
-            "claude-sonnet (Sonnet 4.6), claude-opus (Opus 4.7), openai (GPT-4o), "
-            "ollama (local), grok-4.3 (current xAI flagship), "
-            "grok-4-1-fast, grok-4-1-code, grok-4-1-reasoning "
-            "(legacy, mapped to grok-4.3, retiring May 15 2026)"
+            "claude-sonnet, claude-opus, openai, ollama, grok-4.5, grok-4.3, "
+            "gemini-vertex, claude-vertex, deepseek-v4-flash, deepseek-v4-pro, "
+            "deepseek-chat, deepseek-reasoner"
         ),
     )
 

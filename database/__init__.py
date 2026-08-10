@@ -23,17 +23,24 @@ from .config import (
     is_db_enabled,
     reset_engine_cache,
 )
-from .models import Base, PatientData, Report, ReportFile, Subject, User
+from .models import Base, Conversation, PatientData, Report, ReportFile, Subject, User
 from .repository import (
+    backfill_conversations_from_reports,
+    conversation_to_job_dict,
+    create_conversation,
     create_patient_data,
+    delete_conversation_and_artifacts,
+    get_conversation,
     get_or_create_subject,
     get_report,
+    list_conversations,
     list_patient_data,
     list_reports,
     list_reports_by_subject_name,
     list_subjects,
     normalize_subject,
     persist_report,
+    update_conversation,
 )
 from .seed import DEVELOPER_USER_ID, DEVELOPER_USERNAME, seed_developer_user
 from .session import (
@@ -48,13 +55,19 @@ __all__ = [
     "DEVELOPER_USERNAME",
     "DEVELOPER_USER_ID",
     "Base",
+    "Conversation",
     "PatientData",
     "Report",
     "ReportFile",
     "Subject",
     "User",
+    "backfill_conversations_from_reports",
+    "conversation_to_job_dict",
+    "create_conversation",
     "create_patient_data",
+    "delete_conversation_and_artifacts",
     "ensure_initialized",
+    "get_conversation",
     "get_current_user",
     "get_database_url",
     "get_engine",
@@ -63,6 +76,7 @@ __all__ = [
     "get_session_factory",
     "init_db",
     "is_db_enabled",
+    "list_conversations",
     "list_patient_data",
     "list_reports",
     "list_reports_by_subject_name",
@@ -73,4 +87,5 @@ __all__ = [
     "reset_initialized_flag",
     "seed_developer_user",
     "session_scope",
+    "update_conversation",
 ]

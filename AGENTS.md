@@ -56,7 +56,7 @@ pending.md                   # Known gaps and planned work
 |-----------|---------------------|--------------|
 | `medication_agent` | `LangChainMedicationAnalyzer` | Drug pharmacology, interactions, safety, monitoring |
 | `procedure_agent` | `LangChainMedicalReasoningAgent` | Organ-by-organ procedure analysis, peri-op care |
-| `diagnostic_agent` | `MedicalDiagnosticAgent` | Bayesian + LLM symptom-to-condition pipeline |
+| `diagnostic_agent` | `MedicalDiagnosticAgent` | Diagnostic Specialist: free-form LLM differential (relative likelihood + severity, cannot-miss); not multi-perspective fact-check |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
 
 All four agents extend `LangChainAgentBase` and share cost tracking, audit
@@ -86,7 +86,7 @@ Helpers (`langchain_agents/base.py`):
 
 Each agent emits a **patient report** (Layers 1-2) and a **practitioner report**
 (Layers 1-3). Critical safety content (e.g. medication black-box warnings,
-diagnostic Bayesian posteriors) is placed in the deterministic appendix so it is
+diagnostic likelihood estimates) is placed in the deterministic appendix so it is
 guaranteed present regardless of LLM phrasing.
 
 ---
@@ -255,6 +255,8 @@ uv run python -m pytest tests/test_langchain_agents.py -v
 | `gemini-vertex` | `gemini-2.5-pro` | ~$2 / $12 |
 | `claude-vertex` | `claude-sonnet-4-6` (via Vertex) | $3 / $15 |
 | `openai` | `gpt-4o` | $2.50 / $10 |
+| `deepseek-v4-flash` / `deepseek` | `deepseek-v4-flash` | $0.14 / $0.28 |
+| `deepseek-v4-pro` | `deepseek-v4-pro` | $0.435 / $0.87 |
 | `ollama` | `llama2:13b` | local |
 
 Default routing model: `grok-4.5` (set in `router.py:DEFAULT_ROUTING_MODEL`).

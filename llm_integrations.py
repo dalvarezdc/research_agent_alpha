@@ -162,6 +162,12 @@ class LLMProvider(Enum):
     CLAUDE_VERTEX = "claude-vertex"
     CLAUDE_VERTEX_OPUS = "claude-vertex-opus"
     GEMINI_VERTEX = "gemini-vertex"
+    # DeepSeek providers
+    DEEPSEEK = "deepseek"
+    DEEPSEEK_V4_FLASH = "deepseek-v4-flash"
+    DEEPSEEK_V4_PRO = "deepseek-v4-pro"
+    DEEPSEEK_CHAT = "deepseek-chat"
+    DEEPSEEK_REASONER = "deepseek-reasoner"
 
 
 # Reasoning effort levels mapped to a Gemini "thinking_budget" (tokens).
@@ -508,6 +514,145 @@ class OpenAILLM(LLMInterface):
 
     def is_available(self) -> bool:
         """Check if OpenAI is available"""
+        if self.client is None:
+            return False
+        try:
+            test_response, _ = self.generate_response("Test", "Respond with 'OK'")
+            return "OK" in test_response
+        except Exception:
+            return False
+
+
+class DeepSeekLLM(LLMInterface):
+    """DeepSeek LLM implementation (OpenAI-compatible API)"""
+
+    _MODEL_MAX_COMPLETION_TOKENS = {
+        "deepseek-v4-flash": 8_192,
+        "deepseek-v4-pro": 8_192,
+        "deepseek-chat": 8_192,
+        "deepseek-reasoner": 8_192,
+    }
+
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        if ChatOpenAI is None:
+            raise ImportError(
+                "ChatOpenAI not available. Install langchain-openai: pip install langchain-openai"
+            )
+
+        api_key = config.api_key or os.getenv("DEEPSEEK_API_KEY")
+        base_url = config.base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+
+        if not api_key:
+            self.logger.warning("DEEPSEEK_API_KEY not set")
+
+        ceiling = self._MODEL_MAX_COMPLETION_TOKENS.get(config.model)
+        effective_max_tokens = config.max_tokens
+        if ceiling is not None and effective_max_tokens > ceiling:
+            self.logger.info(
+                "Clamping max_tokens for %s from %d to model ceiling %d",
+                config.model,
+                effective_max_tokens,
+                ceiling,
+            )
+            effective_max_tokens = ceiling
+
+        try:
+            self.client = ChatOpenAI(
+                openai_api_key=api_key,
+                openai_api_base=base_url,
+                model=config.model,
+                temperature=config.temperature,
+                max_tokens=effective_max_tokens,
+                timeout=config.timeout,
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Failed to initialize DeepSeek client: {e}"
+            )
+            self.client = None
+
+    @retry_with_backoff(max_retries=1, initial_delay=1.0, backoff_factor=2.0)
+    def generate_response(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Tuple[str, TokenUsage]:
+        """Generate response using DeepSeek API"""
+        if self.client is None:
+            raise RuntimeError("DeepSeek client not initialized")
+
+        try:
+            try:
+                from cost_tracker import record_model_usage
+
+                record_model_usage(self.config.model)
+            except Exception:
+                pass
+
+            base_system_prompt = "You are a professional assistant. Respond in a formal, concise, and objective manner without humor or casual language."
+            if system_prompt:
+                full_system_prompt = f"{base_system_prompt}\n\n{system_prompt}"
+            else:
+                full_system_prompt = base_system_prompt
+
+            professional_prompt = f"Please answer this in a professional tone: {prompt}"
+
+            messages = []
+            messages.append(SystemMessage(content=full_system_prompt))
+            messages.append(HumanMessage(content=professional_prompt))
+
+            response = self.client.invoke(messages)
+
+            token_usage = TokenUsage()
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                token_usage.input_tokens = response.usage_metadata.get(
+                    "prompt_tokens", 0
+                )
+                token_usage.output_tokens = response.usage_metadata.get(
+                    "completion_tokens", 0
+                )
+                token_usage.total_tokens = response.usage_metadata.get(
+                    "total_tokens", 0
+                )
+            elif hasattr(response, "response_metadata") and response.response_metadata:
+                usage = response.response_metadata.get("token_usage", {})
+                token_usage.input_tokens = usage.get("prompt_tokens", 0)
+                token_usage.output_tokens = usage.get("completion_tokens", 0)
+                token_usage.total_tokens = usage.get("total_tokens", 0)
+
+            return response.content, token_usage
+
+        except Exception as e:
+            self.logger.error(f"DeepSeek API error: {str(e)}")
+            raise
+
+    def medical_analysis(
+        self, medical_input: Dict[str, Any], stage: str
+    ) -> Dict[str, Any]:
+        """Specialized medical analysis using DeepSeek"""
+        system_prompt = """You are a medical reasoning AI that provides systematic analysis
+        of medical procedures with focus on organ-specific effects and evidence-based recommendations."""
+
+        prompt = f"""
+        Analyze this medical procedure:
+        Input: {medical_input}
+        Stage: {stage}
+
+        Provide structured analysis with confidence scores.
+        """
+
+        response, token_usage = self.generate_response(prompt, system_prompt)
+
+        return {
+            "analysis": response,
+            "confidence": 0.75,
+            "sources_needed": [],
+            "token_usage": token_usage,
+        }
+
+    def is_available(self) -> bool:
+        """Check if DeepSeek is available"""
         if self.client is None:
             return False
         try:
@@ -1070,6 +1215,14 @@ class LLMManager:
                     self.providers[config.provider] = ClaudeVertexLLM(config)
                 elif config.provider == LLMProvider.GEMINI_VERTEX:
                     self.providers[config.provider] = GeminiVertexLLM(config)
+                elif config.provider in [
+                    LLMProvider.DEEPSEEK,
+                    LLMProvider.DEEPSEEK_V4_FLASH,
+                    LLMProvider.DEEPSEEK_V4_PRO,
+                    LLMProvider.DEEPSEEK_CHAT,
+                    LLMProvider.DEEPSEEK_REASONER,
+                ]:
+                    self.providers[config.provider] = DeepSeekLLM(config)
 
                 self.logger.info(f"Initialized {config.provider.value} provider")
 
@@ -1289,6 +1442,18 @@ def create_llm_manager(
             temperature=0.1,
             reasoning_effort=DEFAULT_REASONING_EFFORT,
         ))
+    elif primary_provider in ("deepseek", "deepseek-v4-flash", "deepseek-chat"):
+        configs.append(LLMConfig(
+            provider=LLMProvider.DEEPSEEK_V4_FLASH,
+            model="deepseek-v4-flash",
+            temperature=0.1,
+        ))
+    elif primary_provider in ("deepseek-v4-pro", "deepseek-reasoner"):
+        configs.append(LLMConfig(
+            provider=LLMProvider.DEEPSEEK_V4_PRO,
+            model="deepseek-v4-pro",
+            temperature=0.1,
+        ))
 
     # Apply explicit model / reasoning_effort overrides to the PRIMARY config.
     if configs:
@@ -1378,6 +1543,18 @@ def create_llm_manager(
                 temperature=0.1,
                 reasoning_effort=DEFAULT_REASONING_EFFORT,
             ))
+        elif provider in ("deepseek", "deepseek-v4-flash", "deepseek-chat"):
+            configs.append(LLMConfig(
+                provider=LLMProvider.DEEPSEEK_V4_FLASH,
+                model="deepseek-v4-flash",
+                temperature=0.1,
+            ))
+        elif provider in ("deepseek-v4-pro", "deepseek-reasoner"):
+            configs.append(LLMConfig(
+                provider=LLMProvider.DEEPSEEK_V4_PRO,
+                model="deepseek-v4-pro",
+                temperature=0.1,
+            ))
 
     return LLMManager(configs)
 
@@ -1395,6 +1572,11 @@ def get_available_models() -> dict[str, str]:
         "claude-opus-4-7": "claude-opus",
         "claude-sonnet-4-6": "claude-sonnet",
         "claude-haiku-4-5": "claude-sonnet",   # cheapest Claude, maps to sonnet provider
+        # ── OpenAI ────────────────────────────────────────────────────────────
+        "gpt-4o": "openai",
+        "gpt-4o-mini": "openai",
+        "gpt-4-turbo": "openai",
+        "gpt-4-turbo-preview": "openai",
         # ── xAI (Grok) — current ──────────────────────────────────────────────
         "grok-4.5": "grok-4.5",           # current flagship (default)
         "grok-4.3": "grok-4.3",           # previous flagship
@@ -1406,6 +1588,11 @@ def get_available_models() -> dict[str, str]:
         "claude-opus-4-8-vertex": "claude-vertex-opus",
         "claude-sonnet-4-6-vertex": "claude-vertex",
         "claude-opus-4-7-vertex": "claude-vertex-opus",
+        # ── DeepSeek — current ───────────────────────────────────────────────
+        "deepseek-v4-flash": "deepseek-v4-flash",
+        "deepseek-v4-pro": "deepseek-v4-pro",
+        "deepseek-chat": "deepseek-v4-flash",
+        "deepseek-reasoner": "deepseek-v4-pro",
     }
 
 
@@ -1419,6 +1606,11 @@ MODEL_METADATA: dict[str, dict[str, str]] = {
     "claude-opus-4-7": {"supplier": "Anthropic", "release_date": "2026-03-01"},
     "claude-sonnet-4-6": {"supplier": "Anthropic", "release_date": "2026-02-01"},
     "claude-haiku-4-5": {"supplier": "Anthropic", "release_date": "2025-10-01"},
+    # ── OpenAI ────────────────────────────────────────────────────────────────
+    "gpt-4o": {"supplier": "OpenAI", "release_date": "2026-01-01"},
+    "gpt-4o-mini": {"supplier": "OpenAI", "release_date": "2026-01-01"},
+    "gpt-4-turbo": {"supplier": "OpenAI", "release_date": "2026-01-01"},
+    "gpt-4-turbo-preview": {"supplier": "OpenAI", "release_date": "2026-01-01"},
     # ── xAI (Grok) ────────────────────────────────────────────────────────────
     "grok-4.5": {"supplier": "xAI", "release_date": "2026-07-01"},
     "grok-4.3": {"supplier": "xAI", "release_date": "2026-01-15"},
@@ -1430,6 +1622,11 @@ MODEL_METADATA: dict[str, dict[str, str]] = {
     "claude-opus-4-8-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-05-01"},
     "claude-sonnet-4-6-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-02-01"},
     "claude-opus-4-7-vertex": {"supplier": "Google Vertex (Anthropic)", "release_date": "2026-03-01"},
+    # ── DeepSeek ──────────────────────────────────────────────────────────────
+    "deepseek-v4-flash": {"supplier": "DeepSeek", "release_date": "2026-07-01"},
+    "deepseek-v4-pro": {"supplier": "DeepSeek", "release_date": "2026-07-01"},
+    "deepseek-chat": {"supplier": "DeepSeek", "release_date": "2026-07-01"},
+    "deepseek-reasoner": {"supplier": "DeepSeek", "release_date": "2026-07-01"},
 }
 
 # Models older than this many days are treated as deprecated.
@@ -1583,12 +1780,13 @@ def call_model(model_name: str, messages: list[dict[str, str]]) -> str:
     with tracer.start_as_current_span("llm.call") as span:
         span.set_attribute("llm.model_name", model_name)
         span.set_attribute("llm.provider", provider_name)
-        span.set_attribute("llm.input_messages", str(messages)[:2000])
+        span.set_attribute("openinference.span.kind", "LLM")
+        span.set_attribute("input.value", str(messages)[:2000])
         try:
             response_text, token_usage = llm_provider.generate_response(
                 prompt=user_prompt, system_prompt=system_prompt
             )
-            span.set_attribute("llm.output.value", response_text[:2000])
+            span.set_attribute("output.value", response_text[:2000])
             if token_usage:
                 span.set_attribute("llm.token_count.prompt", token_usage.input_tokens)
                 span.set_attribute(

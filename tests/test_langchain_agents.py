@@ -81,7 +81,7 @@ def test_langchain_procedure_agent(monkeypatch):
         # The layered patient/practitioner build issues an extra plain-language
         # call; return markdown for it rather than consuming a JSON response.
         if kwargs.get("audit_step") == "procedure_layering":
-            return "## ✅ Conclusions\nHydrate.\n\n## 🧠 The Reasoning\nContrast affects kidneys."
+            return "## ✅ Report Summary\nHydrate.\n\n## 🧠 The Reasoning\nContrast affects kidneys."
         return next(responses)
 
     monkeypatch.setattr(agent, "_call_llm", _proc_call)
@@ -150,7 +150,7 @@ def test_langchain_medication_agent(monkeypatch):
 
     def _med_call(*args, **kwargs):
         if kwargs.get("audit_step") == "medication_layering":
-            return "## ✅ Conclusions\nTake with food.\n\n## 🧠 The Reasoning\nReduces GI upset."
+            return "## ✅ Report Summary\nTake with food.\n\n## 🧠 The Reasoning\nReduces GI upset."
         return response
 
     monkeypatch.setattr(agent, "_call_llm", _med_call)
@@ -567,7 +567,7 @@ def test_phase5_produces_layered_documents(monkeypatch):
 
     agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
     monkeypatch.setattr(agent, "_call_llm",
-                        lambda *a, **k: "## ✅ Conclusions\nDo X.\n\n## 🧠 The Reasoning\nBecause Y.")
+                        lambda *a, **k: "## 🎯 Conclusions\nDo X.\n\n## 🧠 The Reasoning\nBecause Y.")
 
     perspectives = {
         "mainstream": {"findings": "f", "recommendations": ["r"],
@@ -591,18 +591,18 @@ def test_phase5_produces_layered_documents(monkeypatch):
     assert "Two large RCTs" in practitioner
     assert "RR 0.70" not in patient
     assert "Statistical Appendix" not in patient
-    # Both keep the plain-language conclusions layer.
-    assert "Conclusions" in patient and "Conclusions" in practitioner
+    # Both keep the plain-language conclusions/summary layer.
+    assert ("Conclusions" in patient or "Report Summary" in patient) and ("Conclusions" in practitioner or "Report Summary" in practitioner)
 
 
 def test_phase5_layer_ordering(monkeypatch):
-    """Conclusions precede Reasoning, which precedes the Statistical Appendix."""
+    """Conclusions/Summary precede Reasoning, which precedes the Statistical Appendix."""
     from langchain_agents import LangChainMedicalFactChecker
     from langchain_agents.factcheck_agent import PerspectiveLens
 
     agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
     monkeypatch.setattr(agent, "_call_llm",
-                        lambda *a, **k: "## ✅ Conclusions\nC.\n\n## 🧠 The Reasoning\nR.")
+                        lambda *a, **k: "## 🎯 Conclusions\nC.\n\n## 🧠 The Reasoning\nR.")
 
     perspectives = {
         "mainstream": {"findings": "f", "recommendations": [], "key_insight": "",
@@ -613,7 +613,8 @@ def test_phase5_layer_ordering(monkeypatch):
         phase2_content={}, perspectives=perspectives,
     )
     doc = result.content["practitioner_layered"]
-    assert doc.index("Conclusions") < doc.index("Reasoning") < doc.index("Statistical Appendix")
+    first_idx = min(doc.index("Conclusions") if "Conclusions" in doc else 9999, doc.index("Report Summary") if "Report Summary" in doc else 9999)
+    assert first_idx < doc.index("Reasoning") < doc.index("Statistical Appendix")
 
 
 def test_phase5_verification_guard_warns_on_dropped_insight(monkeypatch, caplog):
@@ -624,7 +625,7 @@ def test_phase5_verification_guard_warns_on_dropped_insight(monkeypatch, caplog)
 
     agent = LangChainMedicalFactChecker(enable_logging=False, interactive=False)
     # LLM output that omits the unique key_insight entirely.
-    monkeypatch.setattr(agent, "_call_llm", lambda *a, **k: "## ✅ Conclusions\nUnrelated text.")
+    monkeypatch.setattr(agent, "_call_llm", lambda *a, **k: "## 🎯 Conclusions\nUnrelated text.")
 
     perspectives = {
         "mainstream": {"findings": "f", "recommendations": [],
@@ -674,7 +675,7 @@ def test_base_build_statistical_appendix_empty():
 
 def test_base_build_layered_report_patient_omits_appendix():
     agent = _make_base_agent()
-    body = "## ✅ Conclusions\nC.\n\n## 🧠 The Reasoning\nR."
+    body = "## 🎯 Conclusions\nC.\n\n## 🧠 The Reasoning\nR."
     appendix = "## 📊 Statistical Appendix\nStats here."
     patient, practitioner = agent._build_layered_report(
         conclusions_and_reasoning=body, appendix=appendix,
@@ -683,12 +684,12 @@ def test_base_build_layered_report_patient_omits_appendix():
     assert "Statistical Appendix" not in patient
     assert "practitioner report" in patient.lower()  # pointer present
     # Both keep the conclusions/reasoning layers.
-    assert "Conclusions" in patient and "Conclusions" in practitioner
+    assert ("Conclusions" in patient or "Report Summary" in patient) and ("Conclusions" in practitioner or "Report Summary" in practitioner)
 
 
 def test_base_build_layered_report_no_appendix_identical():
     agent = _make_base_agent()
-    body = "## ✅ Conclusions\nC."
+    body = "## ✅ Report Summary\nC."
     patient, practitioner = agent._build_layered_report(
         conclusions_and_reasoning=body, appendix="",
     )
@@ -746,7 +747,7 @@ def test_medication_statistical_appendix_contains_grading(monkeypatch):
 
     def _call(*a, **k):
         if k.get("audit_step") == "medication_layering":
-            return "## ✅ Conclusions\nc\n\n## 🧠 The Reasoning\nr"
+            return "## ✅ Report Summary\nc\n\n## 🧠 The Reasoning\nr"
         return med_json
 
     monkeypatch.setattr(agent, "_call_llm", _call)
@@ -780,7 +781,7 @@ def test_procedure_patient_report_has_no_stats(monkeypatch):
 
     def _call(*a, **k):
         if k.get("audit_step") == "procedure_layering":
-            return "## ✅ Conclusions\nHydrate.\n\n## 🧠 The Reasoning\nKidneys at risk."
+            return "## ✅ Report Summary\nHydrate.\n\n## 🧠 The Reasoning\nKidneys at risk."
         return next(responses)
 
     monkeypatch.setattr(agent, "_call_llm", _call)
@@ -816,7 +817,7 @@ def test_procedure_collects_references(monkeypatch):
 
     def _call(*a, **k):
         if k.get("audit_step") == "procedure_layering":
-            return "## ✅ Conclusions\nc\n\n## 🧠 The Reasoning\nr"
+            return "## ✅ Report Summary\nc\n\n## 🧠 The Reasoning\nr"
         return next(responses)
 
     monkeypatch.setattr(agent, "_call_llm", _call)
@@ -846,7 +847,7 @@ def test_medication_collects_references(monkeypatch):
 
     def _call(*a, **k):
         if k.get("audit_step") == "medication_layering":
-            return "## ✅ Conclusions\nc\n\n## 🧠 The Reasoning\nr"
+            return "## ✅ Report Summary\nc\n\n## 🧠 The Reasoning\nr"
         return med_json
 
     monkeypatch.setattr(agent, "_call_llm", _call)

@@ -25,6 +25,16 @@ def init_db(*, seed: bool = True) -> None:
     global _initialized
     engine = get_engine()
     Base.metadata.create_all(engine)
+
+    # Ensure patient_id column exists on conversations table for existing databases
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE conversations ADD COLUMN patient_id VARCHAR(36)"))
+            conn.commit()
+    except Exception:
+        pass
+
     _initialized = True
     logger.debug("Database schema ensured for %s", engine.url)
 
