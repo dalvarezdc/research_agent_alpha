@@ -892,7 +892,7 @@ button.workbench-subtab-btn *,
   cursor: not-allowed;
 }
 
-/* Floating Dropdowns */
+/* Floating Dropdowns (Metabase Clean Popover Theme) */
 .dropdown-wrapper {
   position: relative;
   flex-shrink: 0;
@@ -902,14 +902,14 @@ button.workbench-subtab-btn *,
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: var(--radius-md);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   padding: 0.4rem;
   width: 280px;
   max-height: min(420px, 70vh);
   overflow-y: auto;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 15px rgba(6, 182, 212, 0.15);
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
   z-index: 99999;
   animation: fadeIn 0.15s ease-out;
 }
@@ -917,26 +917,26 @@ button.workbench-subtab-btn *,
 .model-dropdown {
   right: 0;
   left: auto;
-  width: 260px;
+  width: 270px;
 }
 
 .dropdown-header-title {
   font-size: 0.675rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-  padding: 0.35rem 0.5rem 0.2rem 0.5rem;
+  letter-spacing: 0.06em;
+  color: #64748b !important;
+  padding: 0.4rem 0.5rem 0.25rem 0.5rem;
 }
 
 .dropdown-item {
   width: 100%;
   background: transparent;
   border: none;
-  color: var(--text-main);
+  color: #334155 !important;
   font-size: 0.775rem;
   font-weight: 500;
-  padding: 0.4rem 0.6rem;
+  padding: 0.45rem 0.65rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
@@ -946,20 +946,32 @@ button.workbench-subtab-btn *,
   transition: var(--transition);
 }
 
+.dropdown-item i {
+  color: #64748b;
+}
+
 .dropdown-item:hover {
-  background: rgba(6, 182, 212, 0.12);
-  color: var(--primary);
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.dropdown-item:hover i {
+  color: #2563eb;
 }
 
 .dropdown-item.active {
-  background: rgba(6, 182, 212, 0.2);
-  color: var(--primary);
+  background: #edf5ff !important;
+  color: #2563eb !important;
   font-weight: 600;
+}
+
+.dropdown-item.active i {
+  color: #2563eb;
 }
 
 .dropdown-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #f1f5f9;
   margin: 0.35rem 0;
 }
 
@@ -975,7 +987,7 @@ button.workbench-subtab-btn *,
 
 .dropdown-empty-patients {
   font-size: 0.72rem;
-  color: var(--text-dim);
+  color: #64748b;
   padding: 0.45rem 0.6rem;
   font-style: italic;
 }
@@ -2107,15 +2119,15 @@ input:checked + .slider:before {
 }
 
 .modal-card {
-  background: #111827;
-  border: 1px solid var(--card-border);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 750px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.18), 0 10px 20px -5px rgba(15, 23, 42, 0.1);
   animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -2126,7 +2138,7 @@ input:checked + .slider:before {
 
 .modal-header {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--card-border);
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2147,20 +2159,20 @@ input:checked + .slider:before {
   font-family: var(--font-heading);
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--text-bright);
+  color: #0f172a;
   margin: 0;
 }
 
 .modal-title p {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: #64748b;
   margin-top: 0.15rem;
 }
 
 .modal-close {
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: #64748b;
   font-size: 1.6rem;
   cursor: pointer;
   line-height: 1;
@@ -2168,7 +2180,7 @@ input:checked + .slider:before {
 }
 
 .modal-close:hover {
-  color: var(--text-bright);
+  color: #0f172a;
 }
 
 .modal-body {
@@ -2179,25 +2191,27 @@ input:checked + .slider:before {
 
 .input-text {
   width: 100%;
-  background: #0b0f19;
-  border: 1px solid var(--card-border);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: var(--radius-sm);
-  color: var(--text-bright);
+  color: #0f172a;
   font-size: 0.85rem;
   padding: 0.65rem 0.85rem;
   margin-top: 0.35rem;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .input-text:focus {
   outline: none;
-  border-color: var(--accent-blue);
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .field-hint {
   display: block;
   font-size: 0.725rem;
-  color: var(--text-muted);
+  color: #64748b;
   margin-top: 0.3rem;
 }
 
@@ -2213,8 +2227,8 @@ input:checked + .slider:before {
 }
 
 .tasks-table-wrapper {
-  background: #0b0f19;
-  border: 1px solid var(--card-border);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: var(--radius-md);
   max-height: 260px;
   overflow-y: auto;
@@ -2227,22 +2241,21 @@ input:checked + .slider:before {
 }
 
 .slack-tasks-table th {
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-muted);
+  background: #f1f5f9;
+  color: #475569;
   font-weight: 600;
   text-align: left;
   padding: 0.65rem 0.75rem;
-  border-bottom: 1px solid var(--card-border);
+  border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
-  background: #0e1422;
   z-index: 10;
 }
 
 .slack-tasks-table td {
   padding: 0.65rem 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: var(--text-bright);
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
   vertical-align: middle;
 }
 
@@ -2251,22 +2264,22 @@ input:checked + .slider:before {
 }
 
 .slack-tasks-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: #edf5ff;
 }
 
 .empty-tasks-row {
   text-align: center;
-  color: var(--text-muted);
+  color: #64748b;
   padding: 1.5rem !important;
 }
 
 .modal-footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid var(--card-border);
+  border-top: 1px solid #f1f5f9;
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
-  background: #0b0f19;
+  background: #f8fafc;
   border-bottom-left-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-lg);
 }
