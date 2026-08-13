@@ -269,11 +269,13 @@ Create a `.env` file in the project root — it is loaded automatically.
 Using `make` shortcuts:
 
 ```bash
-make setup        # Automated environment setup
-make check-llms   # Check configured LLM provider keys
-make run          # Start interactive router (default)
-make api          # Start REST API server (port 8080)
-make test         # Run test suite
+make setup                # Automated environment setup
+make check-llms           # Check configured LLM provider keys
+make run                  # Start interactive router CLI
+make api-dev              # Start REST API & Metabase-themed Web Workbench (http://localhost:8080)
+make design-system        # Start React + Tailwind Design System component library (http://localhost:5173)
+make design-system-build  # Build production bundle for React + Tailwind UI components
+make test                 # Run test suite
 ```
 
 Or running directly with `uv`:
@@ -518,17 +520,37 @@ uv run python run_analysis.py diagnostic \
 Start the Web UI & API server:
 
 ```bash
-make api
-# or: uv run python api.py --port 8080
+make api-dev
+# or: uv run python api.py --reload --port 8080
 ```
 
-Open **http://localhost:8080** in your browser to access the Web Application Workbench:
+Open **http://localhost:8080** in your browser to access the Web Application Workbench (styled with the **Metabase Slate & Royal Blue Design System**):
 
-- **Interactive Query Workbench**: Enter queries, select target LLM models (`grok-4.5`, `claude-sonnet-4-6`, `gemini-3.6-flash`, etc.), pick specialized agents, and toggle live web research.
+- **Metabase Visual Identity**: Off-white slate canvas (`#F8FAFC`), pure white card containers (`#FFFFFF`), Metabase royal blue primary accents (`#2563EB`), dark slate midnight sidebar, and animated shiny gradient badges.
+- **Interactive Query Workbench**: Enter queries, select target LLM models (`grok-4.5`, `claude-sonnet-4-6`, `deepseek-v4-flash`, `gemini-3.6-flash`), pick specialized agents, and toggle live web research with high-contrast slate popover menus.
 - **Document & File Parser**: Upload PDFs, Word documents (`.docx`, `.doc`), TXT, Markdown, or RTF files. PDF/Word documents are automatically converted into markdown via the built-in parser and grounded as clinical context for the agent analysis.
-- **Format Validation**: Uploading an unsupported file format triggers an error alert displaying allowed extensions (`.pdf`, `.docx`, `.doc`, `.txt`, `.md`, `.rtf`).
 - **Live Report Previews & Downloads**: Preview rendered Patient Reports, Practitioner Reports, Summaries, and Raw JSON directly in the browser with tab navigation, markdown styling, and direct download buttons.
 - **OpenAPI / Swagger UI**: Interactive API documentation is available at **http://localhost:8080/docs**.
+
+---
+
+### React + Tailwind CSS Design System Component Library
+
+The repository includes a standalone React (TypeScript) + Tailwind CSS component library showcasing the Metabase visual theme.
+
+To launch the standalone component library:
+
+```bash
+make design-system
+# or: cd design_system && npm run dev
+```
+
+Open **http://localhost:5173** to view the interactive component showcase featuring reusable UI primitives:
+- `Button`: Primary royal blue, secondary slate, outline, and ghost variants.
+- `Card`: Elevation cards with crisp border highlights on hover.
+- `ShinyBadge`: Iridescent shimmer, blue glow, emerald, and amber status badges.
+- `FormField` & `Input`: Developer form controls with error states and hint labels.
+
 
 ### Parse a document
 
