@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Animated Shimmer Text Effect */
+  .text-shimmer {
+    background: linear-gradient(
+      90deg,
+      #2563eb 0%,
+      #9333ea 25%,
+      #3b82f6 50%,
+      #06b6d4 75%,
+      #2563eb 100%
+    );
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: shimmer 4s linear infinite;
+  }
+
+  /* Iridescent Shiny Border Wrapping Class */
+  .shiny-border-wrapper {
+    position: relative;
+    border-radius: 9999px;
+    padding: 1px;
+    background: linear-gradient(
+      90deg,
+      #3b82f6,
+      #a855f7,
+      #06b6d4,
+      #3b82f6
+    );
+    background-size: 300% 300%;
+    animation: shimmer 5s ease infinite;
+  }
+
+  /* Inner Card for Shiny Border Badge */
+  .shiny-border-inner {
+    @apply flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white text-slate-800 dark:bg-slate-950 dark:text-slate-100;
+  }
+}

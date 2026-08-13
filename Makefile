@@ -1,18 +1,21 @@
-.PHONY: help setup router run check-llms api api-dev test test-verbose lint clean
+.PHONY: help setup router run check-llms api api-dev test test-verbose lint clean design-system design-system-build
 
 # Default target
 help:
 	@echo "🏥 Medical Analysis Agents — Commands"
 	@echo "=================================================="
-	@echo "  make setup        Run automated setup script"
-	@echo "  make run          Start interactive router (default)"
-	@echo "  make check-llms   Verify configured LLM provider API keys"
-	@echo "  make api          Start REST API server (port 8080)"
-	@echo "  make api-dev      Start REST API server with auto-reload"
-	@echo "  make test         Run test suite"
-	@echo "  make test-verbose Run test suite in verbose mode"
-	@echo "  make lint         Run ruff linter checks"
-	@echo "  make clean        Remove build artifacts and bytecode caches"
+	@echo "  make setup                Run automated setup script"
+	@echo "  make run                  Start interactive router (default)"
+	@echo "  make check-llms           Verify configured LLM provider API keys"
+	@echo "  make api                  Start REST API server (port 8080)"
+	@echo "  make api-dev              Start REST API server with auto-reload"
+	@echo "  make design-system        Start React + Tailwind Design System dev server"
+	@echo "  make design-system-build  Build React + Tailwind Design System production bundle"
+	@echo "  make test                 Run test suite"
+	@echo "  make test-verbose         Run test suite in verbose mode"
+	@echo "  make lint                 Run ruff linter checks"
+	@echo "  make clean                Remove build artifacts and bytecode caches"
+
 
 setup:
 	@chmod +x setup.sh
@@ -68,6 +71,14 @@ lint:
 	else \
 		ruff check .; \
 	fi
+
+design-system:
+	@cd design_system && [ -d node_modules ] || npm install
+	@cd design_system && npm run dev
+
+design-system-build:
+	@cd design_system && [ -d node_modules ] || npm install
+	@cd design_system && npm run build
 
 clean:
 	@echo "🧹 Cleaning temporary files and caches..."
