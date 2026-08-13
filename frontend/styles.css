@@ -2280,8 +2280,8 @@ input:checked + .slider:before {
 
 .app-sidebar {
   width: 280px;
-  background: #0f172a;
-  border-right: 1px solid #1e293b;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
   padding: 1.25rem 1rem;
@@ -2308,7 +2308,7 @@ input:checked + .slider:before {
   align-items: center;
   gap: 0.75rem;
   padding-bottom: 1.25rem;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid #f1f5f9;
   margin-bottom: 1.25rem;
 }
 
@@ -2322,20 +2322,20 @@ input:checked + .slider:before {
   justify-content: center;
   color: #fff;
   font-size: 1.2rem;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .sidebar-header .brand-title {
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 1.05rem;
-  color: #ffffff;
+  color: #0f172a;
   display: block;
 }
 
 .sidebar-header .brand-subtitle {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .nav-item {
@@ -2346,7 +2346,7 @@ input:checked + .slider:before {
   border-radius: var(--radius-md);
   background: transparent;
   border: 1px solid transparent;
-  color: #94a3b8;
+  color: #475569;
   font-weight: 500;
   font-size: 0.9rem;
   cursor: pointer;
@@ -2359,28 +2359,38 @@ input:checked + .slider:before {
 .nav-item i {
   font-size: 1.05rem;
   width: 20px;
+  color: #64748b;
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .nav-item.active {
   background: #2563eb;
   color: #ffffff;
-  border: 1px solid #3b82f6;
+  border: 1px solid #1d4ed8;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.nav-item.active i {
+  color: #ffffff;
 }
 
 .badge-count {
   margin-left: auto;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-bright);
+  background: #e2e8f0;
+  color: #475569;
   font-size: 0.725rem;
   padding: 0.15rem 0.5rem;
   border-radius: 12px;
+}
+
+.nav-item.active .badge-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
 }
 
 /* ── Sidebar conversations (ChatGPT-style list) ── */
@@ -2396,7 +2406,7 @@ input:checked + .slider:before {
   min-width: 0;
 }
 
-/* Plus button — same visual language as nav-item */
+/* Plus button — Metabase Royal Blue */
 .nav-item-icon {
   flex-shrink: 0;
   width: 36px;
@@ -2405,23 +2415,19 @@ input:checked + .slider:before {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  background: rgba(0, 112, 243, 0.12);
-  color: #38bdf8;
+  border: 1px solid #1d4ed8;
+  background: #2563eb;
+  color: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 0;
   font-size: 0.9rem;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
 }
 
 .nav-item-icon:hover {
-  background: rgba(0, 112, 243, 0.22);
-  border-color: rgba(56, 189, 248, 0.5);
-  color: #7dd3fc;
-}
-
-.nav-item-icon:active {
-  transform: scale(0.96);
+  background: #1d4ed8;
+  transform: scale(1.04);
 }
 
 /* Search sits directly under Conversations header, above the list */
@@ -2439,7 +2445,7 @@ input:checked + .slider:before {
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted);
+  color: #64748b;
   font-size: 0.75rem;
   pointer-events: none;
   z-index: 1;
@@ -2457,9 +2463,9 @@ input.sidebar-search-input[type="text"] {
   font-size: 0.8rem !important;
   font-family: var(--font-sans);
   line-height: 1.2;
-  color: #ffffff !important;
-  background: #1e293b !important;
-  border: 1px solid #334155 !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -2471,8 +2477,9 @@ input.sidebar-search-input[type="text"] {
 }
 
 .sidebar-search-input:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  background: #ffffff !important;
 }
 
 /* Conversation rows — take remaining sidebar space and scroll */
@@ -2705,7 +2712,7 @@ input.sidebar-search-input[type="text"] {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-main, #cbd5e1);
+  color: #334155;
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
@@ -2714,15 +2721,15 @@ input.sidebar-search-input[type="text"] {
 }
 
 .sidebar-conv-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .sidebar-conv-item.active {
-  background: #2563eb;
-  border-color: #3b82f6;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  background: #edf5ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1);
 }
 
 .sidebar-conv-item .docs-dot {
@@ -2730,22 +2737,22 @@ input.sidebar-search-input[type="text"] {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: rgba(148, 163, 184, 0.4);
+  background: #cbd5e1;
   box-shadow: none;
 }
 
 .sidebar-conv-item .docs-dot.has-docs {
-  background: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
 .sidebar-conv-item .docs-dot.running {
-  background: #fbbf24;
+  background: #f59e0b;
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
 .sidebar-conv-item .docs-dot.failed {
-  background: #f87171;
+  background: #ef4444;
 }
 
 @keyframes pulse-dot {
@@ -2768,17 +2775,17 @@ input.sidebar-search-input[type="text"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 .sidebar-conv-item.active .conv-title {
-  color: #ffffff !important;
+  color: #1d4ed8 !important;
   font-weight: 600;
 }
 
 .sidebar-conv-item .conv-meta {
   font-size: 0.68rem;
-  color: #94a3b8 !important;
+  color: #64748b !important;
   display: flex;
   gap: 0.35rem;
   align-items: center;
@@ -2795,7 +2802,7 @@ input.sidebar-search-input[type="text"] {
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: #94a3b8;
+  color: #64748b;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -2811,16 +2818,17 @@ input.sidebar-search-input[type="text"] {
 }
 
 .sidebar-conv-item .btn-conv-delete:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
 .sidebar-section-title {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #94a3b8 !important;
+  color: #64748b !important;
+  font-weight: 600;
   margin-top: 0.75rem;
   margin-bottom: 0.5rem;
   padding-left: 0.5rem;
@@ -2838,16 +2846,16 @@ input.sidebar-search-input[type="text"] {
 .btn-config-side {
   width: 100%;
   justify-content: flex-start;
-  background: #1e293b !important;
-  color: #e2e8f0 !important;
-  border: 1px solid #334155 !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+  border: 1px solid #e2e8f0 !important;
 }
 
 .btn-config-side:hover,
 .btn-slack-side:hover {
   background: #2563eb !important;
   color: #ffffff !important;
-  border-color: #3b82f6 !important;
+  border-color: #1d4ed8 !important;
 }
 
 /* ── Configuration modal ── */
