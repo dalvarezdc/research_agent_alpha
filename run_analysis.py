@@ -104,6 +104,33 @@ class AgentOrchestrator:
             None
         )
 
+    @staticmethod
+    def _make_safe_base_name(text: str, max_len: int = 48) -> str:
+        """Make a filesystem-safe short slug from query/subject/procedure/medication text.
+
+        Uses only the first non-empty line (before any attached context blocks)
+        so patient/document appendices do not bloat the filename, strips unsafe
+        characters, replaces whitespace/hyphens with underscores, and truncates
+        to max_len to prevent '[Errno 63] File name too long'.
+        """
+        import re
+
+        first_line = ""
+        for line in (text or "").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("---"):
+                if first_line:
+                    break
+                continue
+            first_line = stripped
+            break
+
+        slug = re.sub(r"[^\w\s-]", "", first_line[:120], flags=re.UNICODE)
+        slug = re.sub(r"[-\s]+", "_", slug).strip("_").lower()
+        if not slug:
+            slug = "analysis"
+        return slug[:max_len]
+
     def _persist_report_to_db(
         self,
         *,
@@ -684,7 +711,7 @@ class AgentOrchestrator:
     ) -> Dict[str, str]:
         """Save diagnostic analysis outputs to files"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_query = "".join([c if c.isalnum() else "_" for c in query[:30]]).strip("_")
+        safe_query = self._make_safe_base_name(query, max_len=48)
 
         files = {}
 
@@ -836,7 +863,7 @@ class AgentOrchestrator:
         cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save procedure analysis results"""
-        base_name = procedure_name.replace(" ", "_").lower()
+        base_name = self._make_safe_base_name(procedure_name, max_len=48)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
@@ -978,7 +1005,7 @@ class AgentOrchestrator:
         cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save fact check analysis results"""
-        base_name = subject.replace(" ", "_").lower()
+        base_name = self._make_safe_base_name(subject, max_len=48)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
@@ -1098,7 +1125,7 @@ class AgentOrchestrator:
         cost_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Save medication analysis results"""
-        base_name = medication_name.replace(" ", "_").lower()
+        base_name = self._make_safe_base_name(medication_name, max_len=48)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 

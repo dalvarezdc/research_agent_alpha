@@ -193,6 +193,24 @@ def test_orchestrator_initialization():
         return False
 
 
+def test_make_safe_base_name_long_subject():
+    """Test that _make_safe_base_name handles very long queries without exceeding filename limits."""
+    long_subject = (
+        "Clinical Query: Does chronic hypercortisolism (elevated cortisol) increase the risk of or cause cancer? "
+        "Please provide a differential analysis addressing the following objectives: (1) the general association between sustained "
+        "cortisol elevation and cancer incidence or progression, including underlying mechanisms (e.g., immunosuppression, metabolic dysregulation, "
+        "chronic inflammation); (2) implications for cancer screening in patients with known hypercortisolism; and (3) evaluation of this relationship "
+        "in the context of existing symptoms or comorbidities. Note: Patient-specific data (e.g., age, sex, laboratory-confirmed cortisol levels, "
+        "duration of elevation, presence of Cushing syndrome) are not currently available; the analysis should therefore address the general clinical question "
+        "and specify what additional patient details would be required to refine the risk assessment."
+    )
+    safe_slug = AgentOrchestrator._make_safe_base_name(long_subject, max_len=48)
+    assert len(safe_slug) <= 48
+    assert safe_slug == "clinical_query_does_chronic_hypercortisolism_ele"
+    import re
+    assert not re.search(r"[^\w-]", safe_slug)
+
+
 def run_all_tests():
     """Run all integration tests"""
     print("\n")
