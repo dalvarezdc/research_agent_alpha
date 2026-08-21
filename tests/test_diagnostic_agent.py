@@ -117,6 +117,43 @@ def _fake_llm_router():
                     "recommended_next_steps": [
                         "See a clinician for knee exam within a few days"
                     ],
+                    "diagnostic_tests": [
+                        {
+                            "name": "Focused Knee Exam & McMurray Test",
+                            "tier": "Tier 0: Safety & Baseline",
+                            "clinical_purpose": "Assess for mechanical joint line tenderness or meniscal tear",
+                            "actionable_trigger": "Positive McMurray or joint line pain prompts knee MRI; absent signs favor patellofemoral therapy",
+                        },
+                        {
+                            "name": "Knee Plain Radiographs (Ottawa Knee Rules)",
+                            "tier": "Tier 1: Routine Imaging",
+                            "clinical_purpose": "Rule out acute fracture or severe osteoarthritic joint space narrowing",
+                            "actionable_trigger": "Joint space narrowing guides degenerative management; normal X-ray supports soft tissue etiology",
+                        },
+                    ],
+                    "conditional_therapies": [
+                        {
+                            "trigger_condition": "Confirmed Patellofemoral Syndrome",
+                            "regimen_name": "Targeted Physical Therapy & VMO Strengthening",
+                            "details": "Quadriceps strengthening, patellar taping, activity modification for 6-8 weeks",
+                        }
+                    ],
+                    "patient_supportive_care": {
+                        "dietary_guidance": ["Maintain balanced anti-inflammatory nutrition and adequate hydration"],
+                        "hydration_and_lifestyle": ["RICE protocol: rest, ice for 15-20 min, elevation after activity"],
+                        "medication_warnings": ["Avoid taking high-dose NSAIDs for prolonged periods without clinical supervision"],
+                        "questions_for_doctor": [
+                            "Do you recommend physical therapy for my knee?",
+                            "Are X-rays or an MRI necessary to evaluate my joint?",
+                        ],
+                        "er_warning_signs": [
+                            "Inability to bear any weight on the knee",
+                            "Rapid severe swelling with high fever, redness, or heat",
+                        ],
+                    },
+                    "escalation_triggers": [
+                        "Acute inability to bear weight with joint effusion and fever > 38.5C (suspect septic joint)",
+                    ],
                     "suggested_agent": "procedure_agent",
                     "routing_rationale": "May need imaging or procedures",
                     "references": [
@@ -149,11 +186,25 @@ def test_pipeline_produces_layered_reports_and_probabilities(monkeypatch):
     # Free-form extraction, not a fixed vocabulary.
     assert "knee" in " ".join(result["extraction"]["symptoms"]).lower()
 
-    # Layered reports present; stats only in practitioner.
-    assert result["patient_report"]
-    assert "Statistical Appendix" in result["practitioner_report"]
-    assert "Statistical Appendix" not in result["patient_report"]
-    assert "Condition Likelihood Estimates" in result["practitioner_report"]
+    # Differentiated reports:
+    patient = result["patient_report"]
+    practitioner = result["practitioner_report"]
+
+    # Practitioner report checks:
+    assert "Statistical Appendix" in practitioner
+    assert "Condition Likelihood Estimates" in practitioner
+    assert "Differential Diagnosis Matrix" in practitioner
+    assert "Clinical Purpose:" in practitioner
+    assert "Actionable Decision Trigger:" in practitioner
+    assert "Conditional Pharmacotherapy & Management Pathways" in practitioner
+
+    # Patient report checks:
+    assert "Statistical Appendix" not in patient
+    assert "Summary" in patient
+    assert "Questions to Ask Your Doctor" in patient
+    assert "Supportive Dietary & Daily Care" in patient
+    assert "Emergency Warning Signs" in patient
+    assert "Important Medication & Safety Warnings" in patient
 
     # References collected.
     assert any("doi.org/10.1/x" in c for c in result["references"])

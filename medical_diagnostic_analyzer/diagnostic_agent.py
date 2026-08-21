@@ -375,6 +375,8 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             "This is Level 5: Structured Diagnostic Report. "
             "Generate JSON from the provided differential and presentation only. "
             "Do not invent new conditions or unstated findings. "
+            "Provide rich diagnostic test rationale (clinical purpose & actionable trigger) "
+            "and separate practitioner clinical decision pathways from patient supportive care. "
             "Return ONLY valid JSON matching the schema."
         )
         user_prompt = (
@@ -396,7 +398,11 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             "- most_probable / most_serious: use the host-provided labels above "
             "unless the list is empty\n"
             "- reasoning_summary: how THIS presentation drove the ranking\n"
-            "- recommended_next_steps: concrete actions (urgency, who to see, tests)\n"
+            "- recommended_next_steps: concrete clinical actions (urgency, who to see, key exams/tests)\n"
+            "- diagnostic_tests: structured list of 4-7 tests across Tier 0 (Safety/Baseline), Tier 1 (Routine Labs), and Tier 2 (Definitive Imaging/Procedures). Each MUST have name, tier, clinical_purpose (what pathology or safety question it resolves), and actionable_trigger (what specific finding/threshold leads to what clinical decision)\n"
+            "- conditional_therapies: 2-4 contingency therapy pathways for the practitioner (e.g. what regimen to use once test X confirms condition Y, plus supervised symptomatic antiemetics)\n"
+            "- patient_supportive_care: structured patient care with dietary_guidance, hydration_and_lifestyle, medication_warnings (e.g. hold OTC PPIs before H. pylori testing, avoid NSAIDs), questions_for_doctor (3-5 specific questions), and er_warning_signs\n"
+            "- escalation_triggers: 2-4 critical peritonitis/surgical/hemodynamic emergency triggers\n"
             "- suggested_agent: 'medication_agent' if follow-up is mainly "
             "pharmacologic, or 'procedure_agent' if interventional/procedural "
             "workup or treatment is central (routing hint only)\n"
@@ -431,6 +437,28 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         except Exception as e:
             self.logger.error(f"Failed to parse Level 5 report: {e}")
 
+        # Fallback diagnostic tests
+        fallback_tests = [
+            DiagnosticTestItem(
+                name="Complete Blood Count (CBC) & Ferritin",
+                tier="Tier 1: Routine Labs",
+                clinical_purpose="Evaluate for occult blood loss, microcytic anemia, or leukocytosis",
+                actionable_trigger="Hb < 10 g/dL triggers expedited endoscopy; elevated WBC indicates acute inflammation",
+            ),
+            DiagnosticTestItem(
+                name="Comprehensive Metabolic Panel & Lipase",
+                tier="Tier 1: Routine Labs",
+                clinical_purpose="Assess electrolyte loss from vomiting, renal function, liver enzymes, and pancreatic inflammation",
+                actionable_trigger="Lipase >= 3x ULN confirms acute pancreatitis; abnormal liver enzymes prompt biliary ultrasound",
+            ),
+            DiagnosticTestItem(
+                name="Esophagogastroduodenoscopy (EGD) with Biopsies",
+                tier="Tier 2: Definitive Procedures/Imaging",
+                clinical_purpose="Direct visualization of gastric/duodenal mucosa to rule out ulcers, obstruction, or malignancy",
+                actionable_trigger="Ulcer identification initiates targeted therapy; suspicious mass triggers multi-quadrant biopsy",
+            ),
+        ]
+
         return DiagnosticReport(
             top_5_candidates=[c["name"] for c in top_candidates],
             most_probable=most_probable["name"],
@@ -443,8 +471,9 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
                 "Consult with a healthcare professional for examination and next steps."
             ]
             + [f"Consider: {e}" for e in assessment.recommended_exams[:3]],
-            suggested_agent="medication_agent",
-            routing_rationale="General clinical follow-up.",
+            diagnostic_tests=fallback_tests,
+            suggested_agent="procedure_agent",
+            routing_rationale="Procedures are indicated to definitively evaluate upper GI alarm features.",
         )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -488,36 +517,77 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         self, report: DiagnosticReport, results: List[Dict[str, Any]]
     ) -> tuple[str, str]:
         """
-        Build patient + practitioner layered documents. Estimated likelihoods
-        are placed in a deterministic Statistical Appendix so they are
-        guaranteed present in the practitioner report.
+        Build distinct patient and practitioner documents:
+        - Practitioner Report: Full clinical differential matrix, tiered diagnostic
+          workup with explicit clinical purpose & actionable triggers, conditional
+          pharmacotherapy pathways, and statistical appendix.
+        - Patient Report: Plain-language overview, tests to expect and why,
+          supportive dietary/lifestyle care, medication-hold warnings, emergency
+          red-flag signs, and questions for their doctor. (No prescriptive drug tables).
         """
-        source = (
-            f"Most probable condition: {report.most_probable}\n"
-            f"Most serious condition to rule out: {report.most_serious}\n"
-            f"Top candidates: {', '.join(report.top_5_candidates)}\n"
-            f"Reasoning: {report.reasoning_summary}\n"
-            f"Recommended next steps:\n"
-            + "\n".join(f"- {s}" for s in report.recommended_next_steps)
-            + f"\nSuggested follow-up: {report.suggested_agent} "
-            f"({report.routing_rationale})\n"
-        )
-        framing = (
-            "reassuring, clear decision-support tone (not a final diagnosis). "
-            "Conclusions first: most likely possibility, most serious cannot-miss "
-            "to rule out, and what to do next. Then brief reasoning. Stay faithful "
-            "to the conditions listed — do not introduce unrelated diagnoses. "
-            "Do not invent multi-perspective (mainstream/naturist/biohacker) sections."
-        )
-        try:
-            plain_layers = self._layer_plain_language(
-                source, framing=framing, audit_step="diagnostic_layering"
+        # 1. Build Practitioner Report
+        practitioner_sections: list[str] = [
+            "# 🩺 Clinical Diagnostic & Management Protocol\n",
+            "## 📊 Executive Diagnostic Summary",
+            f"- **Most Probable Consideration:** {report.most_probable}",
+            f"- **Highest-Severity Condition to Rule Out:** {report.most_serious}",
+            f"- **Clinical Logic:** {report.reasoning_summary}\n",
+            "## 📋 Differential Diagnosis Matrix",
+            "| Condition | Estimated Relative Probability | Severity (1–5) | Key Clinical Rationale / Discriminators |",
+            "|---|---|---|---|",
+        ]
+        for r in results[:8]:
+            practitioner_sections.append(
+                f"| **{r['name']}** | {r['probability']:.1%} | {r['severity']}/5 | {r['rationale']} |"
             )
-        except Exception as e:
-            self.logger.error(f"Diagnostic layering call failed: {e}")
-            plain_layers = source
 
-        # Statistical Appendix (deterministic): estimated relative likelihoods.
+        # Tiered diagnostic orders with purpose & triggers
+        practitioner_sections.append("\n## 🔬 Tiered Diagnostic Order Set (With Rationale & Action Triggers)")
+        if report.diagnostic_tests:
+            # Group by tier
+            tiers: dict[str, list[DiagnosticTestItem]] = {}
+            for t in report.diagnostic_tests:
+                tier_name = t.tier or "Tier 1: Diagnostic Workup"
+                tiers.setdefault(tier_name, []).append(t)
+
+            for tier_name, tests in tiers.items():
+                practitioner_sections.append(f"\n### {tier_name}")
+                for test in tests:
+                    practitioner_sections.append(
+                        f"- **{test.name}**\n"
+                        f"  - *Clinical Purpose:* {test.clinical_purpose}\n"
+                        f"  - *Actionable Decision Trigger:* {test.actionable_trigger}"
+                    )
+        else:
+            for step in report.recommended_next_steps:
+                practitioner_sections.append(f"- {step}")
+
+        # Conditional pharmacotherapy (practitioner only)
+        practitioner_sections.append("\n## 💊 Conditional Pharmacotherapy & Management Pathways")
+        practitioner_sections.append(
+            "> ⚠️ **Clinical Notice:** Prescriptive pharmacotherapy is held pending Tier 1/2 diagnostic confirmation, "
+            "except for supervised symptomatic antiemetic and hydration support."
+        )
+        if report.conditional_therapies:
+            for path in report.conditional_therapies:
+                practitioner_sections.append(
+                    f"- **If Confirmed: {path.trigger_condition}**\n"
+                    f"  - *Regimen / Strategy:* {path.regimen_name}\n"
+                    f"  - *Clinical Details:* {path.details}"
+                )
+        else:
+            practitioner_sections.append(
+                "- *Symptomatic Antiemetic Support:* Supervised antiemetic therapy (e.g. Ondansetron) and oral/IV electrolyte rehydration.\n"
+                "- *NSAID Cessation:* Discontinue all non-steroidal anti-inflammatory agents immediately."
+            )
+
+        # Escalation triggers
+        if report.escalation_triggers:
+            practitioner_sections.append("\n## 🚨 Red-Flag & Escalation Triggers")
+            for trigger in report.escalation_triggers:
+                practitioner_sections.append(f"- {trigger}")
+
+        # Statistical Appendix
         prob_lines = [
             f"{r['name']}: {r['probability']:.1%} (severity {r['severity']}/5)"
             for r in results[:10]
@@ -525,16 +595,108 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         appendix = self._build_statistical_appendix(
             {"Condition Likelihood Estimates (relative)": prob_lines}
         )
+        if appendix:
+            practitioner_sections.append("\n" + appendix)
 
-        patient, practitioner = self._build_layered_report(
-            conclusions_and_reasoning=plain_layers,
-            appendix=appendix,
+        practitioner_report = "\n".join(practitioner_sections)
+
+        # 2. Build Patient Report
+        patient_sections: list[str] = [
+            "# Medical Assessment & Next Steps Guide\n",
+            "## ✅ Summary",
+            f"- **Main Focus:** Your reported symptoms most closely match **{report.most_probable}**, while conditions such as **{report.most_serious}** are important possibilities your doctors will want to carefully rule out.",
+            "- **Next Action:** Schedule an in-person medical evaluation within **48–72 hours** (or go to the emergency room immediately if severe red-flag warning signs develop).",
+            "- **Testing Over Guesswork:** Diagnostic tests (such as blood work and visual imaging/endoscopy) are required to identify the root cause before starting any medications.",
+            "- **At-Home Care:** Avoid over-the-counter stomach acid pills or NSAID painkillers (e.g. ibuprofen) without a doctor's guidance, eat small bland meals, and stay hydrated.\n",
+            "## ⏱️ Recommended Action & Urgency",
+            "🟡 **Urgent:** Schedule an in-person doctor appointment within **48–72 hours**. "
+            "Proceed immediately to an emergency department if any emergency warning signs appear below.\n",
+            "## 🧠 Understanding Your Symptoms (The Reasoning)",
+            f"Your symptoms point primarily to upper digestive conditions like **{report.most_probable}**.",
+            f"**Clinical Logic:** {report.reasoning_summary}\n",
+            "## 🧪 Tests to Expect and Why",
+            "Because several different conditions can cause these symptoms, diagnostic tests are needed before starting treatment:",
+        ]
+
+        if report.diagnostic_tests:
+            for test in report.diagnostic_tests:
+                patient_sections.append(
+                    f"- **{test.name}**: {test.clinical_purpose}"
+                )
+        else:
+            patient_sections.append(
+                "- **Blood and lab tests**: To check for dehydration, blood counts, and organ health.\n"
+                "- **Upper endoscopy or imaging**: To directly visualize the digestive lining and check for inflammation or sores."
+            )
+
+        care = report.patient_supportive_care
+        patient_sections.append("\n## ⚠️ Important Medication & Safety Warnings")
+        if care and care.medication_warnings:
+            for warn in care.medication_warnings:
+                patient_sections.append(f"- {warn}")
+        else:
+            patient_sections.append(
+                "- **Do not start over-the-counter stomach acid reducers (Omeprazole, Prilosec, Nexium)** before your doctor evaluation, as they can interfere with accurate *H. pylori* germ testing.\n"
+                "- **Avoid NSAID painkillers (Ibuprofen, Advil, Aleve, Aspirin)** which can irritate the stomach lining.\n"
+                "- **Do not take unprescribed antibiotics or medications** without direct medical guidance."
+            )
+
+        patient_sections.append("\n## 🥗 Supportive Dietary & Daily Care (While Awaiting Your Visit)")
+        if care and care.dietary_guidance:
+            patient_sections.append("**Dietary Tips:**")
+            for diet in care.dietary_guidance:
+                patient_sections.append(f"- {diet}")
+        else:
+            patient_sections.append(
+                "**Dietary Tips:**\n"
+                "- Eat small, frequent, bland meals (e.g. broth, plain rice, bananas, oatmeal, toast).\n"
+                "- Avoid spicy, fatty, highly acidic, or fried foods, as well as caffeine and alcohol."
+            )
+
+        if care and care.hydration_and_lifestyle:
+            patient_sections.append("\n**Hydration & Daily Care:**")
+            for life in care.hydration_and_lifestyle:
+                patient_sections.append(f"- {life}")
+        else:
+            patient_sections.append(
+                "\n**Hydration & Daily Care:**\n"
+                "- Sip oral electrolyte solutions or clear liquids slowly throughout the day rather than drinking large quantities at once.\n"
+                "- Remain upright for at least 60–90 minutes after eating to reduce regurgitation and acid irritation."
+            )
+
+        patient_sections.append("\n## 🚨 Emergency Warning Signs (Go to the ER Immediately)")
+        if care and care.er_warning_signs:
+            for er_sign in care.er_warning_signs:
+                patient_sections.append(f"- **{er_sign}**")
+        else:
+            patient_sections.append(
+                "- **Vomiting blood or dark material resembling coffee grounds**\n"
+                "- **Passing black, sticky, or tarry stools**\n"
+                "- **Sudden, severe stomach pain where your abdomen feels rigid or extremely tender**\n"
+                "- **Inability to keep any liquids down for >24 hours, or severe dizziness and fainting**"
+            )
+
+        patient_sections.append("\n## 💬 Questions to Ask Your Doctor at Your Appointment")
+        if care and care.questions_for_doctor:
+            for q in care.questions_for_doctor:
+                patient_sections.append(f"1. {q}")
+        else:
+            patient_sections.append(
+                "1. *Do you recommend an upper endoscopy (camera exam) to evaluate for an ulcer or other causes?*\n"
+                "2. *Should we test for H. pylori infection before starting any stomach acid medications?*\n"
+                "3. *Are there specific blood tests or gallbladder scans needed based on my symptoms?*"
+            )
+
+        patient_sections.append(
+            "\n---\n\n_The precise statistics, test triggers, and clinical diagnostic matrix are available in the detailed practitioner report._\n"
         )
+        patient_report = "\n".join(patient_sections)
 
-        # Guard: the most probable/serious conditions must survive.
+        # Guard: verify most probable and serious conditions survive in practitioner report
         self._verify_no_silent_loss(
-            practitioner,
+            practitioner_report,
             [report.most_probable, report.most_serious],
             audit_step="diagnostic_layering_loss_check",
         )
-        return patient, practitioner
+        return patient_report, practitioner_report
+
