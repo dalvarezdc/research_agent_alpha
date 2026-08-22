@@ -94,6 +94,11 @@ class AgentOrchestrator:
             "description": "Independent bio-investigator for health subjects",
             "class": MedicalFactChecker,
         },
+        "diagnostic": {
+            "name": "Medical Diagnostic Analyzer",
+            "description": "Decision-support differential diagnosis from symptom presentations",
+            "class": None,  # Dynamically imported
+        },
     }
 
     def __init__(self, output_dir: str = "outputs"):
@@ -361,6 +366,12 @@ class AgentOrchestrator:
                 from langchain_agents import LangChainMedicalFactChecker
 
                 return LangChainMedicalFactChecker
+            if agent_type == "diagnostic":
+                from medical_diagnostic_analyzer.diagnostic_agent import (
+                    MedicalDiagnosticAgent,
+                )
+
+                return MedicalDiagnosticAgent
             raise ValueError(f"Unknown agent type: {agent_type}")
 
         if agent_type == "procedure":
@@ -369,6 +380,12 @@ class AgentOrchestrator:
             return MedicationAnalyzer
         if agent_type == "factcheck":
             return MedicalFactChecker
+        if agent_type == "diagnostic":
+            from medical_diagnostic_analyzer.diagnostic_agent import (
+                MedicalDiagnosticAgent,
+            )
+
+            return MedicalDiagnosticAgent
         raise ValueError(f"Unknown agent type: {agent_type}")
 
     def run_procedure_analyzer(
@@ -2028,8 +2045,8 @@ Examples:
     parser.add_argument(
         "agent",
         nargs="?",
-        choices=["procedure", "medication", "factcheck"],
-        help="Which agent to run (procedure, medication, or factcheck)",
+        choices=["procedure", "medication", "factcheck", "diagnostic"],
+        help="Which agent to run (procedure, medication, factcheck, or diagnostic)",
     )
 
     parser.add_argument("--list", action="store_true", help="List all available agents")
@@ -2200,6 +2217,13 @@ Examples:
                 timeout=args.timeout,
                 implementation=args.implementation,
                 enable_web_research=args.web_search,
+            )
+
+        elif args.agent == "diagnostic":
+            result, files = orchestrator.run_diagnostic_analyzer(
+                query=args.subject,
+                llm_provider=args.llm,
+                timeout=args.timeout,
             )
 
         # Display file locations

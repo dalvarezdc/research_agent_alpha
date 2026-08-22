@@ -44,7 +44,10 @@ from router import route_agent, sample_agents, DEFAULT_ROUTING_MODEL
 from run_analysis import AgentOrchestrator
 from llm_integrations import get_available_models, create_llm_manager
 from document_parser import parse_document
-from medical_report_categorizer import categorize_medical_markdown
+from medical_report_categorizer import (
+    categorize_medical_markdown,
+    classify_patient_description,
+)
 import app_config
 
 # Maximum upload size for document parsing (bytes). Default 25 MB; override via env.
@@ -189,6 +192,11 @@ class PatientUpdate(BaseModel):
     contact_phone: Optional[str] = Field(None, description="Contact phone")
     metadata_json: Optional[Dict[str, Any]] = Field(None, description="Key-value metadata dictionary")
     clinical_data: Optional[Dict[str, Any]] = Field(None, description="Structured clinical data tables")
+
+
+class PatientClassifyRequest(BaseModel):
+    text: str = Field(..., description="Patient free-form description or clinical summary")
+    model: str = Field(DEFAULT_ROUTING_MODEL, description="LLM model identifier to perform classification")
 
 
 def _patient_to_dict(patient) -> Dict[str, Any]:
@@ -1244,6 +1252,32 @@ async def parse_patient_report_endpoint(
     }
 
 
+@app.post("/patients/classify-text")
+def classify_patient_text_endpoint(req: PatientClassifyRequest):
+    """
+    Classify a free-form patient clinical narrative/description using LLM.
+    Extracts demographics, custom metadata tags, and categorized organ system findings.
+    """
+    if not req.text or not req.text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Patient description text cannot be empty."
+        )
+
+    try:
+        classification = classify_patient_description(req.text, model_name=req.model)
+        return {
+            "status": "success",
+            "classification": classification
+        }
+    except Exception as e:
+        logger.error(f"Error classifying patient description: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Classification failure: {e}"
+        )
+
+
 
 
 # ── Configuration (Slack webhooks + LLM API keys) ───────────────────────────
@@ -1534,23 +1568,23 @@ def _safe_frontend_file(relative: str) -> Optional[Path]:
 
 @app.get("/")
 def serve_frontend_index():
-    """Serve the SPA entry point."""
+    """Serve the SPA entry point with no-cache headers."""
     index = FRONTEND_DIR / "index.html"
     if not index.is_file():
         raise HTTPException(status_code=404, detail="Frontend index.html not found")
-    return FileResponse(index)
+    return FileResponse(index, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 @app.get("/{asset_path:path}")
 def serve_frontend_asset(asset_path: str):
-    """Serve static frontend assets (GET only). Registered last so API routes win."""
+    """Serve static frontend assets (GET only) with no-cache headers."""
     file_path = _safe_frontend_file(asset_path)
     if file_path is not None:
-        return FileResponse(file_path)
+        return FileResponse(file_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     # SPA-style fallback for unknown GET paths
     index = FRONTEND_DIR / "index.html"
     if index.is_file():
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     raise HTTPException(status_code=404, detail="Not found")
 
 

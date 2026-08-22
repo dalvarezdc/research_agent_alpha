@@ -55,6 +55,12 @@ _CLINICAL_COMMON_SENSE = (
     "6. RELATIVE PROBABILITIES — Scores are rough relative estimates among "
     "the candidates you list (not calibrated population posteriors). They "
     "should sum to approximately 1.0; the host system may renormalize.\n"
+    "7. ADVERSARIAL REASONING & INDUSTRY BIAS SHIELD — Avoid common-knowledge "
+    "frequency bias. Question whether symptoms reflect underlying metabolic, "
+    "dietary (e.g. ultra-processed food consumption, refined carbohydrates, "
+    "hyperinsulinemia), or environmental root causes rather than solely reflexively "
+    "assuming lifelong pharmaceutical dependency. Evaluate independent biological "
+    "evidence alongside conventional clinical guidelines.\n"
 )
 
 
@@ -77,7 +83,8 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
-            fallback_providers=fallback_providers or ["openai", "ollama"],
+            fallback_providers=fallback_providers
+            or ["claude-sonnet", "grok-4.3", "openai", "ollama"],
             enable_logging=enable_logging,
             enable_web_research=enable_web_research,
         )

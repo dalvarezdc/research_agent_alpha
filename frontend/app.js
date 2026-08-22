@@ -139,6 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const patientAge = document.getElementById('patientAge');
   const patientGender = document.getElementById('patientGender');
   const patientEmail = document.getElementById('patientEmail');
+  const patientDescription = document.getElementById('patientDescription');
+  const btnClassifyDescription = document.getElementById('btnClassifyDescription');
+  const classifyStatusText = document.getElementById('classifyStatusText');
   const metaKeyInput = document.getElementById('metaKeyInput');
   const metaValInput = document.getElementById('metaValInput');
   const btnAddMetaTag = document.getElementById('btnAddMetaTag');
@@ -593,6 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCancelPatientModal.addEventListener('click', closePatientModal);
     btnSavePatient.addEventListener('click', savePatientRecord);
     btnAddMetaTag.addEventListener('click', addMetaTagFromInput);
+    if (btnClassifyDescription) {
+      btnClassifyDescription.addEventListener('click', handleClassifyPatientDescription);
+    }
 
     // Regenerate Modal Handlers
     btnCloseRegenModal.addEventListener('click', closeRegenModal);
@@ -1631,6 +1637,9 @@ document.addEventListener('DOMContentLoaded', () => {
         patientAge.value = patient.age || '';
         patientGender.value = patient.gender || '';
         patientEmail.value = patient.contact_email || '';
+        if (patientDescription) {
+          patientDescription.value = (patient.metadata_json && patient.metadata_json.description) || '';
+        }
         currentPatientMeta = { ...(patient.metadata_json || {}) };
         
         const clinical = patient.clinical_data || {};
@@ -1644,6 +1653,7 @@ document.addEventListener('DOMContentLoaded', () => {
       patientModalTitle.textContent = 'Add New Patient';
       patientEditId.value = '';
       document.getElementById('patientForm').reset();
+      if (patientDescription) patientDescription.value = '';
     }
 
     renderMetadataTagsEditor();
@@ -1653,6 +1663,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closePatientModal() {
     patientModal.classList.add('hidden');
+  }
+
+  async function handleClassifyPatientDescription() {
+    const text = patientDescription ? patientDescription.value.trim() : '';
+    if (!text) {
+      showToast('Please enter a clinical description to classify.', 'error');
+      if (patientDescription) patientDescription.focus();
+      return;
+    }
+
+    if (classifyStatusText) classifyStatusText.classList.remove('hidden');
+    if (btnClassifyDescription) {
+      btnClassifyDescription.disabled = true;
+      btnClassifyDescription.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Classifying with AI...';
+    }
+
+    try {
+      const res = await fetch('/patients/classify-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          model: modelSelect ? modelSelect.value : 'grok-4.5'
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const classified = data.classification || {};
+
+      // 1. Demographics
+      if (classified.demographics) {
+        const demo = classified.demographics;
+        if (demo.name && (!patientName.value || patientName.value.trim() === '')) {
+          patientName.value = demo.name;
+        }
+        if (demo.age && (!patientAge.value || patientAge.value === '')) {
+          patientAge.value = demo.age;
+        }
+        if (demo.gender && (!patientGender.value || patientGender.value === '')) {
+          patientGender.value = demo.gender;
+        }
+        if (demo.primary_condition && (!patientPrimaryCondition.value || patientPrimaryCondition.value.trim() === '')) {
+          patientPrimaryCondition.value = demo.primary_condition;
+        }
+      }
+
+      // 2. Custom Metadata Tags
+      if (classified.metadata_tags && typeof classified.metadata_tags === 'object') {
+        Object.entries(classified.metadata_tags).forEach(([k, v]) => {
+          if (v && k.toLowerCase() !== 'description') {
+            currentPatientMeta[k] = String(v);
+          }
+        });
+        renderMetadataTagsEditor();
+      }
+
+      // 3. Categorized Organ System Findings
+      if (classified.categorized_data && typeof classified.categorized_data === 'object') {
+        const catData = classified.categorized_data;
+        let totalItems = 0;
+        ['heart', 'liver', 'pancreas', 'nutrients', 'overall_health', 'medications'].forEach(cat => {
+          if (Array.isArray(catData[cat]) && catData[cat].length > 0) {
+            currentPatientClinicalData[cat] = catData[cat];
+            totalItems += catData[cat].length;
+          }
+        });
+        renderCategorizedTable(activeCategory);
+        showToast(`AI extracted demographics and classified ${totalItems} clinical measurements!`, 'success');
+      } else {
+        showToast('Clinical description classified successfully!', 'success');
+      }
+    } catch (err) {
+      showToast(`Failed to classify description: ${err.message}`, 'error');
+    } finally {
+      if (classifyStatusText) classifyStatusText.classList.add('hidden');
+      if (btnClassifyDescription) {
+        btnClassifyDescription.disabled = false;
+        btnClassifyDescription.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Classify with AI';
+      }
+    }
   }
 
   async function handlePatientReportUpload(file) {
@@ -1757,7 +1851,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderMetadataTagsEditor() {
     metadataTagsContainer.innerHTML = '';
-    const keys = Object.keys(currentPatientMeta);
+    const keys = Object.keys(currentPatientMeta).filter(k => k !== 'description');
     if (keys.length === 0) {
       metadataTagsContainer.innerHTML = '<span class="no-tags-hint">No custom metadata tags added yet. Enter key & value above.</span>';
       return;
@@ -1797,6 +1891,10 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Patient full name is required.', 'error');
       patientName.focus();
       return;
+    }
+
+    if (patientDescription && patientDescription.value.trim()) {
+      currentPatientMeta['description'] = patientDescription.value.trim();
     }
 
     const payload = {

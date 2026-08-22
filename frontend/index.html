@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Marked.js for markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=metabase8">
+  <link rel="stylesheet" href="styles.css?v=20260822-light-v5">
 </head>
 <body>
 
@@ -67,19 +67,34 @@
           <span>Patients</span>
           <span class="badge-count" id="patientsCountTag">0</span>
         </button>
-      </nav>
 
-      <div class="sidebar-section-title">Quick Utilities</div>
-      <div class="sidebar-actions">
-        <button type="button" class="btn btn-xs btn-outline btn-config-side" id="btnOpenConfigModal">
-          <i class="fa-solid fa-gear"></i> Configuration
+        <!-- Notifications and API Menu -->
+        <div class="sidebar-menu-group">
+          <div class="sidebar-section-title">Notifications and API</div>
+          <div class="sidebar-actions notif-api-group">
+            <button type="button" class="sidebar-menu-btn" id="btnOpenSlackModal">
+              <i class="fa-brands fa-slack icon-slack"></i>
+              <span>Slack Notify</span>
+            </button>
+            <a href="/docs" target="_blank" class="sidebar-menu-btn sidebar-link">
+              <i class="fa-solid fa-book-medical icon-api"></i>
+              <span>OpenAPI Docs</span>
+              <i class="fa-solid fa-arrow-up-right-from-square link-ext-icon"></i>
+            </a>
+            <a href="/health" target="_blank" class="sidebar-menu-btn sidebar-link">
+              <i class="fa-solid fa-heart-pulse icon-health"></i>
+              <span>API Health</span>
+              <i class="fa-solid fa-arrow-up-right-from-square link-ext-icon"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- Configuration Menu -->
+        <button type="button" class="nav-item" id="btnOpenConfigModal">
+          <i class="fa-solid fa-gear"></i>
+          <span>Configuration</span>
         </button>
-        <button type="button" class="btn btn-xs btn-outline btn-slack-side" id="btnOpenSlackModal">
-          <i class="fa-brands fa-slack"></i> Slack Notify
-        </button>
-        <a href="/docs" target="_blank" class="sidebar-link"><i class="fa-solid fa-book"></i> OpenAPI Docs</a>
-        <a href="/health" target="_blank" class="sidebar-link"><i class="fa-solid fa-notes-medical"></i> API Health</a>
-      </div>
+      </nav>
 
       <div class="sidebar-footer">
         <div class="status-badge" id="apiStatusBadge">
@@ -696,6 +711,27 @@
             </div>
           </div>
 
+          <!-- Patient Clinical Description & Narrative -->
+          <div class="form-section patient-desc-section">
+            <div class="section-header">
+              <i class="fa-solid fa-file-waveform"></i>
+              <h4>Patient Clinical Description & History</h4>
+            </div>
+            <p class="field-hint">Enter the patient's medical narrative, symptoms, clinical notes, or history. Click <strong>Auto-Classify with AI</strong> to automatically extract demographics, metadata tags, and categorized organ system findings.</p>
+            
+            <div class="desc-input-wrapper">
+              <textarea id="patientDescription" class="input-text patient-desc-textarea" rows="4" placeholder="e.g. 50-year-old male patient Robert presents with excessive thirst (polydipsia), polyuria, persistent fatigue, blurred vision, fasting glucose 165 mg/dL, and a 5 kg weight gain over 6 months on a high-carb diet. History of hypertension on Lisinopril 10mg daily. Allergic to Penicillin."></textarea>
+              <div class="desc-actions-row">
+                <button type="button" class="btn btn-sm btn-primary" id="btnClassifyDescription">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Classify with AI
+                </button>
+                <span class="classify-status-text hidden" id="classifyStatusText">
+                  <i class="fa-solid fa-spinner fa-spin"></i> Classifying clinical description with LLM...
+                </span>
+              </div>
+            </div>
+          </div>
+
           <!-- Upload Medical Document Drop Zone -->
           <div class="form-section">
             <div class="section-header">
@@ -851,6 +887,6 @@
     <p>Medical Multi-Agent System &bull; For Clinical Research & Information Purposes Only &bull; Evidence Quality & Validation Engine Enabled</p>
   </footer>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=20260822-light-v5"></script>
 </body>
 </html>

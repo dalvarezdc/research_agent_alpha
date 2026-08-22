@@ -287,3 +287,49 @@ def test_agent_override_in_analyze_async(mock_exec, client):
     assert jobs[job_id]["agent_id"] == "general_agent"
 
 
+@patch("api.classify_patient_description")
+def test_classify_patient_text_endpoint(mock_classify, client):
+    """Test POST /patients/classify-text endpoint with mocked LLM classification."""
+    mock_classify.return_value = {
+        "demographics": {
+            "name": "Robert",
+            "age": 50,
+            "gender": "Male",
+            "primary_condition": "Type 2 Diabetes Mellitus"
+        },
+        "metadata_tags": {
+            "Allergies": "Penicillin",
+            "Diet": "High-carbohydrate"
+        },
+        "categorized_data": {
+            "heart": [],
+            "liver": [],
+            "pancreas": [
+                {"marker": "Fasting Blood Glucose", "value": "165 mg/dL", "reference_range": "70-99", "status": "High", "notes": "Elevated"}
+            ],
+            "nutrients": [],
+            "overall_health": [],
+            "medications": []
+        },
+        "summary": "50yo male with hyperglycemia."
+    }
+
+    res = client.post("/patients/classify-text", json={
+        "text": "50-year-old male patient Robert presents with excessive thirst and fasting glucose 165 mg/dL. Allergic to Penicillin.",
+        "model": "grok-4.5"
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert data["classification"]["demographics"]["name"] == "Robert"
+    assert data["classification"]["demographics"]["age"] == 50
+    assert data["classification"]["metadata_tags"]["Allergies"] == "Penicillin"
+    assert len(data["classification"]["categorized_data"]["pancreas"]) == 1
+
+
+def test_classify_patient_text_empty_error(client):
+    """Test POST /patients/classify-text returns 400 when text is empty."""
+    res = client.post("/patients/classify-text", json={"text": "", "model": "grok-4.5"})
+    assert res.status_code == 400
+
+

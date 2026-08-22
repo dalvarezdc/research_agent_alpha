@@ -88,7 +88,8 @@ class LangChainMedicalFactChecker(LangChainAgentBase):
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
-            fallback_providers=fallback_providers or ["openai", "ollama"],
+            fallback_providers=fallback_providers
+            or ["claude-sonnet", "grok-4.3", "openai", "ollama"],
             enable_logging=enable_logging,
             enable_reference_validation=enable_reference_validation,
             enable_web_research=enable_web_research,

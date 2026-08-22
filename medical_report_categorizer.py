@@ -115,3 +115,104 @@ Do NOT include markdown wrapping or extra text outside JSON."""
     except Exception as e:
         logger.error(f"Error categorizing medical report with LLM: {e}")
         return CategorizedPatientReport().model_dump()
+
+
+class PatientExtractedDemographics(BaseModel):
+    name: Optional[str] = Field(None, description="Extracted patient name if mentioned")
+    age: Optional[int] = Field(None, description="Patient age if mentioned")
+    gender: Optional[str] = Field(None, description="Patient gender (Male, Female, Other) if mentioned")
+    primary_condition: Optional[str] = Field(None, description="Main condition or primary clinical complaint")
+
+
+class PatientClassifiedProfile(BaseModel):
+    demographics: PatientExtractedDemographics = Field(default_factory=PatientExtractedDemographics)
+    metadata_tags: Dict[str, str] = Field(default_factory=dict, description="Key-value attributes (e.g. Allergies, Diet, Comorbidities, Vitals)")
+    categorized_data: CategorizedPatientReport = Field(default_factory=CategorizedPatientReport)
+    summary: Optional[str] = Field(None, description="Concise clinical summary")
+
+
+def classify_patient_description(
+    description_text: str,
+    model_name: str = "grok-4.5"
+) -> Dict[str, Any]:
+    """
+    Analyze free-form patient description / clinical narrative and automatically classify:
+    1. Demographics (name, age, gender, primary condition)
+    2. Key-value metadata tags (Allergies, Diet, Comorbidities, Family History, Vitals)
+    3. Categorized Organ System measurements (Heart, Liver, Pancreas, Nutrients, CBC/Overall, Meds)
+    """
+    if not description_text or not description_text.strip():
+        return PatientClassifiedProfile().model_dump()
+
+    available_models = get_available_models()
+    provider_name = available_models.get(model_name, model_name)
+
+    try:
+        llm_manager = create_llm_manager(provider_name)
+    except Exception as e:
+        logger.warning(f"Could not initialize provider '{provider_name}', falling back to default: {e}")
+        llm_manager = create_llm_manager("grok-4.5")
+
+    system_prompt = """You are an expert clinical intake specialist and medical AI classifier.
+Your task is to analyze a free-form patient description, clinical history, or medical case summary and extract structured data.
+
+Extract and classify:
+1. `demographics`:
+   - `name`: Patient's name if stated (otherwise null)
+   - `age`: Patient's age in years if stated (as integer, otherwise null)
+   - `gender`: "Male", "Female", or "Other" if identifiable (otherwise null)
+   - `primary_condition`: Primary diagnosis or chief clinical presentation (e.g. "Type 2 Diabetes Mellitus", "Essential Hypertension", "Chest Pain")
+
+2. `metadata_tags`: A key-value dictionary of clinical tags and context:
+   - e.g. "Allergies": "Penicillin"
+   - e.g. "Diet": "High-carbohydrate, ultra-processed"
+   - e.g. "Comorbidities": "Hypertension, Dyslipidemia"
+   - e.g. "Smoking Status": "Non-smoker"
+   - e.g. "Family History": "Father had T2D"
+
+3. `categorized_data`: Group all clinical measurements, findings, and medications into the 6 organ system domains:
+   - `heart`: Cardiovascular, Blood Pressure, Pulse, Lipids (LDL, HDL, Triglycerides), Cardiac markers
+   - `liver`: ALT, AST, Bilirubin, ALP, Albumin, Hepatic notes
+   - `pancreas`: Fasting Glucose, HbA1c, Insulin, Endocrine findings
+   - `nutrients`: Vitamins, Minerals (Iron, Calcium, Potassium, Sodium, etc.)
+   - `overall_health`: CBC, WBC, Platelets, Inflammatory (CRP, ESR), Renal (Creatinine, eGFR), Weight changes
+   - `medications`: Active drugs, OTC supplements, dosages, frequency
+
+Each item in categorized_data must be: {"marker": str, "value": str, "reference_range": str, "status": "Normal"|"High"|"Low"|"Critical", "notes": str}
+
+Return ONLY valid JSON matching:
+{
+  "demographics": {
+    "name": "Robert",
+    "age": 50,
+    "gender": "Male",
+    "primary_condition": "Type 2 Diabetes Mellitus"
+  },
+  "metadata_tags": {
+    "Diet": "High-carbohydrate, ultra-processed",
+    "Symptoms": "Polydipsia, polyuria, nocturia, fatigue, blurred vision",
+    "Weight Change": "+5 kg in 6 months",
+    "Comorbidity": "Hypertension"
+  },
+  "categorized_data": {
+    "heart": [{"marker": "Blood Pressure / History", "value": "Hypertension", "reference_range": "<120/80 mmHg", "status": "High", "notes": "Managed on Lisinopril"}],
+    "liver": [],
+    "pancreas": [{"marker": "Fasting Blood Glucose", "value": "165 mg/dL", "reference_range": "70-99 mg/dL", "status": "High", "notes": "Above diabetes diagnostic threshold (>=126 mg/dL)"}],
+    "nutrients": [],
+    "overall_health": [{"marker": "Weight Change", "value": "+5 kg", "reference_range": "Stable", "status": "High", "notes": "Over 6 months"}],
+    "medications": [{"marker": "Lisinopril", "value": "10 mg daily", "reference_range": "Prescription", "status": "Normal", "notes": "Antihypertensive"}]
+  },
+  "summary": "50yo male with symptomatic hyperglycemia and metabolic risk factors."
+}
+Do NOT include markdown formatting or commentary outside JSON."""
+
+    user_prompt = f"Analyze and classify this patient clinical description:\n\n{description_text[:12000]}"
+
+    try:
+        response, _ = llm_manager.generate_response(prompt=user_prompt, system_prompt=system_prompt)
+        parsed_dict = parse_json_safely(response)
+        validated = PatientClassifiedProfile.model_validate(parsed_dict)
+        return validated.model_dump()
+    except Exception as e:
+        logger.error(f"Error classifying patient description with LLM: {e}")
+        return PatientClassifiedProfile().model_dump()

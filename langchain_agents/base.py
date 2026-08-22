@@ -25,7 +25,9 @@ class LangChainAgentConfig:
     """Configuration shared across LangChain agents."""
 
     primary_llm_provider: str = "claude-sonnet"
-    fallback_providers: list[str] = field(default_factory=lambda: ["openai", "ollama"])
+    fallback_providers: list[str] = field(
+        default_factory=lambda: ["claude-sonnet", "grok-4.3", "openai", "ollama"]
+    )
     enable_logging: bool = True
     enable_reference_validation: bool = False
     enable_audit: bool = True
@@ -125,16 +127,29 @@ class LangChainAgentBase:
             )
         return "\n".join(lines)
 
+    @staticmethod
+    def _sanitize_prompt_input(val: Any) -> Any:
+        """Sanitize input strings to prevent prompt injection and chat template delimiter collisions."""
+        if not isinstance(val, str):
+            return val
+        # Strip system role override tokens and raw template control sequences
+        sanitized = re.sub(r"<\|(?:im_start|im_end|endoftext|system|assistant|user)\|>", "", val, flags=re.IGNORECASE)
+        sanitized = re.sub(r"\[\s*(?:SYSTEM|ASSISTANT|HUMAN|INSTRUCTION)\s*\]", "", sanitized, flags=re.IGNORECASE)
+        return sanitized.strip()
+
     def _render_prompt(
         self, system_prompt: str, user_prompt: str, **kwargs: Any
     ) -> Tuple[str, str]:
         system_prompt, user_prompt = self._apply_provider_overrides(
             system_prompt, user_prompt
         )
+        cleaned_kwargs = {
+            k: self._sanitize_prompt_input(v) for k, v in kwargs.items()
+        }
         prompt = ChatPromptTemplate.from_messages(
             [("system", system_prompt), ("user", user_prompt)]
         )
-        messages = prompt.format_messages(**kwargs)
+        messages = prompt.format_messages(**cleaned_kwargs)
 
         system_text = ""
         user_texts: list[str] = []
