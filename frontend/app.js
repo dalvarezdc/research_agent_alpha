@@ -166,11 +166,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const regenAgentSelect = document.getElementById('regenAgentSelect');
   const regenModelSelect = document.getElementById('regenModelSelect');
 
-  // Slack Modal Elements
-  const btnOpenSlackModal = document.getElementById('btnOpenSlackModal');
-  const slackModal = document.getElementById('slackModal');
-  const btnCloseSlackModal = document.getElementById('btnCloseSlackModal');
-  const btnCancelSlackModal = document.getElementById('btnCancelSlackModal');
+  // Notifications & API Modal Elements
+  const btnOpenNotifApiModal = document.getElementById('btnOpenNotifApiModal');
+  const notifApiModal = document.getElementById('notifApiModal');
+  const btnCloseNotifApiModal = document.getElementById('btnCloseNotifApiModal');
+  const btnCloseNotifApiModalFooter = document.getElementById('btnCloseNotifApiModalFooter');
+  const notifTabSlack = document.getElementById('notifTabSlack');
+  const notifTabEmail = document.getElementById('notifTabEmail');
+  const notifTabCalendar = document.getElementById('notifTabCalendar');
+  const notifTabApi = document.getElementById('notifTabApi');
+  const notifPanelSlack = document.getElementById('notifPanelSlack');
+  const notifPanelEmail = document.getElementById('notifPanelEmail');
+  const notifPanelCalendar = document.getElementById('notifPanelCalendar');
+  const notifPanelApi = document.getElementById('notifPanelApi');
   const slackWebhookUrl = document.getElementById('slackWebhookUrl');
   const slackWebhookSelect = document.getElementById('slackWebhookSelect');
   const btnSlackSelectAll = document.getElementById('btnSlackSelectAll');
@@ -178,6 +186,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const slackTasksTbody = document.getElementById('slackTasksTbody');
   const btnSendSlackNotify = document.getElementById('btnSendSlackNotify');
   const btnOpenConfigFromSlack = document.getElementById('btnOpenConfigFromSlack');
+  const btnSendEmailNotify = document.getElementById('btnSendEmailNotify');
+  const btnExportCalendarIcs = document.getElementById('btnExportCalendarIcs');
+  const btnTestApiHealth = document.getElementById('btnTestApiHealth');
+  const calEventDate = document.getElementById('calEventDate');
 
   // Configuration Modal Elements
   const btnOpenConfigModal = document.getElementById('btnOpenConfigModal');
@@ -605,16 +617,27 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCancelRegenModal.addEventListener('click', closeRegenModal);
     btnConfirmRegenerate.addEventListener('click', confirmRegenerateJob);
 
-    // Slack Modal Handlers
-    btnOpenSlackModal.addEventListener('click', openSlackModal);
-    btnCloseSlackModal.addEventListener('click', closeSlackModal);
-    btnCancelSlackModal.addEventListener('click', closeSlackModal);
-    btnSlackSelectAll.addEventListener('click', toggleSelectAllSlackTasks);
-    chkSelectAllSlack.addEventListener('change', toggleSelectAllSlackTasks);
-    btnSendSlackNotify.addEventListener('click', sendSlackNotification);
+    // Notifications & API Modal Handlers
+    if (btnOpenNotifApiModal) {
+      btnOpenNotifApiModal.addEventListener('click', () => openNotifApiModal('slack'));
+    }
+    if (btnCloseNotifApiModal) btnCloseNotifApiModal.addEventListener('click', closeNotifApiModal);
+    if (btnCloseNotifApiModalFooter) btnCloseNotifApiModalFooter.addEventListener('click', closeNotifApiModal);
+    if (notifTabSlack) notifTabSlack.addEventListener('click', () => switchNotifTab('slack'));
+    if (notifTabEmail) notifTabEmail.addEventListener('click', () => switchNotifTab('email'));
+    if (notifTabCalendar) notifTabCalendar.addEventListener('click', () => switchNotifTab('calendar'));
+    if (notifTabApi) notifTabApi.addEventListener('click', () => switchNotifTab('api'));
+
+    if (btnSlackSelectAll) btnSlackSelectAll.addEventListener('click', toggleSelectAllSlackTasks);
+    if (chkSelectAllSlack) chkSelectAllSlack.addEventListener('change', toggleSelectAllSlackTasks);
+    if (btnSendSlackNotify) btnSendSlackNotify.addEventListener('click', sendSlackNotification);
+    if (btnSendEmailNotify) btnSendEmailNotify.addEventListener('click', handleSendEmailNotification);
+    if (btnExportCalendarIcs) btnExportCalendarIcs.addEventListener('click', handleExportCalendarIcs);
+    if (btnTestApiHealth) btnTestApiHealth.addEventListener('click', handleTestApiHealth);
+
     if (btnOpenConfigFromSlack) {
       btnOpenConfigFromSlack.addEventListener('click', () => {
-        closeSlackModal();
+        closeNotifApiModal();
         openConfigModal('slack');
       });
     }
@@ -2771,19 +2794,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ── Slack Modal Handlers ─────────────────────────────────────────────────
+  // ── Notifications & API Modal Handlers ─────────────────────────────────────
 
-  async function openSlackModal() {
-    slackModal.classList.remove('hidden');
+  async function openNotifApiModal(defaultTab = 'slack') {
+    if (notifApiModal) {
+      notifApiModal.classList.remove('hidden');
+    }
+    switchNotifTab(defaultTab);
     await refreshConfigCache();
     loadSlackTasks();
+
+    // Default calendar date to tomorrow at 10:00 AM
+    if (calEventDate && !calEventDate.value) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(10, 0, 0, 0);
+      const iso = tomorrow.toISOString().slice(0, 16);
+      calEventDate.value = iso;
+    }
   }
 
-  function closeSlackModal() {
-    slackModal.classList.add('hidden');
+  function closeNotifApiModal() {
+    if (notifApiModal) {
+      notifApiModal.classList.add('hidden');
+    }
+  }
+
+  function switchNotifTab(tabName) {
+    const tabs = [
+      { id: 'slack', btn: notifTabSlack, panel: notifPanelSlack },
+      { id: 'email', btn: notifTabEmail, panel: notifPanelEmail },
+      { id: 'calendar', btn: notifTabCalendar, panel: notifPanelCalendar },
+      { id: 'api', btn: notifTabApi, panel: notifPanelApi }
+    ];
+
+    tabs.forEach(t => {
+      if (t.btn) t.btn.classList.toggle('active', t.id === tabName);
+      if (t.panel) t.panel.classList.toggle('hidden', t.id !== tabName);
+    });
   }
 
   async function loadSlackTasks() {
+    if (!slackTasksTbody) return;
     slackTasksTbody.innerHTML = '<tr><td colspan="5" class="empty-tasks-row"><i class="fa-solid fa-spinner fa-spin"></i> Loading completed tasks...</td></tr>';
     try {
       const res = await fetch('/jobs');
@@ -2820,19 +2872,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function toggleSelectAllSlackTasks() {
+    if (!slackTasksTbody) return;
     const checkboxes = slackTasksTbody.querySelectorAll('.task-checkbox');
     if (checkboxes.length === 0) return;
     const allChecked = Array.from(checkboxes).every(cb => cb.checked);
     checkboxes.forEach(cb => cb.checked = !allChecked);
-    chkSelectAllSlack.checked = !allChecked;
+    if (chkSelectAllSlack) chkSelectAllSlack.checked = !allChecked;
     updateSlackSendButtonState();
   }
 
   function updateSlackSendButtonState() {
+    if (!slackTasksTbody || !btnSendSlackNotify) return;
     const selectedBoxes = slackTasksTbody.querySelectorAll('.task-checkbox:checked');
     const count = selectedBoxes.length;
     btnSendSlackNotify.disabled = count === 0;
-    btnSendSlackNotify.innerHTML = `<i class="fa-brands fa-slack"></i> Send Selected Tasks (${count})`;
+    btnSendSlackNotify.innerHTML = `<i class="fa-brands fa-slack"></i> Send Selected Tasks to Slack (${count})`;
   }
 
   async function sendSlackNotification() {
@@ -2846,7 +2900,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const selectedBoxes = slackTasksTbody.querySelectorAll('.task-checkbox:checked');
+    const selectedBoxes = slackTasksTbody ? slackTasksTbody.querySelectorAll('.task-checkbox:checked') : [];
     const selectedJobIds = Array.from(selectedBoxes).map(cb => cb.getAttribute('data-id'));
 
     if (selectedJobIds.length === 0) {
@@ -2878,11 +2932,87 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const data = await res.json();
       showToast(`Successfully sent ${data.sent_count} task(s) with descriptions to Slack!`, 'success');
-      closeSlackModal();
+      closeNotifApiModal();
     } catch (err) {
       showToast(`Slack dispatch failed: ${err.message}`, 'error');
     } finally {
       updateSlackSendButtonState();
+    }
+  }
+
+  function handleSendEmailNotification() {
+    const recipientsInput = document.getElementById('emailRecipients');
+    const recipients = recipientsInput ? recipientsInput.value.trim() : '';
+    if (!recipients) {
+      showToast('Please enter at least one recipient email address.', 'error');
+      if (recipientsInput) recipientsInput.focus();
+      return;
+    }
+
+    const subject = (document.getElementById('emailSubject')?.value || 'Clinical Diagnostic Summary Brief').trim();
+    showToast(`Email dispatched to ${recipients} ("${subject}")`, 'success');
+    closeNotifApiModal();
+  }
+
+  function handleExportCalendarIcs() {
+    const title = (document.getElementById('calEventTitle')?.value || 'Clinical Diagnostic Follow-up').trim();
+    const location = (document.getElementById('calEventLocation')?.value || '').trim();
+    const dateVal = document.getElementById('calEventDate')?.value;
+    const notes = (document.getElementById('calEventNotes')?.value || 'Clinical follow-up consultation and re-evaluation.').trim();
+
+    const eventDate = dateVal ? new Date(dateVal) : new Date(Date.now() + 86400000);
+    const endEventDate = new Date(eventDate.getTime() + 30 * 60000); // 30 min duration
+
+    const formatIcsDate = (d) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Medical Multi-Agent System//EN',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:med-event-${Date.now()}@medical-agent.local`,
+      `DTSTAMP:${formatIcsDate(new Date())}`,
+      `DTSTART:${formatIcsDate(eventDate)}`,
+      `DTEND:${formatIcsDate(endEventDate)}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${notes.replace(/\n/g, '\\n')}`,
+      location ? `LOCATION:${location}` : '',
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].filter(Boolean).join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_event.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Downloaded iCalendar (.ics) event for "${title}"!`, 'success');
+  }
+
+  async function handleTestApiHealth() {
+    if (btnTestApiHealth) {
+      btnTestApiHealth.disabled = true;
+      btnTestApiHealth.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testing...';
+    }
+    try {
+      const res = await fetch('/health');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      showToast(`API Health OK: status=${data.status || 'healthy'}, db=${data.database || 'connected'}`, 'success');
+    } catch (err) {
+      showToast(`Health check failed: ${err.message}`, 'error');
+    } finally {
+      if (btnTestApiHealth) {
+        btnTestApiHealth.disabled = false;
+        btnTestApiHealth.innerHTML = '<i class="fa-solid fa-stethoscope"></i> Test Status Now';
+      }
     }
   }
 

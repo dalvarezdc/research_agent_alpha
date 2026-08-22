@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Marked.js for markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20260822-light-v5">
+  <link rel="stylesheet" href="styles.css?v=20260822-light-v6">
 </head>
 <body>
 
@@ -68,28 +68,11 @@
           <span class="badge-count" id="patientsCountTag">0</span>
         </button>
 
-        <!-- Notifications and API Menu -->
-        <div class="sidebar-menu-group">
-          <div class="sidebar-section-title">Notifications and API</div>
-          <div class="sidebar-actions notif-api-group">
-            <button type="button" class="sidebar-menu-btn" id="btnOpenSlackModal">
-              <i class="fa-brands fa-slack icon-slack"></i>
-              <span>Slack Notify</span>
-            </button>
-            <a href="/docs" target="_blank" class="sidebar-menu-btn sidebar-link">
-              <i class="fa-solid fa-book-medical icon-api"></i>
-              <span>OpenAPI Docs</span>
-              <i class="fa-solid fa-arrow-up-right-from-square link-ext-icon"></i>
-            </a>
-            <a href="/health" target="_blank" class="sidebar-menu-btn sidebar-link">
-              <i class="fa-solid fa-heart-pulse icon-health"></i>
-              <span>API Health</span>
-              <i class="fa-solid fa-arrow-up-right-from-square link-ext-icon"></i>
-            </a>
-          </div>
-        </div>
+        <button type="button" class="nav-item" id="btnOpenNotifApiModal">
+          <i class="fa-solid fa-tower-broadcast"></i>
+          <span>Notifications &amp; API</span>
+        </button>
 
-        <!-- Configuration Menu -->
         <button type="button" class="nav-item" id="btnOpenConfigModal">
           <i class="fa-solid fa-gear"></i>
           <span>Configuration</span>
@@ -592,68 +575,232 @@
     </div>
   </div>
 
-  <!-- MODAL 1: SLACK NOTIFICATIONS -->
-  <div class="modal-overlay hidden" id="slackModal">
-    <div class="modal-card">
+  <!-- MODAL 1: NOTIFICATIONS & API (Slack, Email, Calendar, OpenAPI & Health) -->
+  <div class="modal-overlay hidden" id="notifApiModal">
+    <div class="modal-card modal-lg">
       <div class="modal-header">
         <div class="modal-title">
-          <i class="fa-brands fa-slack slack-icon"></i>
+          <i class="fa-solid fa-tower-broadcast notif-api-header-icon"></i>
           <div>
-            <h3>Slack Task Notifications</h3>
-            <p>Select multiple tasks and dispatch descriptions as Slack text snippet attachments.</p>
+            <h3>Notifications &amp; API</h3>
+            <p>Manage multi-channel notification dispatch (Slack, Email, Calendar) and API services.</p>
           </div>
         </div>
-        <button class="modal-close" id="btnCloseSlackModal">&times;</button>
+        <button class="modal-close" id="btnCloseNotifApiModal" type="button">&times;</button>
       </div>
 
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="slackWebhookSelect"><i class="fa-brands fa-slack"></i> Saved Webhook</label>
-          <select id="slackWebhookSelect" class="input-text">
-            <option value="">— Select a saved webhook —</option>
-          </select>
-          <span class="field-hint">
-            Manage webhooks in <button type="button" class="link-btn" id="btnOpenConfigFromSlack">Configuration</button>.
-            Or paste a one-off URL below.
-          </span>
-        </div>
-        <div class="form-group">
-          <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Or custom Webhook URL</label>
-          <input type="url" id="slackWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="input-text">
+      <div class="modal-body config-modal-body">
+        <div class="config-tabs notif-api-tabs" role="tablist">
+          <button type="button" class="config-tab active" data-notif-tab="slack" id="notifTabSlack">
+            <i class="fa-brands fa-slack"></i> Slack Notify
+          </button>
+          <button type="button" class="config-tab" data-notif-tab="email" id="notifTabEmail">
+            <i class="fa-solid fa-envelope"></i> Email
+          </button>
+          <button type="button" class="config-tab" data-notif-tab="calendar" id="notifTabCalendar">
+            <i class="fa-solid fa-calendar-days"></i> Calendar
+          </button>
+          <button type="button" class="config-tab" data-notif-tab="api" id="notifTabApi">
+            <i class="fa-solid fa-code"></i> OpenAPI &amp; Health
+          </button>
         </div>
 
-        <div class="tasks-selection-container">
-          <div class="tasks-header-row">
-            <span class="section-title"><i class="fa-solid fa-list-check"></i> Select Tasks to Dispatch</span>
-            <button class="btn btn-xs btn-outline" id="btnSlackSelectAll">Select All</button>
+        <!-- TAB 1: SLACK NOTIFICATIONS -->
+        <div class="config-tab-panel" id="notifPanelSlack">
+          <div class="form-group">
+            <label for="slackWebhookSelect"><i class="fa-brands fa-slack"></i> Saved Webhook</label>
+            <select id="slackWebhookSelect" class="input-text">
+              <option value="">— Select a saved webhook —</option>
+            </select>
+            <span class="field-hint">
+              Manage saved webhooks in <button type="button" class="link-btn" id="btnOpenConfigFromSlack">Configuration</button>, or enter a custom URL below.
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="slackWebhookUrl"><i class="fa-solid fa-link"></i> Custom Webhook URL (Optional)</label>
+            <input type="url" id="slackWebhookUrl" placeholder="https://hooks.slack.com/services/..." class="input-text">
           </div>
 
-          <div class="tasks-table-wrapper">
-            <table class="slack-tasks-table">
-              <thead>
-                <tr>
-                  <th width="40"><input type="checkbox" id="chkSelectAllSlack"></th>
-                  <th>Task / Query</th>
-                  <th>Agent</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody id="slackTasksTbody">
-                <tr>
-                  <td colspan="5" class="empty-tasks-row">Loading tasks...</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="tasks-selection-container">
+            <div class="tasks-header-row">
+              <span class="section-title"><i class="fa-solid fa-list-check"></i> Select Tasks to Dispatch</span>
+              <button type="button" class="btn btn-xs btn-outline" id="btnSlackSelectAll">Select All</button>
+            </div>
+
+            <div class="tasks-table-wrapper">
+              <table class="slack-tasks-table">
+                <thead>
+                  <tr>
+                    <th width="40"><input type="checkbox" id="chkSelectAllSlack"></th>
+                    <th>Task / Query</th>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody id="slackTasksTbody">
+                  <tr>
+                    <td colspan="5" class="empty-tasks-row">Loading tasks...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tab-action-footer">
+            <button type="button" class="btn btn-slack" id="btnSendSlackNotify" disabled>
+              <i class="fa-brands fa-slack"></i> Send Selected Tasks to Slack (0)
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 2: EMAIL NOTIFICATIONS -->
+        <div class="config-tab-panel hidden" id="notifPanelEmail">
+          <p class="config-panel-intro">
+            Dispatch clinical summaries, diagnostic findings, and practitioner reports directly to healthcare teams or patient records via email.
+          </p>
+
+          <div class="form-group">
+            <label for="emailRecipients"><i class="fa-solid fa-at"></i> Recipient Email Address(es) <span class="required">*</span></label>
+            <input type="text" id="emailRecipients" class="input-text" placeholder="physician@clinic.org, coordinator@hospital.com">
+            <span class="field-hint">Separate multiple recipient addresses with commas.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="emailSubject"><i class="fa-solid fa-heading"></i> Subject Line</label>
+            <input type="text" id="emailSubject" class="input-text" placeholder="Clinical Summary Brief — [Patient / Case ID]" value="Clinical Diagnostic Summary Brief">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fa-solid fa-paperclip"></i> Include in Email</label>
+            <div class="checkbox-group-grid">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkEmailIncludeSummary" checked> Patient Summary &amp; Recommendations
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkEmailIncludePractitioner" checked> Full Practitioner Report &amp; Test Orders
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkEmailIncludeDiffMatrix" checked> Diagnostic Likelihood Matrix
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="emailCustomNotes"><i class="fa-solid fa-comment-medical"></i> Additional Clinical Notes (Optional)</label>
+            <textarea id="emailCustomNotes" class="input-text" rows="3" placeholder="Add custom notes or practitioner handover remarks..."></textarea>
+          </div>
+
+          <div class="tab-action-footer">
+            <button type="button" class="btn btn-primary" id="btnSendEmailNotify">
+              <i class="fa-solid fa-paper-plane"></i> Send Email Notification
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 3: CALENDAR INTEGRATION -->
+        <div class="config-tab-panel hidden" id="notifPanelCalendar">
+          <p class="config-panel-intro">
+            Schedule diagnostic follow-up consultations, test re-evaluations, and clinical check-ins. Export directly as standard iCalendar (<code>.ics</code>) files for Google Calendar, Outlook, and Apple Calendar.
+          </p>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="calEventTitle"><i class="fa-solid fa-calendar-check"></i> Event Title <span class="required">*</span></label>
+              <input type="text" id="calEventTitle" class="input-text" placeholder="e.g. HbA1c &amp; Fasting Glucose Follow-up" value="Clinical Diagnostic Follow-up">
+            </div>
+
+            <div class="form-group">
+              <label for="calEventLocation"><i class="fa-solid fa-location-dot"></i> Location / Telehealth Link</label>
+              <input type="text" id="calEventLocation" class="input-text" placeholder="e.g. Endocrine Clinic / Telehealth URL">
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="calEventDate"><i class="fa-solid fa-calendar-day"></i> Date &amp; Time <span class="required">*</span></label>
+              <input type="datetime-local" id="calEventDate" class="input-text">
+            </div>
+
+            <div class="form-group">
+              <label for="calReminderTime"><i class="fa-solid fa-bell"></i> Reminder Alert</label>
+              <select id="calReminderTime" class="input-text">
+                <option value="15">15 minutes before</option>
+                <option value="60">1 hour before</option>
+                <option value="1440" selected>24 hours (1 day) before</option>
+                <option value="2880">2 days before</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="calEventNotes"><i class="fa-solid fa-clipboard-list"></i> Clinical Follow-up Instructions</label>
+            <textarea id="calEventNotes" class="input-text" rows="3" placeholder="e.g. Re-evaluate fasting glucose and repeat lipid panel; review patient dietary log."></textarea>
+          </div>
+
+          <div class="tab-action-footer">
+            <button type="button" class="btn btn-primary" id="btnExportCalendarIcs">
+              <i class="fa-solid fa-calendar-plus"></i> Download iCalendar (.ics) Event
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 4: OPENAPI & HEALTH -->
+        <div class="config-tab-panel hidden" id="notifPanelApi">
+          <p class="config-panel-intro">
+            Explore live API endpoints, Swagger OpenAPI specifications, and server status.
+          </p>
+
+          <div class="api-links-grid">
+            <div class="api-link-card">
+              <div class="api-link-icon">
+                <i class="fa-solid fa-book-medical"></i>
+              </div>
+              <div class="api-link-content">
+                <h4>OpenAPI Interactive Docs (Swagger)</h4>
+                <p>Interactive API explorer for all clinical, patient, and multi-agent analysis endpoints.</p>
+                <a href="/docs" target="_blank" class="btn btn-xs btn-outline mt-2">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i> Open /docs
+                </a>
+              </div>
+            </div>
+
+            <div class="api-link-card">
+              <div class="api-link-icon health-card-icon">
+                <i class="fa-solid fa-heart-pulse"></i>
+              </div>
+              <div class="api-link-content">
+                <h4>API Service Health Check</h4>
+                <p>Live health probe reporting status, database connection, and uptime.</p>
+                <div class="flex items-center gap-2 mt-2">
+                  <a href="/health" target="_blank" class="btn btn-xs btn-outline">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open /health
+                  </a>
+                  <button type="button" class="btn btn-xs btn-ghost" id="btnTestApiHealth">
+                    <i class="fa-solid fa-stethoscope"></i> Test Status Now
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="api-link-card">
+              <div class="api-link-icon">
+                <i class="fa-solid fa-file-code"></i>
+              </div>
+              <div class="api-link-content">
+                <h4>ReDoc API Documentation</h4>
+                <p>Clean, readable OpenAPI reference documentation for backend integration.</p>
+                <a href="/redoc" target="_blank" class="btn btn-xs btn-outline mt-2">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i> Open /redoc
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-ghost" id="btnCancelSlackModal">Cancel</button>
-        <button class="btn btn-slack" id="btnSendSlackNotify" disabled>
-          <i class="fa-brands fa-slack"></i> Send Selected Tasks (0)
-        </button>
+        <button class="btn btn-ghost" id="btnCloseNotifApiModalFooter" type="button">Close</button>
       </div>
     </div>
   </div>
@@ -887,6 +1034,6 @@
     <p>Medical Multi-Agent System &bull; For Clinical Research & Information Purposes Only &bull; Evidence Quality & Validation Engine Enabled</p>
   </footer>
 
-  <script src="app.js?v=20260822-light-v5"></script>
+  <script src="app.js?v=20260822-light-v6"></script>
 </body>
 </html>
