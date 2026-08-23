@@ -3,6 +3,7 @@ import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { ShinyBadge } from './components/ui/ShinyBadge';
 import { Input, FormField } from './components/ui/FormField';
+import { CloudShaderDemo } from './components/ui/cloud-shader-demo';
 import { ShieldCheck, Cpu, Terminal, Key, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -63,6 +64,51 @@ export const App: React.FC = () => {
             <ShinyBadge variant="amber" pulse icon={<Key className="w-3.5 h-3.5" />}>
               Token Expiring
             </ShinyBadge>
+          </div>
+        </section>
+
+        {/* Cloud Shader Hero Showcase Section */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-content-muted">
+                Procedural WebGL Shader
+              </h2>
+              <p className="text-sm text-content-secondary mt-0.5">
+                Volumetric multi-octave cloud simulation with smooth mouse parallax and dynamic atmospheric scattering.
+              </p>
+            </div>
+            <ShinyBadge variant="blue-glow" pulse>
+              GPU Accelerated
+            </ShinyBadge>
+          </div>
+          
+          <div className="relative rounded-2xl overflow-hidden border border-line-default shadow-crisp-lg bg-slate-950">
+            <CloudShaderDemo />
+            
+            {/* Overlay Glass Card */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-6">
+              <div className="max-w-lg w-full text-center space-y-4 p-8 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-2xl pointer-events-auto">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/20 border border-white/30 backdrop-blur-sm">
+                  <Sparkles className="w-3.5 h-3.5 text-brand-300" />
+                  <span>CloudShader Demo</span>
+                </div>
+                <h3 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm">
+                  Atmospheric Cloud Engine
+                </h3>
+                <p className="text-sm text-slate-100/90 leading-relaxed">
+                  Interactive real-time WebGL fractional Brownian motion with responsive canvas scaling and custom atmospheric color blending.
+                </p>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <Button variant="primary" size="md">
+                    Explore Controls
+                  </Button>
+                  <Button variant="outline" size="md" className="border-white/30 text-white hover:bg-white/10">
+                    Source Code
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
