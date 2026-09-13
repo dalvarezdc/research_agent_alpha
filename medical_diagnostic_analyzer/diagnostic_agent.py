@@ -83,8 +83,11 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
-            fallback_providers=fallback_providers
-            or ["claude-sonnet", "grok-4.3", "openai", "ollama"],
+            fallback_providers=(
+                ["claude-sonnet", "grok-4.3", "openai", "ollama"]
+                if fallback_providers is None
+                else fallback_providers
+            ),
             enable_logging=enable_logging,
             enable_web_research=enable_web_research,
         )
@@ -166,11 +169,6 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         patient_report, practitioner_report = self._build_diagnostic_layered_reports(
             report, results
         )
-
-        # Sync cost tracker.
-        from cost_tracker import get_cost_summary as _module_summary
-
-        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
 
         return {
             "extraction": extraction.model_dump(),
@@ -706,4 +704,3 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             audit_step="diagnostic_layering_loss_check",
         )
         return patient_report, practitioner_report
-

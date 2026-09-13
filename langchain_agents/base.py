@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 import os
 from typing import Any, Optional, Tuple
 
@@ -180,7 +180,7 @@ class LangChainAgentBase:
         if self.enable_audit:
             self.audit_events.append(
                 {
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "step": audit_step,
                     "system_prompt": system_text,
                     "user_prompt": user_text,
@@ -377,7 +377,7 @@ class LangChainAgentBase:
             if getattr(self, "enable_audit", False):
                 self.audit_events.append(
                     {
-                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat(),
                         "step": audit_step,
                         "missing_items": missing,
                     }

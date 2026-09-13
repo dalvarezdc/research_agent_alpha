@@ -1,10 +1,11 @@
 import unittest
+from datetime import datetime
 from unittest.mock import patch, ANY, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api import app, JobStatus
+from api import app, JobStatus, jobs, jobs_lock
 
 
 client = TestClient(app)
@@ -153,6 +154,86 @@ def test_list_jobs_endpoint():
     assert response.status_code == 200
     jobs_list = response.json()
     assert isinstance(jobs_list, list)
+
+
+@patch("api.repository.persist_report")
+@patch("api.write_context_report_md", return_value="outputs/job-1/context.md")
+@patch("api.AgentOrchestrator")
+def test_execute_analysis_uses_unique_directory_and_single_persistence_owner(
+    orchestrator_cls, _write_context, persist_report
+):
+    from api import execute_analysis_sync
+
+    orchestrator = orchestrator_cls.return_value
+    orchestrator.output_dir = "outputs/job-1"
+    orchestrator.last_cost_summary = {"total_cost": 0.25}
+    orchestrator.run_medication_analyzer.return_value = (object(), {})
+    persist_report.return_value.id = "job-1"
+
+    execute_analysis_sync(
+        query="Same query",
+        model="grok-4.3",
+        implementation="langchain",
+        web_search=False,
+        timeout=30,
+        agent_id_override="medication_agent",
+        job_id="job-1",
+    )
+
+    orchestrator_cls.assert_called_once_with(
+        output_dir="outputs", persist_to_db=False, run_id="job-1"
+    )
+    persist_report.assert_called_once()
+    assert persist_report.call_args.kwargs["cost_summary"] == {"total_cost": 0.25}
+
+
+def test_delete_running_job_requests_cancellation_without_removing_record():
+    job_id = "running-delete-regression"
+    with jobs_lock:
+        jobs[job_id] = {
+            "id": job_id,
+            "query": "query",
+            "status": JobStatus.RUNNING,
+            "updated_at": datetime.now(),
+        }
+
+    response = client.delete(f"/jobs/{job_id}")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == JobStatus.CANCELLING
+    with jobs_lock:
+        assert jobs[job_id]["status"] == JobStatus.CANCELLING
+        jobs.pop(job_id, None)
+
+
+@patch("api.repository.delete_conversation_and_artifacts", return_value=[])
+@patch("api._persist_conversation_update")
+@patch("api.execute_analysis_sync")
+def test_cancelled_worker_failure_cleans_job(
+    execute_analysis, _persist_update, delete_artifacts
+):
+    from api import run_background_job
+
+    job_id = "cancelled-failure-regression"
+    with jobs_lock:
+        jobs[job_id] = {
+            "id": job_id,
+            "query": "query",
+            "status": JobStatus.PENDING,
+            "updated_at": datetime.now(),
+        }
+
+    def cancel_then_fail(**_kwargs):
+        with jobs_lock:
+            jobs[job_id]["status"] = JobStatus.CANCELLING
+        raise RuntimeError("stopped")
+
+    execute_analysis.side_effect = cancel_then_fail
+    run_background_job(job_id, "query", "grok-4.3", "langchain", False, 30)
+
+    with jobs_lock:
+        assert job_id not in jobs
+    delete_artifacts.assert_called_once()
 
 
 @patch("urllib.request.urlopen")

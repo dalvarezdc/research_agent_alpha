@@ -374,8 +374,8 @@ def test_gemini_vertex_global_service_uses_global_location_and_rest(monkeypatch)
 
     call_kwargs = mock_client_cls.call_args.kwargs
     assert call_kwargs["location"] == "global"
-    assert call_kwargs["api_endpoint"] == "aiplatform.googleapis.com"
-    assert call_kwargs["api_transport"] == "rest"
+    assert call_kwargs["vertexai"] is True
+    assert call_kwargs["client_options"]["api_endpoint"] == "aiplatform.googleapis.com"
 
 
 def test_gemini_vertex_no_global_service_uses_regional(monkeypatch):
@@ -393,7 +393,7 @@ def test_gemini_vertex_no_global_service_uses_regional(monkeypatch):
 
     call_kwargs = mock_client_cls.call_args.kwargs
     assert call_kwargs["location"] == "europe-west3"
-    assert "api_transport" not in call_kwargs
+    assert "client_options" not in call_kwargs
 
 
 def test_claude_vertex_global_service_uses_global_location(monkeypatch):

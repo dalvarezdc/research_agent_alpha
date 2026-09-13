@@ -143,3 +143,36 @@ def test_get_summary_emits_span_attributes():
     assert abs(call_kwargs["cost.duration"] - 1.2) < 0.001
     # Return value must still be the dict
     assert result["total_cost"] == 0.05
+
+
+def test_decorator_records_on_each_agent_instance():
+    """Module-level decorators must not mix phases between agent instances."""
+    from cost_tracker import record_model_usage, track_cost
+
+    class Usage:
+        input_tokens = 0
+        output_tokens = 0
+        cache_read_tokens = 0
+        cache_write_tokens = 0
+
+    class Agent:
+        def __init__(self):
+            self.cost_tracker = CostTracker()
+            self.total_token_usage = Usage()
+            self.primary_llm = "gpt-4o"
+
+        @track_cost("isolated phase")
+        def run(self, model):
+            record_model_usage(model)
+            self.total_token_usage.input_tokens += 10
+            self.total_token_usage.output_tokens += 5
+
+    first = Agent()
+    second = Agent()
+    first.run("gpt-4o")
+    second.run("claude-sonnet-4-6")
+
+    assert len(first.cost_tracker.get_summary()["phases"]) == 1
+    assert len(second.cost_tracker.get_summary()["phases"]) == 1
+    assert first.cost_tracker.get_summary()["phases"][0]["models_used"] == ["gpt-4o"]
+    assert second.cost_tracker.get_summary()["phases"][0]["models_used"] == ["claude-sonnet-4-6"]

@@ -58,3 +58,32 @@ def test_output_type_invalid_choice_falls_back_to_proceed():
     assert _guarded("INVALID_CHOICE") == OutputType.PROCEED
     assert _guarded("X") == OutputType.PROCEED
     assert _guarded("P") == OutputType.PROCEED
+
+
+def test_embedded_references_are_validated_and_markers_remapped():
+    from run_analysis import AgentOrchestrator
+
+    orch = AgentOrchestrator.__new__(AgentOrchestrator)
+    orch._citation_url_validator = object()
+    output = (
+        "Claim one [1]. Rejected claim [2]. Third claim [3].\n\n"
+        "## References\n"
+        "[1] Author. Valid One. https://example.test/one\n"
+        "[2] Author. Invalid Two. https://example.test/two\n"
+        "[3] Author. Valid Three. https://example.test/three\n"
+    )
+
+    def resolve(citation, url, validator):
+        return (None, "invalid", None, None) if "Invalid" in citation else (url, None, 1.0, None)
+
+    with (
+        patch.object(orch, "_resolve_reference_url", side_effect=resolve),
+        patch.object(orch, "_collect_validated_references", return_value=([], [])),
+    ):
+        rendered = orch._append_references_section(output, object())
+
+    assert "Rejected claim []." not in rendered
+    assert "Rejected claim ." in rendered
+    assert "Third claim [2]" in rendered
+    assert "Invalid Two" not in rendered
+    assert rendered.count("## 📚 References") == 1
