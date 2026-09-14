@@ -571,7 +571,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnChatSend.addEventListener('click', sendIntakeChatMessage);
 
     queryInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && (e.ctrlKey || e.metaKey || intakeChatHistory.length > 0)) {
+      // Enter always sends the current intake message. Shift+Enter remains
+      // available for users who need a newline in the clinical prompt.
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendIntakeChatMessage();
       }
@@ -2119,7 +2121,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } finally {
       isIntakeChatLoading = false;
       btnChatSend.disabled = false;
-      btnChatSend.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send / Clarify';
+      // Preserve the compact circular send affordance after every message.
+      btnChatSend.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
       updateIntakeChatUI();
       queryInput.focus();
     }

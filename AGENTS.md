@@ -56,11 +56,17 @@ pending.md                   # Known gaps and planned work
 |-----------|---------------------|--------------|
 | `medication_agent` | `LangChainMedicationAnalyzer` | Drug pharmacology, interactions, safety, monitoring |
 | `procedure_agent` | `LangChainMedicalReasoningAgent` | Organ-by-organ procedure analysis, peri-op care |
-| `diagnostic_agent` | `MedicalDiagnosticAgent` | Diagnostic Specialist: free-form LLM differential (relative likelihood + severity, cannot-miss); not multi-perspective fact-check |
+| `diagnostic_agent` | `MedicalDiagnosticAgent` | Diagnostic Specialist: free-form differential plus evidence-labelled mainstream, biohacker, and natural/lifestyle recommendation perspectives |
 | `general_agent` | `LangChainMedicalFactChecker` | Open health/evidence questions |
 
 All four agents extend `LangChainAgentBase` and share cost tracking, audit
 logging, `_parse_json`, web research, and the **layered-report helpers** below.
+
+The diagnostic agent keeps its clinical differential and cannot-miss safety plan
+authoritative, then adds three adjunct recommendation perspectives. Each action
+uses a Strong / Moderate / Limited / Poor evidence label. Diet, exercise, sleep,
+stress, and substance habits are assessed only when the patient states them;
+missing habit history is requested rather than inferred.
 
 ---
 
