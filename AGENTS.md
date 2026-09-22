@@ -130,7 +130,8 @@ start_analysis(subject)
     A verification guard logs (and audits) any perspective key_insight that fails
       to survive into the practitioner layer.
     Lens-aware framing (clinical / nature-first / optimization / balanced)
-    References re-attached verbatim after Phase 5 output
+    References validated and rendered as one canonical bibliography; inline
+    numeric markers are remapped when rejected entries are removed
 ```
 
 **Reference caching:** Every `PhaseResult.references` list is populated with
@@ -150,7 +151,7 @@ in `run_analysis.py` deduplicates by DOI/PMID/raw text and validates URLs via
 ### 2. Cost tracking — mandatory on every agent
 Every agent must:
 ```python
-from cost_tracker import track_cost, reset_tracking, CostTracker
+from cost_tracker import track_cost, CostTracker
 
 class MyAgent:
     def __init__(self):
@@ -158,12 +159,10 @@ class MyAgent:
         self.total_token_usage = TokenUsage()
 
     def analyze(self, ...):
-        reset_tracking()           # reset module-level tracker
         self.cost_tracker.reset()  # reset per-instance tracker
         ...
-        # Sync at end:
-        from cost_tracker import get_cost_summary as _ms
-        self.cost_tracker._phase_costs = _ms()["phases"][:]
+        # @track_cost resolves self.cost_tracker at call time, keeping
+        # concurrent agent instances isolated.
 
     @track_cost("Phase N: Name")   # decorator on every phase method
     def _phaseN(self, ...):
@@ -309,7 +308,8 @@ Mismatch log: `reference_validation_mismatches.log` (relative to CWD — see `pe
 
 ## Output files per agent
 
-All files written to `outputs/` with `{subject}_{type}_{timestamp}` naming.
+Every orchestrator run uses an isolated `outputs/{run_id}/` directory; API run
+IDs are the job IDs. Files inside use `{subject}_{type}_{timestamp}` naming.
 
 | Agent | Files produced |
 |-------|---------------|

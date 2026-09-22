@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 960" width="980" height="960">
+  <defs>
+    <!-- Card Shadow -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Marker Arrows -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-dashed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-both-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 10 1 L 0 5 L 10 9 z" fill="#2dd4bf"/>
+    </marker>
+    <marker id="arrow-both-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2dd4bf"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg { fill: #0b0f19; }
+    .border { stroke: #1e293b; stroke-width: 1.5; }
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: 700; fill: #f8fafc; letter-spacing: -0.01em; }
+    .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #94a3b8; }
+    .node-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; }
+    .node-desc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; }
+    .node-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; }
+    .subgraph-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .edge-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 500; fill: #cbd5e1; }
+    .edge-bg { fill: #1e293b; stroke: #334155; stroke-width: 1; rx: 4px; }
+    .flow-line { stroke: #64748b; stroke-width: 1.75; fill: none; }
+    .flow-dashed { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 4,4; fill: none; }
+  </style>
+
+  <!-- Canvas Background -->
+  <rect class="bg" width="980" height="960" rx="14"/>
+  <rect class="border" fill="none" width="980" height="960" rx="14"/>
+
+  <!-- Diagram Title Header -->
+  <g transform="translate(30, 32)">
+    <text class="title" y="16">Agent Pipeline — Shared LLM Execution, Phases &amp; Layered Reporting</text>
+    <text y="38" class="subtitle">The generic flow inside the agent black box, shared across procedure, medication, diagnostic, and fact-checker.</text>
+  </g>
+
+  <!-- MAIN SEQUENTIAL NODES -->
+
+  <!-- Node IN: Inputs -->
+  <g id="node-in" filter="url(#shadow)">
+    <rect x="250" y="80" width="380" height="65" rx="8" fill="#132338" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="440" y="106" text-anchor="middle" class="node-title" fill="#e0f2fe">Subject + Context</text>
+    <text x="440" y="128" text-anchor="middle" class="node-desc" fill="#7dd3fc">+ Web Research Context + Document Context</text>
+  </g>
+
+  <!-- Node BUILD: Build prompt -->
+  <g id="node-build" filter="url(#shadow)">
+    <rect x="270" y="175" width="340" height="55" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="440" y="200" text-anchor="middle" class="node-title" fill="#f1f5f9">Build Prompt</text>
+    <text x="440" y="218" text-anchor="middle" class="node-desc" fill="#94a3b8">system + user templates</text>
+  </g>
+
+  <!-- Node OVR: _apply_provider_overrides -->
+  <g id="node-ovr" filter="url(#shadow)">
+    <rect x="270" y="260" width="340" height="55" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="440" y="284" text-anchor="middle" class="node-code" fill="#f8fafc">_apply_provider_overrides()</text>
+    <text x="440" y="302" text-anchor="middle" class="node-desc" fill="#94a3b8">(Grok-specific injection &amp; token optimization)</text>
+  </g>
+
+  <!-- Node CALL: _call_llm -->
+  <g id="node-call" filter="url(#shadow)">
+    <rect x="230" y="345" width="420" height="70" rx="8" fill="#2d1b4e" stroke="#a78bfa" stroke-width="1.75"/>
+    <text x="440" y="374" text-anchor="middle" class="node-title" fill="#f3e8ff">_call_llm() → Provider Adapter</text>
+    <text x="440" y="396" text-anchor="middle" class="node-desc" fill="#d8b4fe">Claude · OpenAI · Grok · Gemini/Vertex · Ollama</text>
+  </g>
+
+  <!-- Node COST: CostTracker (Side node) -->
+  <g id="node-cost" filter="url(#shadow)">
+    <rect x="720" y="350" width="220" height="60" rx="8" fill="#0f2b26" stroke="#2dd4bf" stroke-width="1.5"/>
+    <text x="830" y="376" text-anchor="middle" class="node-title" fill="#99f6e4">💰 CostTracker</text>
+    <text x="830" y="395" text-anchor="middle" class="node-desc" fill="#5eead4">per-phase tokens &amp; cost</text>
+  </g>
+
+  <!-- Node PARSE: _parse_json -->
+  <g id="node-parse" filter="url(#shadow)">
+    <rect x="310" y="445" width="260" height="50" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="440" y="475" text-anchor="middle" class="node-code" fill="#cbd5e1">_parse_json()</text>
+  </g>
+
+  <!-- Node VALID: Pydantic model_validate -->
+  <g id="node-valid" filter="url(#shadow)">
+    <rect x="260" y="525" width="360" height="55" rx="8" fill="#231d3d" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="440" y="549" text-anchor="middle" class="node-title" fill="#e0e7ff">Pydantic model_validate()</text>
+    <text x="440" y="567" text-anchor="middle" class="node-desc" fill="#a5b4fc">(fallback to empty model on failure)</text>
+  </g>
+
+  <!-- Node PHASES: Agent-specific phases -->
+  <g id="node-phases" filter="url(#shadow)">
+    <polygon points="440,610 650,650 440,690 230,650" fill="#312211" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="440" y="646" text-anchor="middle" class="node-title" fill="#fde68a">Agent-Specific Phases</text>
+    <text x="440" y="663" text-anchor="middle" class="node-desc" fill="#fef3c7">procedure · medication · diagnostic · fact-check</text>
+  </g>
+
+  <!-- Node REFS: PhaseResult.references -->
+  <g id="node-refs" filter="url(#shadow)">
+    <rect x="710" y="625" width="230" height="50" rx="8" fill="#14243b" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="825" y="648" text-anchor="middle" class="node-title" fill="#bae6fd">PhaseResult.references</text>
+    <text x="825" y="664" text-anchor="middle" class="node-desc" fill="#7dd3fc">Structured citation list per phase</text>
+  </g>
+
+  <!-- Node LAYER: Layered report helpers -->
+  <g id="node-layer" filter="url(#shadow)">
+    <rect x="250" y="725" width="380" height="60" rx="8" fill="#231d3d" stroke="#818cf8" stroke-width="1.75"/>
+    <text x="440" y="751" text-anchor="middle" class="node-title" fill="#c7d2fe">Layered Report Helpers</text>
+    <text x="440" y="771" text-anchor="middle" class="node-code" fill="#a5b4fc">_build_layered_report()</text>
+  </g>
+
+  <!-- SUBGRAPH: THREE REPORT LAYERS -->
+  <g id="subgraph-layers">
+    <rect x="40" y="820" width="900" height="110" rx="10" fill="#111827" stroke="#1f2937" stroke-width="1.2"/>
+
+    <!-- L1 -->
+    <g id="node-l1" filter="url(#shadow)">
+      <rect x="60" y="835" width="260" height="80" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+      <text x="190" y="863" text-anchor="middle" class="node-title" fill="#a7f3d0">Layer 1 — Conclusions</text>
+      <text x="190" y="885" text-anchor="middle" class="node-desc" fill="#6ee7b7">What readers value first</text>
+      <text x="190" y="901" text-anchor="middle" class="node-desc" fill="#d1fae5">Plain language, inline [n] markers</text>
+    </g>
+
+    <!-- L2 -->
+    <g id="node-l2" filter="url(#shadow)">
+      <rect x="360" y="835" width="260" height="80" rx="8" fill="#0f2b38" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="490" y="863" text-anchor="middle" class="node-title" fill="#bae6fd">Layer 2 — Reasoning</text>
+      <text x="490" y="885" text-anchor="middle" class="node-desc" fill="#7dd3fc">The logic behind conclusions</text>
+      <text x="490" y="901" text-anchor="middle" class="node-desc" fill="#e0f2fe">Organ &amp; mechanism analysis</text>
+    </g>
+
+    <!-- L3 -->
+    <g id="node-l3" filter="url(#shadow)">
+      <rect x="660" y="835" width="260" height="80" rx="8" fill="#2d1d42" stroke="#c084fc" stroke-width="1.5"/>
+      <text x="790" y="863" text-anchor="middle" class="node-title" fill="#e9d5ff">Layer 3 — Statistical Appendix</text>
+      <text x="790" y="885" text-anchor="middle" class="node-desc" fill="#d8b4fe">Deterministic in Python</text>
+      <text x="790" y="901" text-anchor="middle" class="node-desc" fill="#f3e8ff">Lossless effect sizes &amp; CIs</text>
+    </g>
+  </g>
+
+  <!-- CONNECTORS -->
+  <!-- IN -> BUILD -->
+  <path d="M 440 145 L 440 175" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- BUILD -> OVR -->
+  <path d="M 440 230 L 440 260" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- OVR -> CALL -->
+  <path d="M 440 315 L 440 345" class="flow-line" marker-end="url(#arrow-purple)"/>
+
+  <!-- CALL -.-> COST -->
+  <path d="M 650 380 L 720 380" class="flow-dashed" marker-end="url(#arrow-dashed)"/>
+  <rect x="653" y="369" width="64" height="16" class="edge-bg"/>
+  <text x="685" y="380" text-anchor="middle" class="edge-label">@track_cost</text>
+
+  <!-- CALL -> PARSE -->
+  <path d="M 440 415 L 440 445" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- PARSE -> VALID -->
+  <path d="M 440 495 L 440 525" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- VALID -> PHASES -->
+  <path d="M 440 580 L 440 610" class="flow-line" marker-end="url(#arrow-amber)"/>
+
+  <!-- PHASES -> REFS (references per phase) -->
+  <path d="M 650 650 L 710 650" class="flow-line" marker-end="url(#arrow-blue)"/>
+  <rect x="652" y="632" width="56" height="15" class="edge-bg"/>
+  <text x="680" y="643" text-anchor="middle" class="edge-label" font-size="9">refs per phase</text>
+
+  <!-- PHASES -> LAYER -->
+  <path d="M 440 690 L 440 725" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- LAYER -> L1, L2, L3 -->
+  <path d="M 330 785 L 330 805 L 190 805 L 190 835" class="flow-line" marker-end="url(#arrow-emerald)"/>
+  <path d="M 440 785 L 440 835" class="flow-line" marker-end="url(#arrow-blue)"/>
+  <path d="M 550 785 L 550 805 L 790 805 L 790 835" class="flow-line" marker-end="url(#arrow-purple)"/>
+
+</svg>

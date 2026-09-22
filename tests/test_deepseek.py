@@ -130,6 +130,41 @@ def test_create_llm_manager_deepseek():
     assert isinstance(manager_pro.providers[LLMProvider.DEEPSEEK_V4_PRO], DeepSeekLLM)
 
 
+def test_deepseek_agent_does_not_initialize_vertex_for_explicit_empty_fallbacks(
+    monkeypatch,
+):
+    """An API-selected DeepSeek run must not add Claude/Vertex implicitly."""
+    from langchain_agents.medication_agent import LangChainMedicationAnalyzer
+
+    monkeypatch.setenv("IS_GCP", "true")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-deepseek-key")
+    monkeypatch.delenv("VERTEX_PROJECT", raising=False)
+
+    with patch.object(DeepSeekLLM, "is_available", return_value=True):
+        agent = LangChainMedicationAnalyzer(
+            primary_llm_provider="deepseek-v4-flash",
+            fallback_providers=[],
+            enable_logging=False,
+        )
+
+    assert list(agent.llm_manager.providers) == [LLMProvider.DEEPSEEK_V4_FLASH]
+
+
+def test_unconfigured_vertex_fallback_does_not_block_deepseek(monkeypatch):
+    """Optional fallback configuration errors are skipped after primary succeeds."""
+    monkeypatch.setenv("IS_GCP", "true")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-deepseek-key")
+    monkeypatch.delenv("VERTEX_PROJECT", raising=False)
+
+    manager = create_llm_manager(
+        primary_provider="deepseek-v4-flash",
+        fallback_providers=["claude-sonnet"],
+    )
+
+    assert LLMProvider.DEEPSEEK_V4_FLASH in manager.providers
+    assert LLMProvider.CLAUDE_VERTEX not in manager.providers
+
+
 def test_call_model_deepseek():
     """Test call_model function with deepseek-v4-flash using mocked response."""
     mock_response = MagicMock()

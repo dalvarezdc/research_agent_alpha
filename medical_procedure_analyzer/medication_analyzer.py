@@ -230,10 +230,6 @@ class MedicationAnalyzer(MedicalReasoningAgent):
                 monitoring
             )
 
-            # Sync module-level phase data into this agent's per-instance tracker
-            from cost_tracker import get_cost_summary as _module_summary
-            self.cost_tracker._phase_costs = _module_summary()["phases"][:]
-
             # Print cost summary
             self.cost_tracker.print_summary()
 

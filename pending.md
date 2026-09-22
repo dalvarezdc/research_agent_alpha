@@ -152,6 +152,18 @@ The most complex component in the reference validation system (APA parsing, Cros
 ### Cross-agent layered reporting, references & diagnostic migration
 Extended the fact-checker's layered/lossless approach to every agent:
 
+- **Report integrity and concurrency hardening:** API artifacts now live in a
+  unique directory per job; API persistence creates one report record; phase
+  costs stay on each agent's instance tracker; running-job deletion uses a
+  cancellation/cleanup state; and medication contraindications and warning
+  signs survive in both layered reports.
+- **Canonical references:** embedded bibliographies are URL-validated, rejected
+  entries are removed, and surviving inline markers are renumbered against one
+  deterministic bibliography.
+- **Packaging and CI:** the wheel now contains root entry points, database and
+  diagnostic packages, and frontend assets. GitHub Actions runs offline tests
+  and builds the package.
+
 - **Shared helpers in `LangChainAgentBase`** (`_build_statistical_appendix`,
   `_build_layered_report`, `_verify_no_silent_loss`, `_layer_plain_language`) —
   progressive disclosure: Layer 1 Conclusions → Layer 2 Reasoning → Layer 3

@@ -104,6 +104,61 @@ class DifferentialAssessment(BaseModel):
     )
 
 
+class DiagnosticTestItem(BaseModel):
+    """Structured diagnostic test or procedure with purpose and decision trigger."""
+
+    name: str = Field(description="Name of the test, lab panel, or imaging modality")
+    tier: str = Field(
+        default="Tier 1: Baseline Labs",
+        description="Testing tier: 'Tier 0: Safety & Baseline', 'Tier 1: Routine Labs', or 'Tier 2: Definitive Procedures/Imaging'",
+    )
+    clinical_purpose: str = Field(
+        description="Clinical rationale: what pathology, organ function, or safety question this resolves"
+    )
+    actionable_trigger: str = Field(
+        description="Specific threshold, finding, or result and the resulting clinical action"
+    )
+
+
+class ConditionalTherapyPathway(BaseModel):
+    """Contingency pharmacotherapy or intervention conditional on diagnostic confirmation."""
+
+    trigger_condition: str = Field(
+        description="The confirmed diagnosis or test result that activates this therapy"
+    )
+    regimen_name: str = Field(
+        description="Name of the pharmacological regimen or intervention"
+    )
+    details: str = Field(
+        description="Key drugs, dosing strategy, monitoring, or duration"
+    )
+
+
+class PatientSupportiveCare(BaseModel):
+    """Patient-facing guidance on diet, lifestyle, medication cautions, and appointment prep."""
+
+    dietary_guidance: List[str] = Field(
+        default_factory=list,
+        description="Practical, gentle dietary recommendations while awaiting diagnostic workup",
+    )
+    hydration_and_lifestyle: List[str] = Field(
+        default_factory=list,
+        description="Hydration, posture, and activity pacing instructions",
+    )
+    medication_warnings: List[str] = Field(
+        default_factory=list,
+        description="Medications to hold or avoid (e.g. no OTC PPIs before H. pylori test, avoid NSAIDs)",
+    )
+    questions_for_doctor: List[str] = Field(
+        default_factory=list,
+        description="High-yield, empowering questions the patient should bring to their doctor's visit",
+    )
+    er_warning_signs: List[str] = Field(
+        default_factory=list,
+        description="Specific red-flag emergency symptoms requiring immediate emergency department evaluation",
+    )
+
+
 class DiagnosticReport(BaseModel):
     """The final structured diagnostic report (Level 5)."""
 
@@ -132,6 +187,28 @@ class DiagnosticReport(BaseModel):
         description=(
             "Concrete clinical next steps (urgency, who to see, key exams/tests)"
         )
+    )
+    diagnostic_tests: List[DiagnosticTestItem] = Field(
+        default_factory=list,
+        description=(
+            "Structured list of recommended tests with tier, clinical purpose, "
+            "and actionable trigger"
+        ),
+    )
+    conditional_therapies: List[ConditionalTherapyPathway] = Field(
+        default_factory=list,
+        description=(
+            "Pharmacological / therapeutic options conditional on specific test "
+            "findings (for practitioner awareness)"
+        ),
+    )
+    patient_supportive_care: Optional[PatientSupportiveCare] = Field(
+        default=None,
+        description="Supportive dietary, lifestyle, warnings, and questions for the patient",
+    )
+    escalation_triggers: List[str] = Field(
+        default_factory=list,
+        description="Red flag or peritonitis parameters requiring emergency/surgical consult",
     )
     suggested_agent: str = Field(
         description=(

@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import argparse
+import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, List
 
@@ -94,11 +95,25 @@ class AgentOrchestrator:
             "description": "Independent bio-investigator for health subjects",
             "class": MedicalFactChecker,
         },
+        "diagnostic": {
+            "name": "Medical Diagnostic Analyzer",
+            "description": "Decision-support differential diagnosis from symptom presentations",
+            "class": None,  # Dynamically imported
+        },
     }
 
-    def __init__(self, output_dir: str = "outputs"):
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+    def __init__(
+        self,
+        output_dir: str = "outputs",
+        *,
+        persist_to_db: bool = True,
+        run_id: Optional[str] = None,
+    ):
+        self.run_id = run_id or str(uuid.uuid4())
+        self.output_dir = os.path.join(output_dir, self.run_id)
+        self.persist_to_db = persist_to_db
+        self.last_cost_summary: Dict[str, Any] = {}
+        os.makedirs(self.output_dir, exist_ok=True)
         self._reference_validation_cache: Dict[int, Dict[str, Any]] = {}
         self._citation_url_validator: Optional[CitationURLCorrespondenceValidator] = (
             None
@@ -148,6 +163,9 @@ class AgentOrchestrator:
         any failure here (DB disabled, missing deps, connection error) is logged
         and swallowed — it must never break a run or block file output.
         """
+        if not self.persist_to_db:
+            return
+
         try:
             from database import is_db_enabled
         except Exception:  # pragma: no cover - database package unavailable
@@ -361,6 +379,12 @@ class AgentOrchestrator:
                 from langchain_agents import LangChainMedicalFactChecker
 
                 return LangChainMedicalFactChecker
+            if agent_type == "diagnostic":
+                from medical_diagnostic_analyzer.diagnostic_agent import (
+                    MedicalDiagnosticAgent,
+                )
+
+                return MedicalDiagnosticAgent
             raise ValueError(f"Unknown agent type: {agent_type}")
 
         if agent_type == "procedure":
@@ -369,6 +393,12 @@ class AgentOrchestrator:
             return MedicationAnalyzer
         if agent_type == "factcheck":
             return MedicalFactChecker
+        if agent_type == "diagnostic":
+            from medical_diagnostic_analyzer.diagnostic_agent import (
+                MedicalDiagnosticAgent,
+            )
+
+            return MedicalDiagnosticAgent
         raise ValueError(f"Unknown agent type: {agent_type}")
 
     def run_procedure_analyzer(
@@ -452,6 +482,7 @@ class AgentOrchestrator:
         # Save outputs
         print("💾 Saving outputs...")
         cost_summary = self._get_agent_cost_summary(agent)
+        self.last_cost_summary = cost_summary
         files = self._save_procedure_analysis(
             result,
             procedure,
@@ -534,6 +565,7 @@ class AgentOrchestrator:
         # Save outputs
         print("💾 Saving outputs...")
         cost_summary = self._get_agent_cost_summary(agent)
+        self.last_cost_summary = cost_summary
         files = self._save_medication_analysis(
             result,
             medication,
@@ -625,6 +657,7 @@ class AgentOrchestrator:
         # Save outputs
         print("💾 Saving outputs...")
         cost_summary = self._get_agent_cost_summary(agent)
+        self.last_cost_summary = cost_summary
         files = self._save_fact_check_analysis(
             session,
             subject,
@@ -663,6 +696,7 @@ class AgentOrchestrator:
 
         agent = MedicalDiagnosticAgent(
             primary_llm_provider=llm_provider,
+            fallback_providers=[],
             enable_logging=True,
             interactive=interactive,
         )
@@ -695,6 +729,7 @@ class AgentOrchestrator:
 
         # Save outputs
         print("💾 Saving outputs...")
+        self.last_cost_summary = self._get_agent_cost_summary(agent)
         files = self._save_diagnostic_analysis(result, query)
 
         self._persist_report_to_db(
@@ -702,6 +737,7 @@ class AgentOrchestrator:
             subject_text=query,
             files=files,
             llm_provider=llm_provider,
+            cost_summary=self.last_cost_summary,
         )
 
         return result, files
@@ -850,7 +886,7 @@ class AgentOrchestrator:
             result,
             medication,
             audit_events=getattr(agent, "audit_events", None),
-            cost_summary=self._get_agent_cost_summary(agent),
+            cost_summary=self.last_cost_summary,
         )
 
         return result, files
@@ -1437,40 +1473,82 @@ This analysis aims to inform and educate, not to direct medical care. When in do
         return output + disclaimer
 
     def _append_references_section(self, output: str, session: Any) -> str:
-        """Append aggregated references section from all phases"""
-        # Check if references already embedded in output
-        if (
-            "## 📚 References" in output
-            or "## References" in output
-            or "## REFERENCES" in output.upper()
-        ):
-            # References already present in the LLM-generated output
-            # But still append phase-collected references if available
-            pass
+        """Render one canonical, URL-validated bibliography.
+
+        If the LLM supplied a numbered bibliography, validate those exact
+        entries, remove rejected entries, and remap inline markers to the new
+        contiguous numbering. Phase-collected references are appended after the
+        embedded entries and deduplicated.
+        """
+        import re
+
+        body = output
+        embedded_entries: list[tuple[int, str]] = []
+        heading = re.search(
+            r"(?im)^##\s+(?:📚\s*)?(?:research\s+)?references\s*$", output
+        )
+        if heading:
+            body = output[: heading.start()].rstrip()
+            bibliography = output[heading.end() :]
+            matches = list(re.finditer(r"(?m)^\s*\[(\d+)\]\s+(.+)$", bibliography))
+            for idx, match in enumerate(matches):
+                end = matches[idx + 1].start() if idx + 1 < len(matches) else len(bibliography)
+                citation = (match.group(2) + bibliography[match.end() : end]).strip()
+                embedded_entries.append((int(match.group(1)), " ".join(citation.split())))
+
+        canonical: list[str] = []
+        seen: set[str] = set()
+        marker_map: dict[int, int | None] = {}
+        validator = self._get_citation_url_validator()
+        for old_number, citation in embedded_entries:
+            candidate = self._extract_url_from_citation(citation)
+            resolved, _, _, _ = self._resolve_reference_url(
+                citation, candidate, validator
+            )
+            if not resolved:
+                marker_map[old_number] = None
+                continue
+            formatted = self._format_reference_citation(
+                {"raw_citation": citation}, resolved
+            )
+            key = formatted.lower() if formatted else ""
+            if formatted and key not in seen:
+                seen.add(key)
+                canonical.append(formatted)
+            marker_map[old_number] = canonical.index(formatted) + 1 if formatted else None
+
+        if embedded_entries:
+            def _remap_marker(match: re.Match[str]) -> str:
+                mapped = marker_map.get(int(match.group(1)))
+                return f"[{mapped}]" if mapped is not None else ""
+
+            body = re.sub(r"\[(\d+)\]", _remap_marker, body)
 
         kept_references, _ = self._collect_validated_references(session)
+        for citation in kept_references:
+            key = citation.lower()
+            if key not in seen:
+                seen.add(key)
+                canonical.append(citation)
 
         # If no phase references and no embedded references, add note
-        if not kept_references and (
-            "## 📚 References" not in output and "## References" not in output
-        ):
+        if not canonical:
             refs_section = "\n\n---\n\n## 📚 References\n\n"
             refs_section += "_Note: This analysis synthesizes information from medical literature, clinical guidelines, and evidence-based medicine databases. Specific citations are included for individual studies and recommendations throughout the analysis._\n"
-            return output + refs_section
+            return body + refs_section
 
-        # If we have collected references from phases, append them
-        if kept_references:
-            refs_section = "\n\n---\n\n## 📚 Research References\n\n"
-            refs_section += "_References collected during analysis phases:_\n\n"
+        refs_section = "\n\n---\n\n## 📚 References\n\n"
+        for i, citation in enumerate(canonical[:30], 1):
+            refs_section += f"[{i}] {citation}\n\n"
+        return body + refs_section
 
-            for i, citation in enumerate(
-                kept_references[:30], 1
-            ):  # Limit to 30 references
-                refs_section += f"[{i}] {citation}\n\n"
+    @staticmethod
+    def _extract_url_from_citation(citation: str) -> Optional[str]:
+        """Return the first URL embedded in a citation, without punctuation."""
+        import re
 
-            return output + refs_section
-
-        return output
+        match = re.search(r"https?://[^\s<>]+", citation or "")
+        return match.group(0).rstrip(").,;]") if match else None
 
     def _append_cost_section(self, output: str, cost_summary: Dict) -> str:
         """Append cost analysis section to output"""
@@ -2028,8 +2106,8 @@ Examples:
     parser.add_argument(
         "agent",
         nargs="?",
-        choices=["procedure", "medication", "factcheck"],
-        help="Which agent to run (procedure, medication, or factcheck)",
+        choices=["procedure", "medication", "factcheck", "diagnostic"],
+        help="Which agent to run (procedure, medication, factcheck, or diagnostic)",
     )
 
     parser.add_argument("--list", action="store_true", help="List all available agents")
@@ -2200,6 +2278,13 @@ Examples:
                 timeout=args.timeout,
                 implementation=args.implementation,
                 enable_web_research=args.web_search,
+            )
+
+        elif args.agent == "diagnostic":
+            result, files = orchestrator.run_diagnostic_analyzer(
+                query=args.subject,
+                llm_provider=args.llm,
+                timeout=args.timeout,
             )
 
         # Display file locations

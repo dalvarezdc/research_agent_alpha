@@ -61,7 +61,11 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
-            fallback_providers=fallback_providers or ["openai", "ollama"],
+            fallback_providers=(
+                ["claude-sonnet", "grok-4.3", "openai", "ollama"]
+                if fallback_providers is None
+                else fallback_providers
+            ),
             enable_logging=enable_logging,
             enable_reference_validation=enable_reference_validation,
             enable_web_research=enable_web_research,
@@ -102,8 +106,6 @@ class LangChainMedicalReasoningAgent(LangChainAgentBase):
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
 
-        from cost_tracker import get_cost_summary as _module_summary
-        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
         self.cost_tracker.print_summary()
         return output
 

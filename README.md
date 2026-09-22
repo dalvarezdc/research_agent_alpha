@@ -68,6 +68,11 @@ Every entry point converges on the `AgentOrchestrator`, which drives one agent
 and a set of shared services, then writes artifacts to `outputs/` and (best
 effort) to the database.
 
+![System Architecture](docs/diagrams/system_architecture.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
 flowchart TB
     subgraph Clients["Entry points"]
@@ -112,6 +117,8 @@ flowchart TB
     FILES -.->|/outputs static mount| API
 ```
 
+</details>
+
 Notes:
 
 - **DB persistence is best-effort and gated** by `DB_PERSISTENCE_ENABLED`. A
@@ -130,6 +137,11 @@ The generic flow inside the black box, shared by all four agents. Reasoning
 phases are agent-specific (Diagram 3 shows one concrete example); the prompt →
 LLM → validate → references → layered-report tail is common.
 
+![Agent Pipeline](docs/diagrams/agent_pipeline.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
 flowchart TD
     IN["Subject + context<br/>+ web context + document context"] --> BUILD["Build prompt<br/>system + user templates"]
@@ -146,6 +158,8 @@ flowchart TD
     CALL -.->|"@track_cost"| COST["💰 CostTracker"]
 ```
 
+</details>
+
 Every agent produces a **patient report** (Layers 1-2) and a **practitioner
 report** (Layers 1-3). Critical safety content is placed in the deterministic
 Layer 3 appendix so it is guaranteed present regardless of LLM phrasing.
@@ -154,6 +168,11 @@ Layer 3 appendix so it is guaranteed present regardless of LLM phrasing.
 
 The richest concrete pipeline: five phases with interactive gates, three
 parallel perspective agents, and a lossless layered assembly.
+
+![Fact-Checker Pipeline](docs/diagrams/fact_checker_pipeline.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 flowchart TD
@@ -193,6 +212,8 @@ flowchart TD
     SPLIT -.->|references re-attached verbatim| PAT
     SPLIT -.->|references re-attached verbatim| PRAC
 ```
+
+</details>
 
 Interactive gates use sensible defaults in non-interactive mode (`Both` →
 `Proceed` → `Balanced` lens). The other three agents share the same

@@ -878,3 +878,28 @@ def test_collect_validated_references_reads_flat_references():
     kept, removed = orch._collect_validated_references(_Result())
     assert kept and "Smith (2024)" in kept[0]
     assert removed == []
+def test_medication_layered_reports_preserve_safety_fields():
+    from langchain_agents.medication_agent import LangChainMedicationAnalyzer
+    from medical_procedure_analyzer.medication_analyzer import MedicationOutput
+
+    agent = object.__new__(LangChainMedicationAnalyzer)
+    agent.enable_audit = False
+    agent.audit_events = []
+    agent._layer_plain_language = lambda source, **kwargs: source
+    output = MedicationOutput(
+        medication_name="Example",
+        drug_class="Example class",
+        mechanism_of_action="Example mechanism",
+        absorption="known",
+        metabolism="known",
+        elimination="known",
+        half_life="known",
+        contraindications=[{"condition": "SAFETY_CONTRAINDICATION", "reason": "avoid"}],
+        warning_signs=[{"symptom": "SAFETY_WARNING", "action": "seek help"}],
+    )
+
+    agent._build_layered_medication_reports(output)
+
+    for report in (output.patient_report, output.practitioner_report):
+        assert "SAFETY_CONTRAINDICATION" in report
+        assert "SAFETY_WARNING" in report

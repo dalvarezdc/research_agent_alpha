@@ -121,10 +121,10 @@ except ImportError:
         ChatOpenAI = None
 
 try:
-    from langchain_community.llms import Ollama
-except ImportError:
+    from langchain_ollama import OllamaLLM as Ollama
+except ImportError:  # Backward-compatible fallback for older environments.
     try:
-        from langchain.llms import Ollama
+        from langchain_community.llms import Ollama
     except ImportError:
         Ollama = None
 
@@ -136,10 +136,15 @@ except ImportError:
     xai_user = None
 
 try:
-    from langchain_google_vertexai import ChatVertexAI
-    from langchain_google_vertexai.model_garden import ChatAnthropicVertex
+    # The Google Gen AI integration supports Vertex AI and supersedes the
+    # deprecated ChatVertexAI adapter for Gemini models.
+    from langchain_google_genai import ChatGoogleGenerativeAI as ChatVertexAI
 except ImportError:
     ChatVertexAI = None
+
+try:
+    from langchain_google_vertexai.model_garden import ChatAnthropicVertex
+except ImportError:
     ChatAnthropicVertex = None
 
 
@@ -1072,18 +1077,20 @@ class GeminiVertexLLM(LLMInterface):
         thinking_budget = config.thinking_budget()
         client_kwargs: Dict[str, Any] = dict(
             model=config.model,
+            vertexai=True,
             project=project,
             location=location,
             temperature=config.temperature,
-            max_output_tokens=config.max_tokens,
+            max_tokens=config.max_tokens,
         )
         if _global:
-            # REST transport is required for the global endpoint; gRPC hangs.
-            client_kwargs["api_endpoint"] = "aiplatform.googleapis.com"
-            client_kwargs["api_transport"] = "rest"
+            # The Google Gen AI SDK uses REST; select the global Vertex endpoint.
+            client_kwargs["client_options"] = {
+                "api_endpoint": "aiplatform.googleapis.com"
+            }
 
         if thinking_budget is not None:
-            # ChatVertexAI accepts thinking_budget natively and nests it into
+            # ChatGoogleGenerativeAI accepts thinking_budget natively and nests it into
             # the request's thinking_config. -1 = dynamic, 0 = disabled.
             client_kwargs["thinking_budget"] = thinking_budget
 
@@ -1093,7 +1100,7 @@ class GeminiVertexLLM(LLMInterface):
             # Older langchain-google-vertexai without thinking_budget support:
             # retry without it so the client still initializes.
             self.logger.warning(
-                "ChatVertexAI does not accept thinking_budget; "
+                "ChatGoogleGenerativeAI does not accept thinking_budget; "
                 "initializing without reasoning configuration."
             )
             client_kwargs.pop("thinking_budget", None)
@@ -1192,7 +1199,7 @@ class LLMManager:
 
     def _initialize_providers(self):
         """Initialize all configured LLM providers"""
-        for config in self.configs:
+        for index, config in enumerate(self.configs):
             try:
                 if config.provider in [
                     LLMProvider.CLAUDE_SONNET,
@@ -1226,10 +1233,17 @@ class LLMManager:
 
                 self.logger.info(f"Initialized {config.provider.value} provider")
 
-            except ValueError as e:
-                # Configuration errors (missing env vars, bad values) — re-raise immediately
-                # so the caller gets a clear message instead of a silent empty providers dict.
-                raise
+            except ValueError:
+                # A missing primary-provider setting is fatal. An unavailable
+                # optional fallback must not prevent a configured primary from
+                # starting (for example DeepSeek when IS_GCP is also present).
+                if index == 0:
+                    raise
+                self.logger.warning(
+                    "Skipping unavailable fallback provider %s",
+                    config.provider.value,
+                    exc_info=True,
+                )
             except Exception as e:
                 self.logger.error(
                     f"Failed to initialize {config.provider.value}: {str(e)}"

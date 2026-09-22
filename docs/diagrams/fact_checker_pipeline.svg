@@ -1,0 +1,258 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 1320" width="1140" height="1320">
+  <defs>
+    <!-- Card Shadow -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Marker Arrows -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-dashed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-both-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 10 1 L 0 5 L 10 9 z" fill="#2dd4bf"/>
+    </marker>
+    <marker id="arrow-both-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2dd4bf"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg { fill: #0b0f19; }
+    .border { stroke: #1e293b; stroke-width: 1.5; }
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: 700; fill: #f8fafc; letter-spacing: -0.01em; }
+    .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #94a3b8; }
+    .node-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; }
+    .node-desc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; }
+    .node-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; }
+    .subgraph-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .edge-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 500; fill: #cbd5e1; }
+    .edge-bg { fill: #1e293b; stroke: #334155; stroke-width: 1; rx: 4px; }
+    .flow-line { stroke: #64748b; stroke-width: 1.75; fill: none; }
+    .flow-dashed { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 4,4; fill: none; }
+  </style>
+
+  <!-- Canvas Background -->
+  <rect class="bg" width="1140" height="1320" rx="14"/>
+  <rect class="border" fill="none" width="1140" height="1320" rx="14"/>
+
+  <!-- Diagram Title Header -->
+  <g transform="translate(30, 32)">
+    <text class="title" y="16">Fact-Checker Pipeline — 5 Phases, Parallel Perspectives &amp; Layered Assembly</text>
+    <text y="38" class="subtitle">Detailed multi-phase investigation: conflict scan, evidence audit, synthesis, 3 parallel LLMs, and lossless layered assembly.</text>
+  </g>
+
+  <!-- TOP PHASES -->
+
+  <!-- Node S: start_analysis -->
+  <g id="node-s" filter="url(#shadow)">
+    <rect x="420" y="75" width="300" height="50" rx="25" fill="#132338" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="570" y="105" text-anchor="middle" class="node-title" fill="#bae6fd">start_analysis(subject)</text>
+  </g>
+
+  <!-- Node WC: Web Context -->
+  <g id="node-wc" filter="url(#shadow)">
+    <rect x="430" y="150" width="280" height="45" rx="8" fill="#0f2b26" stroke="#2dd4bf" stroke-width="1.5"/>
+    <text x="570" y="177" text-anchor="middle" class="node-title" fill="#99f6e4">🌐 Build Web Context</text>
+  </g>
+
+  <!-- Phase 1: Conflict Scan -->
+  <g id="node-p1" filter="url(#shadow)">
+    <rect x="360" y="225" width="420" height="60" rx="8" fill="#1e293b" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="570" y="250" text-anchor="middle" class="node-title" fill="#93c5fd">Phase 1 — Conflict Scan</text>
+    <text x="570" y="269" text-anchor="middle" class="node-desc" fill="#bfdbfe">official vs counter-narrative + references</text>
+  </g>
+
+  <!-- User Gate U1 -->
+  <g id="node-u1" filter="url(#shadow)">
+    <polygon points="570,310 710,340 570,370 430,340" fill="#2d2212" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="570" y="337" text-anchor="middle" class="node-title" fill="#fde68a">User Gate 1</text>
+    <text x="570" y="352" text-anchor="middle" class="node-desc" fill="#fef3c7">Official / Independent / Both</text>
+  </g>
+
+  <!-- Phase 2: Evidence Audit -->
+  <g id="node-p2" filter="url(#shadow)">
+    <rect x="360" y="395" width="420" height="60" rx="8" fill="#1e293b" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="570" y="420" text-anchor="middle" class="node-title" fill="#93c5fd">Phase 2 — Evidence Audit</text>
+    <text x="570" y="439" text-anchor="middle" class="node-desc" fill="#bfdbfe">funding bias · methodology · recency</text>
+  </g>
+
+  <!-- User Gate U2 -->
+  <g id="node-u2" filter="url(#shadow)">
+    <polygon points="570,480 670,505 570,530 470,505" fill="#2d2212" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="570" y="503" text-anchor="middle" class="node-title" fill="#fde68a">User Gate 2</text>
+    <text x="570" y="517" text-anchor="middle" class="node-desc" fill="#fef3c7">Dig / Proceed</text>
+  </g>
+
+  <!-- Phase 3: Synthesis -->
+  <g id="node-p3" filter="url(#shadow)">
+    <rect x="360" y="555" width="420" height="60" rx="8" fill="#1e293b" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="570" y="580" text-anchor="middle" class="node-title" fill="#93c5fd">Phase 3 — Synthesis</text>
+    <text x="570" y="599" text-anchor="middle" class="node-desc" fill="#bfdbfe">biological truth · industry bias · grey zone</text>
+  </g>
+
+  <!-- User Gate U3 -->
+  <g id="node-u3" filter="url(#shadow)">
+    <polygon points="570,640 730,670 570,700 410,670" fill="#2d2212" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="570" y="666" text-anchor="middle" class="node-title" fill="#fde68a">User Lens Selection</text>
+    <text x="570" y="682" text-anchor="middle" class="node-desc" fill="#fef3c7">M (Mainstream) / N (Naturist) / B (Biohacker) / A (Balanced)</text>
+  </g>
+
+  <!-- SUBGRAPH: PHASE 4 (Parallel Perspectives) -->
+  <g id="subgraph-p4">
+    <rect x="50" y="730" width="1040" height="230" rx="12" fill="#151b2e" stroke="#2b3b64" stroke-width="1.5"/>
+    <rect x="65" y="720" width="370" height="20" rx="4" fill="#2b3b64"/>
+    <text x="75" y="734" class="subgraph-title" fill="#60a5fa">PHASE 4 — THREE PARALLEL PERSPECTIVE AGENTS</text>
+
+    <!-- Node M: Mainstream -->
+    <g id="node-m" filter="url(#shadow)">
+      <rect x="80" y="755" width="290" height="90" rx="8" fill="#11293b" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="225" y="785" text-anchor="middle" class="node-title" fill="#bae6fd">🏥 Mainstream LLM</text>
+      <text x="225" y="809" text-anchor="middle" class="node-desc" fill="#e0f2fe">Established medical guidelines</text>
+      <text x="225" y="827" text-anchor="middle" class="node-desc" fill="#7dd3fc">Clinical consensus &amp; standard of care</text>
+    </g>
+
+    <!-- Node N: Naturist -->
+    <g id="node-n" filter="url(#shadow)">
+      <rect x="425" y="755" width="290" height="90" rx="8" fill="#0d2b24" stroke="#34d399" stroke-width="1.5"/>
+      <text x="570" y="785" text-anchor="middle" class="node-title" fill="#a7f3d0">🌿 Naturist LLM</text>
+      <text x="570" y="809" text-anchor="middle" class="node-desc" fill="#d1fae5">Holistic &amp; evolutionary root causes</text>
+      <text x="570" y="827" text-anchor="middle" class="node-desc" fill="#6ee7b7">Food, lifestyle &amp; low-intervention</text>
+    </g>
+
+    <!-- Node B: Biohacker -->
+    <g id="node-b" filter="url(#shadow)">
+      <rect x="770" y="755" width="290" height="90" rx="8" fill="#2d1c47" stroke="#c084fc" stroke-width="1.5"/>
+      <text x="915" y="785" text-anchor="middle" class="node-title" fill="#e9d5ff">🚀 Biohacker LLM</text>
+      <text x="915" y="809" text-anchor="middle" class="node-desc" fill="#f3e8ff">Emerging human optimization</text>
+      <text x="915" y="827" text-anchor="middle" class="node-desc" fill="#d8b4fe">Biomarkers, off-label &amp; n=1 trials</text>
+    </g>
+
+    <!-- Node ASM: Assembler LLM -->
+    <g id="node-asm" filter="url(#shadow)">
+      <rect x="370" y="880" width="400" height="60" rx="8" fill="#231d3d" stroke="#818cf8" stroke-width="1.75"/>
+      <text x="570" y="906" text-anchor="middle" class="node-title" fill="#c7d2fe">Assembler LLM (Merged Markdown)</text>
+      <text x="570" y="926" text-anchor="middle" class="node-desc" fill="#a5b4fc">Integrated synthesis with 'Your Focus' section at top</text>
+    </g>
+  </g>
+
+  <!-- Node SPLIT: Split body / references -->
+  <g id="node-split" filter="url(#shadow)">
+    <rect x="420" y="985" width="300" height="45" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="570" y="1012" text-anchor="middle" class="node-title" fill="#e2e8f0">✂️ Split Body / References</text>
+  </g>
+
+  <!-- SUBGRAPH: PHASE 5 (Layered Assembly) -->
+  <g id="subgraph-p5">
+    <rect x="180" y="1055" width="780" height="135" rx="12" fill="#1c1630" stroke="#3b2b64" stroke-width="1.5"/>
+    <rect x="195" y="1045" width="360" height="20" rx="4" fill="#3b2b64"/>
+    <text x="205" y="1059" class="subgraph-title" fill="#c084fc">PHASE 5 — PROGRESSIVE DISCLOSURE ASSEMBLY</text>
+
+    <!-- L12 -->
+    <g id="node-l12" filter="url(#shadow)">
+      <rect x="200" y="1075" width="340" height="50" rx="6" fill="#241e40" stroke="#a78bfa" stroke-width="1.2"/>
+      <text x="370" y="1096" text-anchor="middle" class="node-title" fill="#ddd6fe">LLM: Layer 1 &amp; Layer 2</text>
+      <text x="370" y="1113" text-anchor="middle" class="node-desc" fill="#c4b5fd">Conclusions &amp; Reasoning (plain language)</text>
+    </g>
+
+    <!-- L3f -->
+    <g id="node-l3f" filter="url(#shadow)">
+      <rect x="590" y="1075" width="350" height="50" rx="6" fill="#241e40" stroke="#a78bfa" stroke-width="1.2"/>
+      <text x="765" y="1096" text-anchor="middle" class="node-title" fill="#ddd6fe">Deterministic Layer 3 Appendix</text>
+      <text x="765" y="1113" text-anchor="middle" class="node-desc" fill="#c4b5fd">Python assembled, lossless quantitative evidence</text>
+    </g>
+
+    <!-- GUARD -->
+    <g id="node-guard" filter="url(#shadow)">
+      <rect x="360" y="1135" width="420" height="42" rx="6" fill="#3b111e" stroke="#f43f5e" stroke-width="1.2"/>
+      <text x="570" y="1155" text-anchor="middle" class="node-title" fill="#fecdd3">🛡️ Verification Guard: _verify_no_silent_loss()</text>
+      <text x="570" y="1169" text-anchor="middle" class="node-desc" fill="#fda4af">Audits &amp; verifies no key insights fail to survive</text>
+    </g>
+  </g>
+
+  <!-- FINAL OUTPUT REPORTS -->
+  <!-- PAT: Patient Report -->
+  <g id="node-pat" filter="url(#shadow)">
+    <rect x="180" y="1215" width="340" height="75" rx="8" fill="#0c2d25" stroke="#34d399" stroke-width="1.75"/>
+    <text x="350" y="1243" text-anchor="middle" class="node-title" fill="#a7f3d0">Patient Report (Layers 1-2)</text>
+    <text x="350" y="1263" text-anchor="middle" class="node-desc" fill="#6ee7b7">Layer 1: Conclusions · Layer 2: Reasoning</text>
+    <text x="350" y="1279" text-anchor="middle" class="node-desc" fill="#d1fae5">+ Validated references re-attached</text>
+  </g>
+
+  <!-- PRAC: Practitioner Report -->
+  <g id="node-prac" filter="url(#shadow)">
+    <rect x="620" y="1215" width="340" height="75" rx="8" fill="#132338" stroke="#38bdf8" stroke-width="1.75"/>
+    <text x="790" y="1243" text-anchor="middle" class="node-title" fill="#bae6fd">Practitioner Report (Layers 1-3)</text>
+    <text x="790" y="1263" text-anchor="middle" class="node-desc" fill="#7dd3fc">Layers 1-2 + Layer 3 Statistical Appendix</text>
+    <text x="790" y="1279" text-anchor="middle" class="node-desc" fill="#e0f2fe">+ Full verified citations &amp; methodology audit</text>
+  </g>
+
+  <!-- CONNECTORS -->
+  <!-- S -> WC -->
+  <path d="M 570 125 L 570 150" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- WC -> P1 -->
+  <path d="M 570 195 L 570 225" class="flow-line" marker-end="url(#arrow-blue)"/>
+
+  <!-- P1 -> U1 -->
+  <path d="M 570 285 L 570 310" class="flow-line" marker-end="url(#arrow-amber)"/>
+
+  <!-- U1 -> P2 -->
+  <path d="M 570 370 L 570 395" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- P2 -> U2 -->
+  <path d="M 570 455 L 570 480" class="flow-line" marker-end="url(#arrow-amber)"/>
+
+  <!-- U2 -> P3 -->
+  <path d="M 570 530 L 570 555" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- P3 -> U3 -->
+  <path d="M 570 615 L 570 640" class="flow-line" marker-end="url(#arrow-amber)"/>
+
+  <!-- U3 -> Phase 4 Parallel Agents -->
+  <path d="M 570 700 L 570 715 L 225 715 L 225 755" class="flow-line" marker-end="url(#arrow-blue)"/>
+  <path d="M 570 700 L 570 755" class="flow-line" marker-end="url(#arrow-emerald)"/>
+  <path d="M 570 700 L 570 715 L 915 715 L 915 755" class="flow-line" marker-end="url(#arrow-purple)"/>
+
+  <!-- Parallel Agents -> Assembler -->
+  <path d="M 225 845 L 225 865 L 480 865 L 480 880" class="flow-line" marker-end="url(#arrow)"/>
+  <path d="M 570 845 L 570 880" class="flow-line" marker-end="url(#arrow)"/>
+  <path d="M 915 845 L 915 865 L 660 865 L 660 880" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- ASM -> SPLIT -->
+  <path d="M 570 940 L 570 985" class="flow-line" marker-end="url(#arrow)"/>
+
+  <!-- SPLIT -> Phase 5 -->
+  <path d="M 570 1030 L 570 1055" class="flow-line" marker-end="url(#arrow-purple)"/>
+
+  <!-- Phase 5 -> Outputs -->
+  <path d="M 370 1177 L 370 1195 L 350 1195 L 350 1215" class="flow-line" marker-end="url(#arrow-emerald)"/>
+  <path d="M 770 1177 L 770 1195 L 790 1195 L 790 1215" class="flow-line" marker-end="url(#arrow-blue)"/>
+
+  <!-- SPLIT -.-> references re-attached verbatim to PAT & PRAC -->
+  <path d="M 420 1007 L 130 1007 L 130 1252 L 180 1252" class="flow-dashed" marker-end="url(#arrow-dashed)"/>
+  <rect x="80" y="1120" width="100" height="26" class="edge-bg"/>
+  <text x="130" y="1132" text-anchor="middle" class="edge-label" font-size="9.5">references</text>
+  <text x="130" y="1143" text-anchor="middle" class="edge-label" font-size="9.5">re-attached</text>
+
+  <path d="M 720 1007 L 1010 1007 L 1010 1252 L 960 1252" class="flow-dashed" marker-end="url(#arrow-dashed)"/>
+  <rect x="960" y="1120" width="100" height="26" class="edge-bg"/>
+  <text x="1010" y="1132" text-anchor="middle" class="edge-label" font-size="9.5">references</text>
+  <text x="1010" y="1143" text-anchor="middle" class="edge-label" font-size="9.5">re-attached</text>
+
+</svg>

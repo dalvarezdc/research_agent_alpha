@@ -1,4 +1,4 @@
-.PHONY: help setup router run check-llms api api-dev test test-verbose lint clean design-system design-system-build
+.PHONY: help setup router run check-llms api api-dev test test-verbose lint clean design-system ds design-system-build ds-build
 
 # Default target
 help:
@@ -9,7 +9,7 @@ help:
 	@echo "  make check-llms           Verify configured LLM provider API keys"
 	@echo "  make api                  Start REST API server (port 8080)"
 	@echo "  make api-dev              Start REST API server with auto-reload"
-	@echo "  make design-system        Start React + Tailwind Design System dev server"
+	@echo "  make design-system (or ds) Start React + Tailwind Design System dev server (port 5173)"
 	@echo "  make design-system-build  Build React + Tailwind Design System production bundle"
 	@echo "  make test                 Run test suite"
 	@echo "  make test-verbose         Run test suite in verbose mode"
@@ -76,9 +76,13 @@ design-system:
 	@cd design_system && [ -d node_modules ] || npm install
 	@cd design_system && npm run dev
 
+ds: design-system
+
 design-system-build:
 	@cd design_system && [ -d node_modules ] || npm install
 	@cd design_system && npm run build
+
+ds-build: design-system-build
 
 clean:
 	@echo "🧹 Cleaning temporary files and caches..."

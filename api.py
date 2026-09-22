@@ -44,7 +44,10 @@ from router import route_agent, sample_agents, DEFAULT_ROUTING_MODEL
 from run_analysis import AgentOrchestrator
 from llm_integrations import get_available_models, create_llm_manager
 from document_parser import parse_document
-from medical_report_categorizer import categorize_medical_markdown
+from medical_report_categorizer import (
+    categorize_medical_markdown,
+    classify_patient_description,
+)
 import app_config
 
 # Maximum upload size for document parsing (bytes). Default 25 MB; override via env.
@@ -89,6 +92,7 @@ class JobStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLING = "cancelling"
 
 
 # In-memory thread-safe storage for asynchronous jobs
@@ -189,6 +193,11 @@ class PatientUpdate(BaseModel):
     contact_phone: Optional[str] = Field(None, description="Contact phone")
     metadata_json: Optional[Dict[str, Any]] = Field(None, description="Key-value metadata dictionary")
     clinical_data: Optional[Dict[str, Any]] = Field(None, description="Structured clinical data tables")
+
+
+class PatientClassifyRequest(BaseModel):
+    text: str = Field(..., description="Patient free-form description or clinical summary")
+    model: str = Field(DEFAULT_ROUTING_MODEL, description="LLM model identifier to perform classification")
 
 
 def _patient_to_dict(patient) -> Dict[str, Any]:
@@ -369,6 +378,9 @@ def execute_analysis_sync(
     When ``job_id`` is provided, the Report row is keyed with the same id so
     conversation delete can purge report + files in one shot.
     """
+    # Every run owns a directory. This prevents same-subject requests started in
+    # the same second from overwriting each other's clinical artifacts.
+    run_id = job_id or str(uuid.uuid4())
     # Map model name to provider name
     available_models_dict = get_available_models()
     llm_provider = available_models_dict.get(model, model)
@@ -387,6 +399,15 @@ def execute_analysis_sync(
         )
         logger.info(f"Routed query to agent: {routed_agent_id}")
 
+    # The API owns persistence so the orchestrator must not create a second
+    # Report row for these same files. AgentOrchestrator also allocates the
+    # run-specific artifact directory used by the context report.
+    orchestrator = AgentOrchestrator(
+        output_dir="outputs",
+        persist_to_db=False,
+        run_id=run_id,
+    )
+
     # 1b. Write small context audit report (what is being sent to the agent)
     context_path = write_context_report_md(
         query=query,
@@ -396,11 +417,10 @@ def execute_analysis_sync(
         implementation=implementation,
         context_report=context_report,
         job_id=job_id,
-        output_dir="outputs",
+        output_dir=orchestrator.output_dir,
     )
 
     # 2. Run the specialized agent via AgentOrchestrator
-    orchestrator = AgentOrchestrator(output_dir="outputs")
     files: Dict[str, Any] = {"context_report": context_path}
 
     if routed_agent_id == "medication_agent":
@@ -463,6 +483,7 @@ def execute_analysis_sync(
                 files=files,
                 llm_provider=llm_provider,
                 implementation=implementation,
+                cost_summary=orchestrator.last_cost_summary,
                 report_id=job_id,
             )
             report_id = report.id
@@ -546,8 +567,22 @@ def run_background_job(
     """
     logger.info(f"Starting background job: {job_id}")
     with jobs_lock:
-        jobs[job_id]["status"] = JobStatus.RUNNING
-        jobs[job_id]["updated_at"] = datetime.now()
+        job = jobs.get(job_id)
+        if job is None or job.get("status") == JobStatus.CANCELLING:
+            jobs.pop(job_id, None)
+            should_cancel = True
+        else:
+            job["status"] = JobStatus.RUNNING
+            job["updated_at"] = datetime.now()
+            should_cancel = False
+    if should_cancel:
+        try:
+            ensure_initialized()
+            with session_scope() as session:
+                repository.delete_conversation_and_artifacts(session, job_id)
+        except Exception as cleanup_error:
+            logger.warning("Could not clean cancelled pending job %s: %s", job_id, cleanup_error)
+        return
     _persist_conversation_update(job_id, status=JobStatus.RUNNING)
 
     try:
@@ -565,12 +600,35 @@ def run_background_job(
                 context_report=context_report,
             )
         with jobs_lock:
-            jobs[job_id]["status"] = JobStatus.COMPLETED
-            jobs[job_id]["agent_id"] = data["agent_id"]
-            jobs[job_id]["files"] = data["files"]
-            jobs[job_id]["result"] = data["result"]
-            jobs[job_id]["report_id"] = data.get("report_id")
-            jobs[job_id]["updated_at"] = datetime.now()
+            job = jobs.get(job_id)
+            cancellation_requested = (
+                job is None or job.get("status") == JobStatus.CANCELLING
+            )
+            if not cancellation_requested:
+                job["status"] = JobStatus.COMPLETED
+                job["agent_id"] = data["agent_id"]
+                job["files"] = data["files"]
+                job["result"] = data["result"]
+                job["report_id"] = data.get("report_id")
+                job["updated_at"] = datetime.now()
+        if cancellation_requested:
+            try:
+                ensure_initialized()
+                with session_scope() as session:
+                    repository.delete_conversation_and_artifacts(session, job_id)
+            finally:
+                # Persistence is best effort, so also clean paths returned by the
+                # completed analysis when no database row exists.
+                for file_path in (data.get("files") or {}).values():
+                    if isinstance(file_path, str) and os.path.isfile(file_path):
+                        try:
+                            os.remove(file_path)
+                        except OSError as cleanup_error:
+                            logger.warning("Could not remove cancelled artifact %s: %s", file_path, cleanup_error)
+                with jobs_lock:
+                    jobs.pop(job_id, None)
+            logger.info("Cancelled and cleaned background job: %s", job_id)
+            return
         _persist_conversation_update(
             job_id,
             status=JobStatus.COMPLETED,
@@ -584,9 +642,26 @@ def run_background_job(
         tb = traceback.format_exc()
         logger.error(f"Failed background job: {job_id}. Error: {e}")
         with jobs_lock:
-            jobs[job_id]["status"] = JobStatus.FAILED
-            jobs[job_id]["error"] = f"{e}\n{tb}"
-            jobs[job_id]["updated_at"] = datetime.now()
+            job = jobs.get(job_id)
+            cancellation_requested = (
+                job is None or job.get("status") == JobStatus.CANCELLING
+            )
+            if not cancellation_requested:
+                job["status"] = JobStatus.FAILED
+                job["error"] = f"{e}\n{tb}"
+                job["updated_at"] = datetime.now()
+        if cancellation_requested:
+            try:
+                ensure_initialized()
+                with session_scope() as session:
+                    repository.delete_conversation_and_artifacts(session, job_id)
+            except Exception as cleanup_error:
+                logger.warning("Could not clean failed cancelled job %s: %s", job_id, cleanup_error)
+            finally:
+                with jobs_lock:
+                    jobs.pop(job_id, None)
+            logger.info("Background job %s was cancelled while running", job_id)
+            return
         _persist_conversation_update(
             job_id,
             status=JobStatus.FAILED,
@@ -981,7 +1056,23 @@ def delete_job_endpoint(job_id: str):
     removed_files: list[str] = []
 
     with jobs_lock:
-        job = jobs.pop(job_id, None)
+        job = jobs.get(job_id)
+        if job and job.get("status") in (JobStatus.PENDING, JobStatus.RUNNING):
+            job["status"] = JobStatus.CANCELLING
+            job["updated_at"] = datetime.now()
+            cancelling = True
+        else:
+            job = jobs.pop(job_id, None)
+            cancelling = False
+
+    if cancelling:
+        _persist_conversation_update(job_id, status=JobStatus.CANCELLING)
+        return {
+            "status": JobStatus.CANCELLING,
+            "job_id": job_id,
+            "removed_files": [],
+            "message": "Cancellation requested; artifacts will be removed when the active analysis stops.",
+        }
 
     if job:
         for fpath in (job.get("files") or {}).values():
@@ -1242,6 +1333,32 @@ async def parse_patient_report_endpoint(
         "markdown": markdown_text,
         "categorized_data": categorized_data
     }
+
+
+@app.post("/patients/classify-text")
+def classify_patient_text_endpoint(req: PatientClassifyRequest):
+    """
+    Classify a free-form patient clinical narrative/description using LLM.
+    Extracts demographics, custom metadata tags, and categorized organ system findings.
+    """
+    if not req.text or not req.text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Patient description text cannot be empty."
+        )
+
+    try:
+        classification = classify_patient_description(req.text, model_name=req.model)
+        return {
+            "status": "success",
+            "classification": classification
+        }
+    except Exception as e:
+        logger.error(f"Error classifying patient description: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Classification failure: {e}"
+        )
 
 
 
@@ -1534,23 +1651,23 @@ def _safe_frontend_file(relative: str) -> Optional[Path]:
 
 @app.get("/")
 def serve_frontend_index():
-    """Serve the SPA entry point."""
+    """Serve the SPA entry point with no-cache headers."""
     index = FRONTEND_DIR / "index.html"
     if not index.is_file():
         raise HTTPException(status_code=404, detail="Frontend index.html not found")
-    return FileResponse(index)
+    return FileResponse(index, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 @app.get("/{asset_path:path}")
 def serve_frontend_asset(asset_path: str):
-    """Serve static frontend assets (GET only). Registered last so API routes win."""
+    """Serve static frontend assets (GET only) with no-cache headers."""
     file_path = _safe_frontend_file(asset_path)
     if file_path is not None:
-        return FileResponse(file_path)
+        return FileResponse(file_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     # SPA-style fallback for unknown GET paths
     index = FRONTEND_DIR / "index.html"
     if index.is_file():
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     raise HTTPException(status_code=404, detail="Not found")
 
 

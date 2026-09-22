@@ -77,7 +77,11 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
     ):
         config = LangChainAgentConfig(
             primary_llm_provider=primary_llm_provider,
-            fallback_providers=fallback_providers or ["openai", "ollama"],
+            fallback_providers=(
+                ["claude-sonnet", "grok-4.3", "openai", "ollama"]
+                if fallback_providers is None
+                else fallback_providers
+            ),
             enable_logging=enable_logging,
             enable_reference_validation=enable_reference_validation,
             enable_web_research=enable_web_research,
@@ -103,8 +107,6 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
         if self.enable_reference_validation and self.reference_validator:
             output.validation_report = self.reference_validator.validate_analysis(output)
 
-        from cost_tracker import get_cost_summary as _module_summary
-        self.cost_tracker._phase_costs = _module_summary()["phases"][:]
         self.cost_tracker.print_summary()
         return output
 
@@ -124,8 +126,23 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
             out = []
             for it in items:
                 if isinstance(it, dict):
-                    label = it.get("intervention") or it.get("action") or it.get("claim") or ""
-                    detail = it.get("rationale") or it.get("reason_debunked") or it.get("risks") or ""
+                    label = (
+                        it.get("intervention")
+                        or it.get("claim")
+                        or it.get("condition")
+                        or it.get("symptom")
+                        or it.get("action")
+                        or ""
+                    )
+                    detail = (
+                        it.get("rationale")
+                        or it.get("reason_debunked")
+                        or it.get("risks")
+                        or it.get("reason")
+                        or it.get("response")
+                        or it.get("action")
+                        or ""
+                    )
                     out.append(f"- {label}. {detail}".strip())
                 else:
                     out.append(f"- {it}")
@@ -141,10 +158,12 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
             f"{output.metabolism}; elimination {output.elimination}; half-life {output.half_life}\n"
             f"Serious adverse effects: {', '.join(output.serious_adverse_effects) or 'not established'}\n"
             f"Common adverse effects: {', '.join(output.common_adverse_effects) or 'not established'}\n"
+            f"Contraindications:\n{_fmt_recs(output.contraindications)}\n"
             f"What to do:\n{_fmt_recs(output.evidence_based_recommendations)}\n"
             f"What not to do:\n{_fmt_recs(output.what_not_to_do)}\n"
             f"Debunked claims:\n{_fmt_recs(output.debunked_claims)}\n"
             f"Monitoring: {', '.join(output.monitoring_requirements) or 'not established'}\n"
+            f"Warning signs:\n{_fmt_recs(output.warning_signs)}\n"
         )
 
         framing = (
@@ -161,6 +180,20 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
             appendix_sections["⚠️ Black Box Warnings"] = list(output.black_box_warnings)
         if output.serious_adverse_effects:
             appendix_sections["Serious Adverse Effects"] = list(output.serious_adverse_effects)
+        if output.contraindications:
+            appendix_sections["Contraindications"] = [
+                "; ".join(f"{key}: {value}" for key, value in item.items())
+                if isinstance(item, dict)
+                else str(item)
+                for item in output.contraindications
+            ]
+        if output.warning_signs:
+            appendix_sections["Warning Signs"] = [
+                "; ".join(f"{key}: {value}" for key, value in item.items())
+                if isinstance(item, dict)
+                else str(item)
+                for item in output.warning_signs
+            ]
         interaction_lines = []
         for label, items in (
             ("Drug interactions", output.drug_interactions),
@@ -198,7 +231,12 @@ class LangChainMedicationAnalyzer(LangChainAgentBase):
 
         # Verification guard: black box warnings and serious adverse effects must
         # survive into the practitioner layer.
-        must_survive = list(output.black_box_warnings) + list(output.serious_adverse_effects)
+        must_survive = (
+            list(output.black_box_warnings)
+            + list(output.serious_adverse_effects)
+            + [str(value) for item in output.contraindications for value in item.values()]
+            + [str(value) for item in output.warning_signs for value in item.values()]
+        )
         self._verify_no_silent_loss(
             practitioner, must_survive, audit_step="medication_layering_loss_check"
         )

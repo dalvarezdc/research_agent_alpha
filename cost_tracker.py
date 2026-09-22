@@ -8,9 +8,15 @@ and module-level functions (backwards-compatible wrappers around a default insta
 
 from functools import wraps
 from datetime import datetime
+from contextvars import ContextVar
 from typing import Dict, List, Optional
 
 from observability import add_span_attributes
+
+
+_active_tracker: ContextVar[Optional["CostTracker"]] = ContextVar(
+    "active_cost_tracker", default=None
+)
 
 
 # Model pricing (price per 1M tokens)
@@ -230,7 +236,11 @@ class CostTracker:
         def decorator(func):
             @wraps(func)
             def wrapper(agent_self, *args, **kwargs):
-                self._current_phase_models = []
+                tracker = getattr(agent_self, "cost_tracker", None)
+                if not isinstance(tracker, CostTracker):
+                    tracker = self
+                tracker._current_phase_models = []
+                tracker_token = _active_tracker.set(tracker)
                 start = datetime.now()
 
                 tu = getattr(agent_self, "total_token_usage", None)
@@ -239,7 +249,10 @@ class CostTracker:
                 start_cache_read = getattr(tu, "cache_read_tokens", 0)
                 start_cache_write = getattr(tu, "cache_write_tokens", 0)
 
-                result = func(agent_self, *args, **kwargs)
+                try:
+                    result = func(agent_self, *args, **kwargs)
+                finally:
+                    _active_tracker.reset(tracker_token)
 
                 duration = (datetime.now() - start).total_seconds()
 
@@ -263,12 +276,12 @@ class CostTracker:
                         phase_cache_write,
                     )
                     models_used = (
-                        list(set(self._current_phase_models))
-                        if self._current_phase_models
+                        list(dict.fromkeys(tracker._current_phase_models))
+                        if tracker._current_phase_models
                         else [model]
                     )
 
-                    self._phase_costs.append(
+                    tracker._phase_costs.append(
                         {
                             "phase": phase_name,
                             "cost": cost,
@@ -321,7 +334,7 @@ def print_cost_summary() -> None:
 
 def record_model_usage(model_name: str) -> None:
     """Module-level recorder (backwards compat)."""
-    _default_tracker.record_model_usage(model_name)
+    (_active_tracker.get() or _default_tracker).record_model_usage(model_name)
 
 
 def reset_tracking() -> None:
