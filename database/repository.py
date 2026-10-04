@@ -300,6 +300,13 @@ def delete_patient(session: Session, patient_id: str) -> bool:
     patient = session.get(Patient, patient_id)
     if patient is None:
         return False
+    # Preserve saved chats and their runs as General history after removing a record.
+    from .models import SavedChat
+    for chat in session.scalars(select(SavedChat).where(SavedChat.patient_id == patient_id)):
+        chat.patient_id = None
+        chat.source_ids = []
+    for conversation in list(patient.conversations):
+        conversation.patient = None
     session.delete(patient)
     session.flush()
     return True
@@ -366,6 +373,7 @@ def conversation_to_job_dict(conv: Conversation) -> dict[str, Any]:
     files = conv.files or {}
     return {
         "id": conv.id,
+        "chat_id": conv.chat_id,
         "query": conv.query,
         "agent_id": conv.agent_id,
         "status": conv.status,
@@ -394,6 +402,7 @@ def create_conversation(
     implementation: Optional[str] = None,
     parent_job_id: Optional[str] = None,
     patient_id: Optional[str] = None,
+    chat_id: Optional[str] = None,
 ) -> Conversation:
     """Insert a new Conversation row for a background job."""
     conv = Conversation(
@@ -405,6 +414,7 @@ def create_conversation(
         implementation=implementation,
         parent_job_id=parent_job_id,
         patient_id=patient_id,
+        chat_id=chat_id,
     )
     session.add(conv)
     session.flush()
@@ -474,6 +484,10 @@ def delete_conversation_and_artifacts(
     Returns the list of removed file paths.
     """
     removed: list[str] = []
+    from .models import SavedChat
+    for chat in session.scalars(select(SavedChat)):
+        if conversation_id in (chat.source_ids or []):
+            chat.source_ids = [source for source in chat.source_ids if source != conversation_id]
     conv = session.get(Conversation, conversation_id)
 
     # Paths stored on the conversation itself.
@@ -533,4 +547,3 @@ def backfill_conversations_from_reports(session: Session) -> int:
         session.flush()
         logger.info("Backfilled %d conversations from existing reports", created)
     return created
-

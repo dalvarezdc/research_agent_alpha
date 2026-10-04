@@ -333,6 +333,18 @@ reports via the shared helpers. All agents optionally produce `audit.json` when
 
 ## Authoritative docs
 
+### Saved medical workspaces
+
+`SavedChat`, `ChatMessage`, and `ChatAttachment` persist the browser intake state.
+`Conversation` remains an analysis job and links to a saved chat through `chat_id`.
+`chat_api.py` provides `/chats` CRUD, message submission/retry, and attachment APIs;
+`database/chats.py` owns workspace validation, context assembly, and idempotent legacy
+history migration. General chats have no patient ID. Never infer ownership from names
+or use the last viewed report as another chat's source. Source IDs resolve to explicit
+same-workspace chats or analysis jobs. The backend snapshots patient data, attachments,
+selected sources, and messages for analysis; existing clients without `chat_id` retain
+the original API behavior. Tests: `tests/test_saved_chats.py`.
+
 The former `README_FOR_LLM_DEVELOPMENT.md`, `README_IMPROVEMENTS.md`, and
 `REFERENCE_VALIDATION_INTEGRATION.md` have been **removed** — their content was
 outdated (wrong model IDs, stale roadmap, incorrect integration status).

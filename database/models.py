@@ -248,11 +248,41 @@ class Patient(Base):
 
     user: Mapped["User"] = relationship(back_populates="patients")
     conversations: Mapped[list["Conversation"]] = relationship(
-        back_populates="patient", cascade="all, delete-orphan"
+        back_populates="patient"
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<Patient id={self.id!r} name={self.name!r}>"
+
+
+class SavedChat(Base):
+    __tablename__ = "saved_chats"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    patient_id: Mapped[Optional[str]] = mapped_column(ForeignKey("patients.id"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="New chat")
+    draft: Mapped[str] = mapped_column(Text, default="")
+    source_ids: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    imported: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    chat_id: Mapped[str] = mapped_column(ForeignKey("saved_chats.id"), index=True)
+    role: Mapped[str] = mapped_column(String(20))
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="complete")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class ChatAttachment(Base):
+    __tablename__ = "chat_attachments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    chat_id: Mapped[str] = mapped_column(ForeignKey("saved_chats.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    markdown: Mapped[str] = mapped_column(Text)
 
 
 class Conversation(Base):
@@ -266,6 +296,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    chat_id: Mapped[Optional[str]] = mapped_column(ForeignKey("saved_chats.id"), nullable=True, index=True)
     query: Mapped[str] = mapped_column(Text, nullable=False)
     agent_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
@@ -299,4 +330,3 @@ class Conversation(Base):
             f"<Conversation id={self.id!r} status={self.status!r} "
             f"query={self.query[:40]!r}>"
         )
-

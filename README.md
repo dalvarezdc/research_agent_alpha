@@ -549,6 +549,9 @@ Open **http://localhost:8080** in your browser to access the Web Application Wor
 
 - **Metabase Visual Identity**: Off-white slate canvas (`#F8FAFC`), pure white card containers (`#FFFFFF`), Metabase royal blue primary accents (`#2563EB`), dark slate midnight sidebar, and animated shiny gradient badges.
 - **Interactive Query Workbench**: Enter queries, select target LLM models (`grok-4.5`, `claude-sonnet-4-6`, `deepseek-v4-flash`, `gemini-3.6-flash`), pick specialized agents, and toggle live web research with high-contrast slate popover menus.
+- **Focused workspaces**: Select General medical research or one patient in the sidebar. Each workspace has saved chats with editable titles, autosaved drafts, messages, attached documents, and linked analysis runs. General chats never automatically attach a patient record.
+- **Patient data and sources**: The Patient data tab displays the selected record and opens the existing editor. Other chats and reports are excluded unless selected under Included sources. New chat retains the workspace and starts with empty history and attachments.
+- **Existing history**: Startup upgrades existing analysis jobs into imported chats, retaining report files and regeneration links. Only explicit patient IDs determine ownership; imported history can be reassigned through its workspace control. Managed database installations can run `alembic upgrade head`.
 - **Document & File Parser**: Upload PDFs, Word documents (`.docx`, `.doc`), TXT, Markdown, or RTF files. PDF/Word documents are automatically converted into markdown via the built-in parser and grounded as clinical context for the agent analysis.
 - **Live Report Previews & Downloads**: Preview rendered Patient Reports, Practitioner Reports, Summaries, and Raw JSON directly in the browser with tab navigation, markdown styling, and direct download buttons.
 - **OpenAPI / Swagger UI**: Interactive API documentation is available at **http://localhost:8080/docs**.
