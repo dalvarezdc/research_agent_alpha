@@ -1,0 +1,20 @@
+#!/bin/sh
+# Reject commits that add, edit, rename, or delete a path listed in .agentignore.
+# setup.sh installs this file into .git/hooks/pre-commit.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+checker="$root/scripts/check_agentignore.py"
+
+if [ ! -f "$checker" ]; then
+  echo "agentignore: missing $checker" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "agentignore: python3 is required to run $checker" >&2
+  exit 1
+fi
+
+exec python3 "$checker" --staged

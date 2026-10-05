@@ -27,6 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Intake Chatbot State
   let intakeChatHistory = []; // Array of { role: 'user'|'assistant', content: string }
   let isIntakeChatLoading = false;
+  let activeChat = null;
+  let workspaceId = localStorage.getItem('medicalWorkspace') || '';
+  let workspaceChats = [];
+  let navigationVersion = 0;
+  let draftTimer;
+  let draftSave = Promise.resolve();
+  let sourceSave = Promise.resolve();
+  const sendingChats = new Set();
 
   const CAT_TITLES = {
     heart: '🫀 Heart & Cardiovascular System',
@@ -155,6 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectedPatientNameEl = document.getElementById('selectedPatientName');
   const selectedPatientMetaEl = document.getElementById('selectedPatientMeta');
   const btnClearSelectedPatient = document.getElementById('btnClearSelectedPatient');
+  const patientsActiveBanner = document.getElementById('patientsActiveBanner');
+  const patientsActiveBannerName = document.getElementById('patientsActiveBannerName');
+  const btnActiveBannerGoChat = document.getElementById('btnActiveBannerGoChat');
+  const btnActiveBannerClear = document.getElementById('btnActiveBannerClear');
 
   // Regenerate Modal Elements
   const regenerateModal = document.getElementById('regenerateModal');
@@ -214,9 +226,342 @@ document.addEventListener('DOMContentLoaded', () => {
   checkApiHealth();
   loadAvailableModels();
   setupEventListeners();
-  loadConversationsHistory();
-  loadPatients();
+  initializeWorkspaces();
   refreshConfigCache();
+
+  async function chatRequest(path, method = 'GET', body) {
+    const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async function initializeWorkspaces() {
+    const bar = document.querySelector('.workbench-subtabs-bar');
+    bar.insertAdjacentHTML('beforeend', '<button type="button" id="btnTabPatient" class="workbench-subtab-btn hidden" data-wtab="patient">Patient data</button>');
+    bar.insertAdjacentHTML('afterend', '<section id="patientDataPanel" class="panel hidden"></section><div id="savedChatTools" class="saved-chat-tools"><input id="savedChatTitle" aria-label="Chat title" placeholder="New chat"><div id="chatAttachments"></div><details><summary>Included sources</summary><div id="chatSources"></div></details><div id="importedChatActions"></div></div>');
+    document.getElementById('savedChatTitle').addEventListener('input', () => {
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => saveDraft().then(refreshSavedChats).catch(reportChatError), 350);
+    });
+    document.getElementById('chatRunSelect').addEventListener('change', e => { if (e.target.value) loadConversationDetails(e.target.value); });
+    document.getElementById('btnRegenerateRun').addEventListener('click', () => {
+      const run = activeChat?.runs.find(r => r.id === document.getElementById('chatRunSelect').value);
+      if (run) openRegenModal(run.id, run.query);
+    });
+    document.getElementById('btnDeleteRun').addEventListener('click', () => {
+      const id = document.getElementById('chatRunSelect').value;
+      if (id) deleteConversation(id);
+    });
+    queryInput.addEventListener('input', () => { clearTimeout(draftTimer); draftTimer = setTimeout(() => saveDraft().catch(reportChatError), 350); });
+    window.addEventListener('pagehide', () => {
+      if (!activeChat) return;
+      fetch(`/chats/${activeChat.id}`, {method: 'PATCH', keepalive: true,
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify({draft: queryInput.value, title: document.getElementById('savedChatTitle').value})}).catch(() => {});
+    });
+    document.querySelector('.view-header p').textContent = 'Continue a saved conversation or start a new clinical analysis query.';
+    try {
+      await loadPatients();
+      await loadConversationsHistory();
+      if (workspaceId && !patientsCache.some(p => p.id === workspaceId)) workspaceId = '';
+      await selectWorkspace(workspaceId);
+    } catch (error) { reportChatError(error); }
+  }
+
+  function reportChatError(error) { showToast(error.message || String(error), 'error'); }
+
+  async function saveDraft() {
+    clearTimeout(draftTimer);
+    const id = activeChat?.id;
+    const draft = queryInput.value;
+    const title = document.getElementById('savedChatTitle').value;
+    if (!id) return;
+    await sourceSave;
+    draftSave = draftSave.catch(() => {}).then(() => chatRequest(`/chats/${id}`, 'PATCH', { draft, title }));
+    await draftSave;
+  }
+
+  async function refreshSavedChats() {
+    const scope = workspaceId;
+    const list = await chatRequest('/chats' + (scope ? `?patient_id=${encodeURIComponent(scope)}` : ''));
+    if (scope !== workspaceId) return;
+    workspaceChats = list;
+    renderSavedChats();
+  }
+
+  function renderSavedChats() {
+    conversationsCountTag.textContent = workspaceChats.length;
+    const filter = (sidebarConversationSearch.value || '').toLowerCase();
+    sidebarConversationsList.innerHTML = '';
+    workspaceChats.filter(c => c.title.toLowerCase().includes(filter)).forEach(chat => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'sidebar-conv-item' + (activeChat?.id === chat.id ? ' active' : '');
+      row.textContent = chat.title;
+      row.addEventListener('click', () => openSavedChat(chat.id).catch(reportChatError));
+      sidebarConversationsList.appendChild(row);
+    });
+    if (!sidebarConversationsList.children.length) {
+      sidebarConversationsList.textContent = selectedPatient ? `No chats yet for ${selectedPatient.name}.` : 'No conversations yet.';
+    }
+  }
+
+  function updateSelectedPatientChip() {
+    if (!selectedPatientChip) return;
+    if (selectedPatient) {
+      selectedPatientChip.classList.remove('hidden');
+      if (selectedPatientNameEl) selectedPatientNameEl.textContent = selectedPatient.name || 'Unnamed';
+      if (selectedPatientMetaEl) {
+        const parts = [];
+        if (selectedPatient.age != null) parts.push(`${selectedPatient.age} yrs`);
+        if (selectedPatient.gender) parts.push(selectedPatient.gender);
+        if (selectedPatient.primary_condition) parts.push(selectedPatient.primary_condition);
+        selectedPatientMetaEl.textContent = parts.length > 0 ? parts.join(' · ') : '';
+      }
+    } else {
+      selectedPatientChip.classList.add('hidden');
+    }
+  }
+
+  async function selectWorkspace(id) {
+    await saveDraft();
+    workspaceId = id || '';
+    localStorage.setItem('medicalWorkspace', workspaceId);
+    selectedPatient = patientsCache.find(p => p.id === workspaceId) || null;
+    activeChat = null;
+    const version = ++navigationVersion;
+    queryInput.value = '';
+    intakeChatHistory = [];
+    updateIntakeChatUI();
+    document.getElementById('btnTabPatient').classList.toggle('hidden', !selectedPatient);
+    updateSelectedPatientChip();
+    renderPatientsTable();
+    await refreshSavedChats();
+    if (version !== navigationVersion) return;
+    const saved = localStorage.getItem(`medicalChat:${workspaceId}`);
+    const target = workspaceChats.find(c => c.id === saved) || workspaceChats[0];
+    if (target) await openSavedChat(target.id, false);
+    else await newSavedChat();
+  }
+
+  async function newSavedChat() {
+    try {
+      await saveDraft();
+      const scope = workspaceId;
+      const chat = await chatRequest('/chats', 'POST', { patient_id: scope || null });
+      if (scope !== workspaceId) return;
+      await refreshSavedChats();
+      await openSavedChat(chat.id, false);
+    } catch (error) { reportChatError(error); }
+  }
+
+  async function openSavedChat(id, save = true) {
+    if (save) await saveDraft();
+    const version = ++navigationVersion;
+    const chat = await chatRequest(`/chats/${id}`);
+    if (version !== navigationVersion || (chat.patient_id || '') !== workspaceId) return;
+    activeChat = chat;
+    localStorage.setItem(`medicalChat:${workspaceId}`, id);
+    currentJob = null;
+    activeConversationId = null;
+    activeFiles = {};
+    loadedReportTexts = {};
+    parsedDocument = null;
+    if (pollInterval) clearInterval(pollInterval);
+    [filesContainer, reportPreviewCard, jobProgressCard, routeResultCard, parsedDocCard].forEach(el => el.classList.add('hidden'));
+    placeholderState.classList.remove('hidden');
+    queryInput.value = chat.draft || '';
+    renderActiveChat();
+    switchView('viewConversations');
+    switchWorkbenchTab('intake');
+    renderSavedChats();
+    const running = chat.runs.find(r => ['pending', 'running'].includes(r.status));
+    if (running) pollSavedRun(running.id, chat.id);
+  }
+
+  function renderActiveChat() {
+    if (!activeChat) return;
+    const owner = activeChat.id;
+    intakeChatHistory = activeChat.messages || [];
+    isIntakeChatLoading = sendingChats.has(owner);
+    btnChatSend.disabled = isIntakeChatLoading;
+    btnChatSend.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+    updateIntakeChatUI();
+    intakeChatHistory.filter(m => m.role === 'user' && m.status !== 'complete').forEach(m => {
+      const retry = document.createElement('button');
+      retry.className = 'btn btn-secondary';
+      retry.textContent = 'Retry message';
+      retry.disabled = sendingChats.has(owner);
+      retry.onclick = () => sendSavedMessage(m);
+      intakeChatStream.appendChild(retry);
+    });
+    document.getElementById('savedChatTitle').value = activeChat.title;
+    const runSelect = document.getElementById('chatRunSelect');
+    runSelect.innerHTML = '<option value="">Select an analysis</option>' + activeChat.runs.map(r => `<option value="${r.id}">${escapeHtml(formatQueryDisplayTitle(r.query))} · ${escapeHtml(r.status)}</option>`).join('');
+    if (activeConversationId) runSelect.value = activeConversationId;
+    const attachments = document.getElementById('chatAttachments');
+    attachments.innerHTML = '';
+    activeChat.attachments.forEach(a => {
+      const button = document.createElement('button');
+      button.className = 'btn btn-ghost';
+      button.textContent = `${a.filename} ×`;
+      button.title = 'Remove attached document';
+      button.onclick = async () => {
+        try { await chatRequest(`/chats/${owner}/attachments/${a.id}`, 'DELETE'); await reloadActiveChat(owner); }
+        catch (error) { reportChatError(error); }
+      };
+      attachments.appendChild(button);
+    });
+    renderChatSources();
+    const imported = document.getElementById('importedChatActions');
+    imported.innerHTML = '';
+    if (activeChat.imported) {
+      const label = document.createElement('label');
+      label.textContent = 'Imported analysis history · Move to workspace: ';
+      const move = document.createElement('select');
+      move.innerHTML = '<option value="">General medical research</option>' + patientsCache.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
+      move.value = workspaceId;
+      move.onchange = async () => {
+        try { await chatRequest(`/chats/${owner}`, 'PATCH', {patient_id: move.value || null}); await selectWorkspace(workspaceId); }
+        catch (error) { reportChatError(error); }
+      };
+      label.appendChild(move);
+      imported.appendChild(label);
+    }
+  }
+
+  function renderChatSources() {
+    const box = document.getElementById('chatSources');
+    box.innerHTML = '';
+    const owner = activeChat.id;
+    const sources = [
+      ...workspaceChats.filter(c => c.id !== owner).map(c => ({id: c.id, query: `Chat: ${c.title}`})),
+      ...conversationsCache.filter(r => (r.patient_id || '') === workspaceId && r.chat_id && r.chat_id !== owner)
+    ];
+    sources.forEach(run => {
+      const label = document.createElement('label');
+      const check = document.createElement('input');
+      check.type = 'checkbox'; check.value = run.id;
+      check.checked = (activeChat.source_ids || []).includes(run.id);
+      check.onchange = async () => {
+        try {
+          const ids = [...box.querySelectorAll('input:checked')].map(el => el.value);
+          sourceSave = sourceSave.catch(() => {}).then(() => chatRequest(`/chats/${owner}`, 'PATCH', { source_ids: ids }));
+          await sourceSave;
+          if (activeChat?.id === owner) activeChat.source_ids = ids;
+        } catch (error) {
+          sourceSave = Promise.resolve();
+          if (activeChat?.id === owner) renderChatSources();
+          reportChatError(error);
+        }
+      };
+      label.append(check, document.createTextNode(formatQueryDisplayTitle(run.query)));
+      box.appendChild(label);
+    });
+    if (!box.children.length) box.textContent = 'No other analyses in this workspace. Other chat history is excluded by default.';
+  }
+
+  function renderPatientData() {
+    const panel = document.getElementById('patientDataPanel');
+    panel.innerHTML = '';
+    if (!selectedPatient) return;
+    const heading = document.createElement('h2'); heading.textContent = selectedPatient.name;
+    const content = document.createElement('pre'); content.style.whiteSpace = 'pre-wrap'; content.textContent = formatPatientContext(selectedPatient);
+    const edit = document.createElement('button'); edit.className = 'btn btn-primary'; edit.textContent = 'Edit patient data';
+    edit.onclick = () => openPatientModal(selectedPatient.id);
+    panel.append(heading, edit, content);
+  }
+
+  async function reloadActiveChat(owner) {
+    const chat = await chatRequest(`/chats/${owner}`);
+    if (activeChat?.id !== owner) return;
+    activeChat = chat;
+    renderActiveChat();
+  }
+
+  async function sendSavedMessage(retry = null) {
+    if (!activeChat || sendingChats.has(activeChat.id)) return;
+    const text = retry?.content || queryInput.value.trim();
+    if (!text) return;
+    const owner = activeChat.id;
+    const message = retry || { id: crypto.randomUUID(), role: 'user', content: text, status: 'pending' };
+    sendingChats.add(owner);
+    try {
+      await saveDraft();
+      if (activeChat?.id === owner) {
+        if (!retry) activeChat.messages.push(message);
+        queryInput.value = '';
+        renderActiveChat();
+      }
+      await chatRequest(`/chats/${owner}/messages`, 'POST', {id: message.id, content: text, model: modelSelect.value});
+    } catch (error) { reportChatError(error); }
+    finally {
+      sendingChats.delete(owner);
+      await reloadActiveChat(owner).catch(reportChatError);
+      await refreshSavedChats().catch(reportChatError);
+    }
+  }
+
+  async function attachToSavedChat(file) {
+    if (!activeChat) return;
+    const owner = activeChat.id;
+    const data = new FormData(); data.append('file', file);
+    try {
+      const response = await fetch('/parse', {method: 'POST', body: data});
+      if (!response.ok) throw new Error('Document parsing failed');
+      const parsed = await response.json();
+      await chatRequest(`/chats/${owner}/attachments`, 'POST', {filename: parsed.filename || file.name, markdown: parsed.markdown});
+      await reloadActiveChat(owner);
+    } catch (error) { reportChatError(error); }
+  }
+
+  async function analyzeSavedChat() {
+    if (!activeChat || btnAnalyze.disabled) return;
+    const owner = activeChat.id;
+    const query = queryInput.value.trim();
+    if (!query && !activeChat.messages.length) { showToast('Enter a medical query first.', 'error'); return; }
+    btnAnalyze.disabled = true;
+    try {
+      await saveDraft();
+      const job = await chatRequest('/analyze/async', 'POST', {chat_id: owner, query, model: modelSelect.value,
+        web_search: webSearchToggle.checked, implementation: 'langchain', timeout: 300,
+        ...(agentSelect.value === 'auto' ? {} : {agent_id: agentSelect.value})});
+      if (activeChat?.id === owner) {
+        if (queryInput.value.trim() === query) queryInput.value = '';
+        await reloadActiveChat(owner);
+        currentJob = {id: job.job_id};
+        switchWorkbenchTab('output');
+        pollSavedRun(job.job_id, owner);
+      }
+      await loadConversationsHistory();
+    } catch (error) { reportChatError(error); }
+    finally { btnAnalyze.disabled = false; }
+  }
+
+  function pollSavedRun(jobId, owner) {
+    if (pollInterval) clearInterval(pollInterval);
+    const update = async () => {
+      try {
+        const job = await chatRequest(`/jobs/${jobId}`);
+        if (activeChat?.id !== owner) return;
+        if (['pending', 'running'].includes(job.status)) {
+          jobProgressCard.classList.remove('hidden');
+          jobStatusHeading.textContent = 'Analysis running…';
+          updateProgressSteps(job.status);
+        } else {
+          clearInterval(pollInterval);
+          await reloadActiveChat(owner);
+          if (job.status === 'completed') await loadConversationDetails(jobId);
+          else { jobStatusHeading.textContent = 'Analysis failed'; showToast(job.error || 'Analysis failed', 'error'); }
+        }
+      } catch (error) { reportChatError(error); }
+    };
+    pollInterval = setInterval(update, 2500);
+    update();
+  }
 
   // 1. API Health Check
   async function checkApiHealth() {
@@ -571,7 +916,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnChatSend.addEventListener('click', sendIntakeChatMessage);
 
     queryInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && (e.ctrlKey || e.metaKey || intakeChatHistory.length > 0)) {
+      // Enter always sends the current intake message. Shift+Enter remains
+      // available for users who need a newline in the clinical prompt.
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendIntakeChatMessage();
       }
@@ -579,7 +926,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnAnalyze.addEventListener('click', submitAsyncAnalysis);
     btnRoute.addEventListener('click', routeQueryOnly);
-    btnClear.addEventListener('click', resetForm);
+    btnClear.addEventListener('click', () => { queryInput.value = ''; saveDraft().catch(reportChatError); });
 
     // Output Report Tabs
     document.querySelectorAll('.report-tabs .tab-btn').forEach(btn => {
@@ -682,6 +1029,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function switchWorkbenchTab(tabName) {
+    document.getElementById('savedChatTools')?.classList.toggle('hidden', tabName !== 'intake');
+    document.getElementById('patientDataPanel')?.classList.toggle('hidden', tabName !== 'patient');
+    document.getElementById('btnTabPatient')?.classList.toggle('active', tabName === 'patient');
+    if (tabName === 'patient') {
+      [workbenchTabIntake, workbenchTabOutput].forEach(el => { el.classList.add('hidden'); el.style.setProperty('display', 'none', 'important'); });
+      [btnTabIntake, btnTabOutput].forEach(el => el.classList.remove('active'));
+      renderPatientData();
+      return;
+    }
     const intakeBtn = document.getElementById('btnTabIntake') || btnTabIntake;
     const outputBtn = document.getElementById('btnTabOutput') || btnTabOutput;
     const intakeTab = document.getElementById('workbenchTabIntake') || workbenchTabIntake;
@@ -705,8 +1061,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (outputIndicator) outputIndicator.classList.add('hidden');
 
       // If switching to output tab and no current job active, auto-load the most recent conversation
-      if (!currentJob && Array.isArray(conversationsCache) && conversationsCache.length > 0) {
-        loadConversationDetails(conversationsCache[0].id || conversationsCache[0].job_id);
+      if (!currentJob && activeChat?.runs?.length) {
+        loadConversationDetails(activeChat.runs[0].id);
       }
     } else {
       outputBtn.classList.remove('active');
@@ -769,43 +1125,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function startNewConversation() {
-    try {
-      activeConversationId = null;
-      currentJob = null;
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
-      resetForm({ silent: true });
-      switchView('viewConversations');
-      switchWorkbenchTab('intake');
-      if (sidebarConversationSearch) sidebarConversationSearch.value = '';
-      if (conversationSearchInput) conversationSearchInput.value = '';
-      renderConversationsList();
-      if (queryInput) {
-        queryInput.value = '';
-        queryInput.focus();
-      }
-      showToast('New conversation ready.', 'info');
-    } catch (err) {
-      console.error('startNewConversation failed:', err);
-      showToast(`Could not start new conversation: ${err.message}`, 'error');
-    }
+    return newSavedChat();
   }
 
-  function filterJobs(list, filter) {
-    const q = (filter || '').toLowerCase().trim();
-    if (!q) return list.slice();
-    return list.filter(j => {
-      const hay = [
-        j.query,
-        j.agent_id,
-        j.status,
-        j.model,
-      ].map(v => String(v || '').toLowerCase()).join(' ');
-      return hay.includes(q);
-    });
-  }
 
   async function loadConversationsHistory() {
     try {
@@ -816,8 +1138,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const data = await res.json();
       conversationsCache = Array.isArray(data) ? data : [];
+      await refreshSavedChats();
       if (conversationsCountTag) {
-        conversationsCountTag.textContent = String(conversationsCache.length);
+        conversationsCountTag.textContent = String(workspaceChats.length);
       }
       renderConversationsList();
     } catch (err) {
@@ -830,15 +1153,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderConversationsList() {
-    const sideFilter = (sidebarConversationSearch && sidebarConversationSearch.value) || '';
-    const mainFilter = (conversationSearchInput && conversationSearchInput.value) || '';
-
-    // Sidebar and main strip use their own search boxes independently.
-    const sideFiltered = filterJobs(conversationsCache, sideFilter);
-    const mainFiltered = filterJobs(conversationsCache, mainFilter);
-
-    renderSidebarConversations(sideFiltered, sideFilter);
-    renderMainConversationsStrip(mainFiltered);
+    renderSavedChats();
   }
 
   function getAgentTagInfo(agentId) {
@@ -880,231 +1195,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return truncateQuery(str, 48);
   }
 
-  function groupConversationsForSidebar(list) {
-    const patientMap = {};
-    const unrelatedList = [];
-
-    list.forEach(job => {
-      let matchedPatient = null;
-      if (job.patient_id && Array.isArray(patientsCache)) {
-        matchedPatient = patientsCache.find(p => p.id === job.patient_id);
-      }
-      if (!matchedPatient && Array.isArray(patientsCache) && job.query) {
-        const qLower = job.query.toLowerCase();
-        matchedPatient = patientsCache.find(p => p.name && p.name.length > 2 && qLower.includes(p.name.toLowerCase()));
-      }
-
-      if (matchedPatient) {
-        const pid = matchedPatient.id;
-        if (!patientMap[pid]) {
-          patientMap[pid] = {
-            id: pid,
-            name: matchedPatient.name,
-            items: []
-          };
-        }
-        patientMap[pid].items.push(job);
-      } else {
-        unrelatedList.push(job);
-      }
-    });
-
-    const patientGroups = Object.values(patientMap);
-    const unrelatedByDate = groupConversations(unrelatedList);
-
-    return { patientGroups, unrelatedByDate };
-  }
-
-  function createSidebarConvItemElement(job, isPatientTree = false) {
-    const id = job.id || job.job_id || '';
-    const row = document.createElement('div');
-    row.className = 'sidebar-conv-item' + (id && id === activeConversationId ? ' active' : '') + (isPatientTree ? ' in-tree' : '');
-    row.dataset.id = id;
-    row.setAttribute('role', 'button');
-    row.tabIndex = 0;
-    row.title = job.query || 'Conversation';
-
-    const tagInfo = getAgentTagInfo(job.agent_id);
-    const dateStr = formatConvDate(job.created_at);
-    const displayTitle = formatQueryDisplayTitle(job.query);
-    const hasDocs = conversationHasDocs(job);
-    const titlePrefix = isPatientTree ? '--- ' : '';
-
-    row.innerHTML = `
-      <span class="${docsDotClass(job)}" title="${hasDocs ? 'Documentation ready' : escapeHtml(job.status || 'pending')}"></span>
-      <div class="conv-text">
-        <span class="conv-title">${titlePrefix}${escapeHtml(displayTitle)}</span>
-        <span class="conv-meta"><span class="${tagInfo.className}">${escapeHtml(tagInfo.label)}</span>${dateStr ? `<span class="conv-date">· ${dateStr}</span>` : ''}</span>
-      </div>
-      <button type="button" class="btn-conv-delete" title="Delete conversation &amp; reports" aria-label="Delete conversation">
-        <i class="fa-solid fa-trash-can"></i>
-      </button>
-    `;
-
-    const open = () => {
-      if (id) loadConversationDetails(id);
-    };
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-conv-delete')) return;
-      open();
-    });
-    row.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        open();
-      }
-    });
-    row.querySelector('.btn-conv-delete').addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (id) deleteConversation(id);
-    });
-
-    return row;
-  }
-
-  function renderSidebarConversations(filtered, filterText) {
-    if (!sidebarConversationsList) return;
-
-    if (!Array.isArray(conversationsCache) || conversationsCache.length === 0) {
-      sidebarConversationsList.innerHTML =
-        '<div class="sidebar-conv-empty">No conversations yet.<br><span style="opacity:0.7">Run an analysis to start.</span></div>';
-      return;
-    }
-
-    if (filtered.length === 0) {
-      sidebarConversationsList.innerHTML =
-        `<div class="sidebar-conv-empty">No matches${filterText ? ` for “${escapeHtml(filterText)}”` : ''}.</div>`;
-      return;
-    }
-
-    const { patientGroups, unrelatedByDate } = groupConversationsForSidebar(filtered);
-    const frag = document.createDocumentFragment();
-
-    // 1. Render Patient Tree View Menu (expandable folders per patient)
-    if (patientGroups.length > 0) {
-      patientGroups.forEach(grp => {
-        if (!grp.items.length) return;
-
-        const groupWrapper = document.createElement('div');
-        groupWrapper.className = 'sidebar-patient-group tree-node';
-
-        const header = document.createElement('div');
-        header.className = 'patient-group-header tree-header';
-        header.setAttribute('role', 'button');
-        header.setAttribute('tabindex', '0');
-
-        header.innerHTML = `
-          <div class="patient-group-title">
-            <i class="fa-solid fa-chevron-down group-toggle-icon"></i>
-            <i class="fa-solid fa-user-injured patient-icon"></i>
-            <span class="patient-name">${escapeHtml(grp.name)}</span>
-          </div>
-          <span class="patient-conv-count">${grp.items.length}</span>
-        `;
-
-        const itemsContainer = document.createElement('div');
-        itemsContainer.className = 'sidebar-patient-group-items tree-branch';
-
-        header.addEventListener('click', () => {
-          header.classList.toggle('collapsed');
-          itemsContainer.classList.toggle('collapsed');
-        });
-
-        grp.items.forEach(job => {
-          const row = createSidebarConvItemElement(job, true);
-          itemsContainer.appendChild(row);
-        });
-
-        groupWrapper.appendChild(header);
-        groupWrapper.appendChild(itemsContainer);
-        frag.appendChild(groupWrapper);
-      });
-    }
-
-    // 2. Render Unrelated Conversations (flat list by standard date section headers)
-    Object.entries(unrelatedByDate).forEach(([label, items]) => {
-      if (!items.length) return;
-      const groupLabel = document.createElement('div');
-      groupLabel.className = 'sidebar-conv-group-label';
-      groupLabel.textContent = label;
-      frag.appendChild(groupLabel);
-
-      items.forEach(job => {
-        const row = createSidebarConvItemElement(job, false);
-        frag.appendChild(row);
-      });
-    });
-
-    sidebarConversationsList.innerHTML = '';
-    sidebarConversationsList.appendChild(frag);
-  }
-
-  function renderMainConversationsStrip(filtered) {
-    if (!conversationsList) return;
-
-    // Show only the most recent few in the main strip (full list is in sidebar).
-    const recent = filtered.slice(0, 8);
-
-    if (recent.length === 0) {
-      conversationsList.innerHTML =
-        '<div class="empty-conversations">Select a conversation from the left menu, or start a new analysis.</div>';
-      return;
-    }
-
-    conversationsList.innerHTML = '';
-    recent.forEach(job => {
-      const id = job.id || job.job_id || '';
-      const card = document.createElement('div');
-      card.className = 'conversation-card';
-      if (id && id === activeConversationId) card.classList.add('active');
-
-      const agentLabel = job.agent_id ? String(job.agent_id).replace('_agent', '').toUpperCase() : 'AUTO';
-      const statusColor = job.status === 'completed' ? '#34d399' : (job.status === 'failed' ? '#f87171' : '#fbbf24');
-      const dateStr = formatConvDate(job.created_at);
-      const hasDocs = conversationHasDocs(job);
-
-      card.innerHTML = `
-        <div class="conversation-main">
-          <span class="conversation-title">
-            <span class="docs-dot ${hasDocs ? 'has-docs' : ''}" title="${hasDocs ? 'Docs generated' : 'No docs yet'}"></span>
-            ${escapeHtml(truncateQuery(job.query || 'Untitled', 64))}
-          </span>
-          <div class="conversation-meta">
-            <span class="agent-tag">${escapeHtml(agentLabel)}</span>
-            <span style="color: ${statusColor}; font-weight:600;">${escapeHtml(job.status || 'pending')}</span>
-            <span>${dateStr}</span>
-          </div>
-        </div>
-        <div class="conversation-actions">
-          <button class="btn-icon-sm btn-view-job" title="Open" data-id="${id}">
-            <i class="fa-solid fa-eye"></i>
-          </button>
-          <button class="btn-icon-sm danger btn-delete-job" title="Delete conversation &amp; reports" data-id="${id}">
-            <i class="fa-solid fa-trash-can"></i>
-          </button>
-        </div>
-      `;
-
-      card.querySelector('.btn-view-job').addEventListener('click', () => id && loadConversationDetails(id));
-      card.querySelector('.btn-delete-job').addEventListener('click', () => id && deleteConversation(id));
-      card.addEventListener('dblclick', () => id && loadConversationDetails(id));
-
-      conversationsList.appendChild(card);
-    });
-  }
 
   async function loadConversationDetails(jobId) {
+    const owner = activeChat?.id;
+    const version = ++navigationVersion;
     try {
       const res = await fetch(`/jobs/${jobId}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const job = await res.json();
+      if (version !== navigationVersion || activeChat?.id !== owner || (job.chat_id && job.chat_id !== owner)) return;
+      if (['pending', 'running'].includes(job.status)) { pollSavedRun(jobId, owner); return; }
       currentJob = job;
       activeConversationId = jobId;
+      document.getElementById('chatRunSelect').value = jobId;
       switchView('viewConversations');
       await displayJobResults(job);
+      if (version !== navigationVersion || activeChat?.id !== owner) return;
       switchWorkbenchTab('output');
-      if (job.query) queryInput.value = job.query;
       renderConversationsList();
       showToast(`Loaded: "${truncateQuery(job.query || jobId, 48)}"`, 'info');
     } catch (err) {
@@ -1113,16 +1220,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function deleteConversation(jobId) {
-    if (!confirm('Delete this conversation and all associated reports?')) return;
+    if (!confirm('Delete this analysis run and its reports? The saved chat will remain.')) return;
+    const owner = activeChat?.id;
     try {
       const res = await fetch(`/jobs/${jobId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (activeConversationId === jobId) {
         activeConversationId = null;
-        resetForm({ silent: true });
+        currentJob = null;
+        filesContainer.classList.add('hidden');
+        reportPreviewCard.classList.add('hidden');
+        placeholderState.classList.remove('hidden');
       }
-      showToast('Conversation and reports deleted.', 'success');
-      loadConversationsHistory();
+      showToast('Analysis run and reports deleted.', 'success');
+      await reloadActiveChat(owner);
+      await loadConversationsHistory();
     } catch (err) {
       showToast(`Failed to delete: ${err.message}`, 'error');
     }
@@ -1140,6 +1252,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function confirmRegenerateJob() {
+    const owner = activeChat?.id;
     const jobId = regenSourceJobId.value;
     const targetAgent = regenAgentSelect.value;
     const targetModel = regenModelSelect.value;
@@ -1163,7 +1276,10 @@ document.addEventListener('DOMContentLoaded', () => {
       closeRegenModal();
       showToast(`Regeneration job submitted! Polling new job ${data.job_id}...`, 'success');
       
-      pollJobStatus(data.job_id);
+      if (activeChat?.id === owner) {
+        await reloadActiveChat(owner);
+        pollSavedRun(data.job_id, owner);
+      }
       loadConversationsHistory();
     } catch (err) {
       showToast(`Failed to regenerate: ${err.message}`, 'error');
@@ -1187,9 +1303,9 @@ document.addEventListener('DOMContentLoaded', () => {
           const refreshed = patientsCache.find(p => p.id === selectedPatient.id);
           if (refreshed) {
             selectedPatient = refreshed;
-            updateSelectedPatientChip();
+            renderPatientData();
           } else {
-            clearSelectedPatient({ toast: false });
+            await selectWorkspace('');
           }
         }
         renderPlusMenuPatients();
@@ -1255,99 +1371,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function selectPatientForContext(patientId) {
-    const patient = patientsCache.find(p => p.id === patientId);
-    if (!patient) {
-      showToast('Patient not found. Refresh the patient list and try again.', 'error');
-      return;
-    }
-    selectedPatient = patient;
-    updateSelectedPatientChip();
-    renderPlusMenuPatients();
-    showToast(`Using ${patient.name} as chat context.`, 'success');
+    return selectWorkspace(patientId).catch(reportChatError);
   }
-  function clearSelectedPatient(opts = {}) {
-    selectedPatient = null;
-    updateSelectedPatientChip();
-    renderPlusMenuPatients();
-    if (opts.toast) showToast('Patient context cleared.', 'info');
+  function clearSelectedPatient({ toast = false } = {}) {
+    return selectWorkspace('').then(() => {
+      if (toast) showToast('Switched to General Medical Research workspace.', 'info');
+    }).catch(reportChatError);
   }
-
-  function updateSelectedPatientChip() {
-    if (!selectedPatientChip) return;
-    if (!selectedPatient) {
-      selectedPatientChip.classList.add('hidden');
-      if (selectedPatientNameEl) selectedPatientNameEl.textContent = '—';
-      if (selectedPatientMetaEl) selectedPatientMetaEl.textContent = '';
-      renderPastConversationsContextPicker();
-      return;
-    }
-
-    const bits = [];
-    if (selectedPatient.age != null) bits.push(`${selectedPatient.age} yrs`);
-    if (selectedPatient.gender) bits.push(selectedPatient.gender);
-    if (selectedPatient.primary_condition) bits.push(selectedPatient.primary_condition);
-
-    if (selectedPatientNameEl) selectedPatientNameEl.textContent = selectedPatient.name || 'Unnamed patient';
-    if (selectedPatientMetaEl) selectedPatientMetaEl.textContent = bits.join(' · ');
-    selectedPatientChip.classList.remove('hidden');
-
-    renderPastConversationsContextPicker();
-  }
-
-  function renderPastConversationsContextPicker() {
-    const listEl = document.getElementById('pastConversationsContextList');
-    if (!listEl) return;
-
-    if (!selectedPatient) {
-      listEl.innerHTML = '';
-      return;
-    }
-
-    const patientConvs = (conversationsCache || []).filter(c => {
-      if (c.patient_id === selectedPatient.id) return true;
-      if (c.query && selectedPatient.name && c.query.toLowerCase().includes(selectedPatient.name.toLowerCase())) return true;
-      return false;
-    });
-
-    if (patientConvs.length === 0) {
-      listEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.75rem; padding:0.25rem 0;">No prior conversations for this patient yet.</div>';
-      return;
-    }
-
-    listEl.innerHTML = '';
-    patientConvs.forEach(conv => {
-      const item = document.createElement('div');
-      item.className = 'past-conv-item';
-
-      const tagInfo = getAgentTagInfo(conv.agent_id);
-      const dateStr = formatConvDate(conv.created_at);
-      const title = formatQueryDisplayTitle(conv.query);
-
-      item.innerHTML = `
-        <input type="checkbox" id="pastConv_${conv.id}" class="past-conv-checkbox" value="${conv.id}" checked>
-        <label for="pastConv_${conv.id}" class="past-conv-label">
-          <span class="past-conv-title">${escapeHtml(title)}</span>
-          <span class="past-conv-meta">
-            <span class="${tagInfo.className}">${escapeHtml(tagInfo.label)}</span>
-            <span class="past-conv-date">${dateStr}</span>
-          </span>
-        </label>
-      `;
-
-      item.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'LABEL') {
-          const chk = item.querySelector('.past-conv-checkbox');
-          if (chk) chk.checked = !chk.checked;
-        }
-      });
-
-      listEl.appendChild(item);
-    });
-  }
-
-  /**
-   * Serialize a patient record into plain-text clinical context for chat / analysis.
-   */
   function formatPatientContext(patient) {
     if (!patient) return '';
 
@@ -1385,13 +1415,15 @@ document.addEventListener('DOMContentLoaded', () => {
       rows.forEach(row => {
         if (!row || typeof row !== 'object') return;
         const marker = row.marker || row.name || row.medication || 'Item';
-        const value = row.value || row.dose || row.dosage || '';
+        const value = row.value ?? row.dose ?? row.dosage ?? '';
         const range = row.reference_range || row.range || '';
         const notes = row.notes || '';
         let entry = `    - ${marker}`;
-        if (value) entry += `: ${value}`;
+        if (value !== '') entry += `: ${value}`;
         if (range) entry += ` (ref: ${range})`;
         if (notes) entry += ` — ${notes}`;
+        const extras = Object.fromEntries(Object.entries(row).filter(([key]) => !['marker', 'name', 'medication', 'value', 'dose', 'dosage', 'reference_range', 'range', 'notes'].includes(key)));
+        if (Object.keys(extras).length) entry += ` — ${JSON.stringify(extras)}`;
         lines.push(entry);
       });
     });
@@ -1416,177 +1448,30 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Build combined background context from selected patient + optional attached document.
    */
-  function buildBackgroundContext() {
-    const parts = [];
-
-    if (selectedPatient) {
-      const patientText = formatPatientContext(selectedPatient);
-      if (patientText) {
-        parts.push(`--- SELECTED PATIENT CONTEXT ---\n${patientText}`);
-      }
-
-      // Past selected conversations context for this patient
-      const checkedBoxes = document.querySelectorAll('#pastConversationsContextList .past-conv-checkbox:checked');
-      if (checkedBoxes.length > 0) {
-        const historyParts = [];
-        checkedBoxes.forEach(chk => {
-          const convId = chk.value;
-          const conv = (conversationsCache || []).find(c => c.id === convId);
-          if (conv) {
-            const dateStr = formatConvDate(conv.created_at);
-            const title = formatQueryDisplayTitle(conv.query);
-            let summary = '';
-            if (conv.result && typeof conv.result === 'object') {
-              if (conv.result.patient_report) summary = conv.result.patient_report;
-              else if (conv.result.summary) summary = conv.result.summary;
-              else if (conv.result.diagnostic) summary = JSON.stringify(conv.result.diagnostic);
-            }
-            if (!summary && loadedReportTexts && loadedReportTexts['patient']) {
-              summary = loadedReportTexts['patient'];
-            }
-            if (!summary) summary = conv.query;
-            historyParts.push(`• [${dateStr}] ${title}:\n${summary.substring(0, 1000)}`);
-          }
-        });
-        if (historyParts.length > 0) {
-          parts.push(`--- PRIOR CONVERSATION HISTORY (${selectedPatient.name}) ---\n${historyParts.join('\n\n')}`);
-        }
-      }
-    }
-
-    if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
-      const filename = parsedDocument.filename || 'document';
-      parts.push(`--- ATTACHED CLINICAL DOCUMENT (${filename}) ---\n${parsedDocument.markdown}`);
-    }
-
-    return parts.length ? parts.join('\n\n') : null;
-  }
-
-  function buildContextReportMarkdown(opts = {}) {
-    const finalQuery = opts.finalQuery || '';
-    const model = opts.model || (modelSelect && modelSelect.value) || 'unknown';
-    const agentChoice = opts.agentChoice || (agentSelect && agentSelect.value) || 'auto';
-    const webSearch = opts.webSearch != null
-      ? opts.webSearch
-      : !!(webSearchToggle && webSearchToggle.checked);
-    const usedIntakeChat = opts.usedIntakeChat === true;
-    const intakeTurns = opts.intakeTurns != null
-      ? opts.intakeTurns
-      : (intakeChatHistory ? intakeChatHistory.length : 0);
-
-    const lines = [];
-    lines.push('# Agent Context Report');
-    lines.push('');
-    lines.push('Audit of the clinical context assembled in the UI and sent to the specialized agent.');
-    lines.push('');
-    lines.push('## Composition summary');
-    lines.push('');
-    lines.push(`- **Assembled at (client):** ${new Date().toISOString()}`);
-    lines.push(`- **Model selected:** \`${model}\``);
-    lines.push(`- **Agent routing:** \`${agentChoice}\`${agentChoice === 'auto' ? ' (server will auto-route)' : ' (explicit override)'}`);
-    lines.push(`- **Web search:** ${webSearch ? 'enabled' : 'disabled'}`);
-    lines.push(`- **Intake chat used:** ${usedIntakeChat ? `yes (${intakeTurns} turns)` : 'no'}`);
-    lines.push(`- **Patient context attached:** ${selectedPatient ? 'yes' : 'no'}`);
-    lines.push(
-      `- **Document context attached:** ${
-        parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked
-          ? 'yes'
-          : 'no'
-      }`
-    );
-    lines.push(`- **Final prompt length:** ${finalQuery.length} characters`);
-    lines.push('');
-
-    // Patient section
-    lines.push('## Selected patient');
-    lines.push('');
-    if (selectedPatient) {
-      lines.push(`- **ID:** \`${selectedPatient.id}\``);
-      lines.push(`- **Name:** ${selectedPatient.name || 'Unnamed'}`);
-      if (selectedPatient.age != null) lines.push(`- **Age:** ${selectedPatient.age}`);
-      if (selectedPatient.gender) lines.push(`- **Gender:** ${selectedPatient.gender}`);
-      if (selectedPatient.primary_condition) {
-        lines.push(`- **Primary condition:** ${selectedPatient.primary_condition}`);
-      }
-      lines.push('');
-      lines.push('### Patient record (serialized)');
-      lines.push('');
-      lines.push('```text');
-      lines.push(formatPatientContext(selectedPatient) || '(empty)');
-      lines.push('```');
-    } else {
-      lines.push('_No patient selected for this run._');
-    }
-    lines.push('');
-
-    // Document section
-    lines.push('## Attached medical document');
-    lines.push('');
-    if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
-      const md = parsedDocument.markdown || '';
-      lines.push(`- **Filename:** ${parsedDocument.filename || 'document'}`);
-      if (parsedDocument.metadata) {
-        const meta = parsedDocument.metadata;
-        if (meta.format) lines.push(`- **Format:** ${meta.format}`);
-        if (meta.page_count != null) lines.push(`- **Pages:** ${meta.page_count}`);
-      }
-      lines.push(`- **Characters included:** ${md.length}`);
-      lines.push('');
-      lines.push('### Document text included as context');
-      lines.push('');
-      lines.push('```text');
-      // Keep the report readable if the doc is huge, but still show full payload size above.
-      const maxDocChars = 12000;
-      if (md.length > maxDocChars) {
-        lines.push(md.slice(0, maxDocChars));
-        lines.push('');
-        lines.push(`[... truncated in report for readability; full ${md.length} chars were sent to the agent ...]`);
-      } else {
-        lines.push(md);
-      }
-      lines.push('```');
-    } else if (parsedDocument && parsedDocument.markdown) {
-      lines.push(
-        `_Document "${parsedDocument.filename || 'document'}" is parsed but ` +
-        `**not** included (attach-context checkbox off)._`
-      );
-    } else {
-      lines.push('_No medical document attached for this run._');
-    }
-    lines.push('');
-
-    // Intake chat section
-    lines.push('## Intake chat');
-    lines.push('');
-    if (usedIntakeChat && intakeChatHistory && intakeChatHistory.length > 0) {
-      lines.push(`_Transcript (${intakeChatHistory.length} messages) used to synthesize the clinical query:_`);
-      lines.push('');
-      intakeChatHistory.forEach((msg, idx) => {
-        const role = (msg.role || 'user').toUpperCase();
-        lines.push(`**${idx + 1}. ${role}**`);
-        lines.push('');
-        lines.push(msg.content || '');
-        lines.push('');
-      });
-    } else {
-      lines.push('_No intake chat turns — direct prompt mode._');
-      lines.push('');
-    }
-
-    // Final payload
-    lines.push('## Final prompt sent to agent');
-    lines.push('');
-    lines.push('This is the complete string delivered as the agent `query` / subject payload:');
-    lines.push('');
-    lines.push('```text');
-    lines.push((finalQuery || '').trim() || '(empty)');
-    lines.push('```');
-    lines.push('');
-
-    return lines.join('\n');
-  }
 
   function renderPatientsTable() {
+    if (patientsActiveBanner && patientsActiveBannerName) {
+      if (selectedPatient) {
+        patientsActiveBanner.classList.remove('hidden');
+        patientsActiveBannerName.textContent = selectedPatient.name || 'Unnamed';
+      } else {
+        patientsActiveBanner.classList.add('hidden');
+      }
+    }
+    if (btnActiveBannerGoChat) {
+      btnActiveBannerGoChat.onclick = () => {
+        switchView('viewConversations');
+        switchWorkbenchTab('intake');
+        if (queryInput) queryInput.focus();
+      };
+    }
+    if (btnActiveBannerClear) {
+      btnActiveBannerClear.onclick = async () => {
+        await clearSelectedPatient();
+        showToast('Switched to General Medical Research workspace.', 'info');
+      };
+    }
+
     const filter = (patientSearchInput.value || '').toLowerCase().trim();
     const filtered = patientsCache.filter(p => 
       (p.name || '').toLowerCase().includes(filter) ||
@@ -1604,6 +1489,10 @@ document.addEventListener('DOMContentLoaded', () => {
     patientsTableBody.innerHTML = '';
     filtered.forEach(p => {
       const tr = document.createElement('tr');
+      const isSelected = selectedPatient && selectedPatient.id === p.id;
+      if (isSelected) {
+        tr.classList.add('selected-patient-row');
+      }
       
       // Build Metadata chips preview
       let metaHtml = '';
@@ -1620,18 +1509,36 @@ document.addEventListener('DOMContentLoaded', () => {
       const createdStr = p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A';
 
       tr.innerHTML = `
-        <td><strong>${escapeHtml(p.name)}</strong></td>
+        <td>
+          <div class="patient-name-cell">
+            <strong>${escapeHtml(p.name)}</strong>
+            ${isSelected ? '<span class="patient-active-pill"><i class="fa-solid fa-circle-check"></i> Active</span>' : ''}
+          </div>
+        </td>
         <td>${escapeHtml(p.age ? String(p.age) + ' yrs' : 'N/A')} / ${escapeHtml(p.gender || 'N/A')}</td>
         <td>${escapeHtml(p.primary_condition || 'Unspecified')}</td>
         <td>${escapeHtml(p.contact_email || p.contact_phone || 'N/A')}</td>
         <td>${metaHtml}</td>
         <td style="color:var(--text-muted); font-size:0.75rem;">${createdStr}</td>
-        <td style="text-align: right;">
+        <td style="text-align: right; white-space: nowrap;">
+          <button type="button" class="btn btn-xs ${isSelected ? 'btn-success' : 'btn-primary'} btn-select-patient" data-id="${p.id}" title="${isSelected ? 'Currently chatting on this patient — click to open chat' : 'Select this patient and start chatting'}">
+            <i class="fa-solid ${isSelected ? 'fa-comment-dots' : 'fa-comments'}"></i>
+            <span>${isSelected ? 'Chatting' : 'Select Patient'}</span>
+          </button>
           <button class="btn-icon-sm btn-edit-patient" title="Edit Patient & Metadata" data-id="${p.id}"><i class="fa-solid fa-pen-to-square"></i></button>
           <button class="btn-icon-sm danger btn-delete-patient" title="Delete Patient" data-id="${p.id}"><i class="fa-solid fa-trash-can"></i></button>
         </td>
       `;
 
+      tr.querySelector('.btn-select-patient').addEventListener('click', async () => {
+        if (!isSelected) {
+          await selectWorkspace(p.id);
+          showToast(`Selected patient: ${p.name}. Chatting in patient workspace.`, 'info');
+        }
+        switchView('viewConversations');
+        switchWorkbenchTab('intake');
+        if (queryInput) queryInput.focus();
+      });
       tr.querySelector('.btn-edit-patient').addEventListener('click', () => openPatientModal(p.id));
       tr.querySelector('.btn-delete-patient').addEventListener('click', () => deletePatientRecord(p.id));
 
@@ -1962,7 +1869,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`/patients/${patientId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (selectedPatient && selectedPatient.id === patientId) {
-        clearSelectedPatient({ toast: false });
+        await selectWorkspace('');
       }
       showToast('Patient record deleted successfully.', 'info');
       loadPatients();
@@ -1973,51 +1880,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 8. Document File Upload Handler for Main Analysis
   async function handleFileUpload(file) {
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-      showFileError(`Unsupported file extension '.${ext}'. Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`);
-      return;
-    }
-
-    fileErrorAlert.classList.add('hidden');
-    parsedStatus.textContent = 'Parsing...';
-    parsedStatus.className = 'status-pill pending';
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch('/parse', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      parsedDocument = data;
-
-      parsedFileName.textContent = data.filename;
-      parsedFormat.textContent = (data.metadata?.file_format || ext).toUpperCase();
-      parsedPages.textContent = `${data.metadata?.page_count || 1} page(s)`;
-      parsedChars.textContent = `${data.metadata?.char_count || data.markdown.length} chars`;
-      parsedMarkdownContent.textContent = data.markdown || '(No text extracted)';
-
-      parsedStatus.textContent = data.status === 'success' ? 'Parsed Successfully' : 'Parse Warnings';
-      parsedStatus.className = `status-pill ${data.status === 'success' ? 'success' : 'error'}`;
-
-      parsedDocCard.classList.remove('hidden');
-      showToast(`Successfully parsed document: ${data.filename}`, 'success');
-
-    } catch (err) {
-      console.error('Upload Error:', err);
-      showFileError(`Failed to parse document: ${err.message}`);
-    }
+    return attachToSavedChat(file);
   }
-
   function removeUploadedDocument(opts = {}) {
     const hadDoc = !!parsedDocument;
     parsedDocument = null;
@@ -2079,216 +1943,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function sendIntakeChatMessage() {
-    const text = queryInput.value.trim();
-    if (!text && intakeChatHistory.length === 0) {
-      showToast('Please enter a medical query to start intake chat.', 'error');
-      queryInput.focus();
-      return;
-    }
-
-    if (text) {
-      intakeChatHistory.push({ role: 'user', content: text });
-      queryInput.value = '';
-    }
-
-    isIntakeChatLoading = true;
-    updateIntakeChatUI();
-
-    btnChatSend.disabled = true;
-    btnChatSend.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
-
-    try {
-      const res = await fetch('/intake/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: intakeChatHistory,
-          model: modelSelect.value,
-          document_context: buildBackgroundContext()
-        })
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      if (data && data.content) {
-        intakeChatHistory.push({ role: 'assistant', content: data.content });
-      }
-    } catch (err) {
-      showToast(`Intake assistant error: ${err.message}`, 'error');
-    } finally {
-      isIntakeChatLoading = false;
-      btnChatSend.disabled = false;
-      btnChatSend.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send / Clarify';
-      updateIntakeChatUI();
-      queryInput.focus();
-    }
+    return sendSavedMessage();
   }
 
-  // 9. Submit Asynchronous Analysis Run
   async function submitAsyncAnalysis() {
-    let query = queryInput.value.trim();
-    const usedIntakeChat = intakeChatHistory.length > 0;
-    const intakeTurnsAtSubmit = intakeChatHistory.length;
-
-    // If chat turns exist, summarize conversation context
-    if (usedIntakeChat) {
-      if (query) {
-        intakeChatHistory.push({ role: 'user', content: query });
-        queryInput.value = '';
-        updateIntakeChatUI();
-      }
-
-      btnAnalyze.disabled = true;
-      btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Summarizing Intake Chat...';
-
-      try {
-        const sumRes = await fetch('/intake/summarize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: intakeChatHistory,
-            model: modelSelect.value,
-            document_context: buildBackgroundContext()
-          })
-        });
-
-        if (sumRes.ok) {
-          const sumData = await sumRes.json();
-          if (sumData && sumData.summary) {
-            query = sumData.summary;
-          }
-        }
-      } catch (err) {
-        console.warn('Summary endpoint error, using transcript fallback:', err);
-        query = intakeChatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-      }
-
-      // Re-attach structured patient context after synthesis so clinical tables
-      // are never silently dropped by the summarizer LLM.
-      if (selectedPatient) {
-        const patientText = formatPatientContext(selectedPatient);
-        if (patientText) {
-          query += `\n\n--- SELECTED PATIENT CONTEXT ---\n${patientText}`;
-        }
-      }
-      if (parsedDocument && parsedDocument.markdown && attachContextCheck && attachContextCheck.checked) {
-        query += `\n\n--- ATTACHED CLINICAL DOCUMENT (${parsedDocument.filename || 'document'}) ---\n${parsedDocument.markdown}`;
-      }
-    }
-
-    if (!query) {
-      showToast('Please enter a medical query or clinical subject.', 'error');
-      queryInput.focus();
-      btnAnalyze.disabled = false;
-      btnAnalyze.innerHTML = '<i class="fa-solid fa-play"></i> Start Analysis Run';
-      return;
-    }
-
-    // When no intake chat, attach patient + document context directly onto the query.
-    if (!usedIntakeChat) {
-      const bg = buildBackgroundContext();
-      if (bg) {
-        query += `\n\n${bg}`;
-      }
-    }
-
-    const contextReportMd = buildContextReportMarkdown({
-      finalQuery: query,
-      model: modelSelect.value,
-      agentChoice: agentSelect.value,
-      webSearch: webSearchToggle.checked,
-      usedIntakeChat: usedIntakeChat,
-      intakeTurns: intakeChatHistory.length || intakeTurnsAtSubmit,
-    });
-
-    const payload = {
-      query: query,
-      model: modelSelect.value,
-      implementation: 'langchain',
-      web_search: webSearchToggle.checked,
-      timeout: 300,
-      context_report: contextReportMd,
-      patient_id: selectedPatient ? selectedPatient.id : null,
-    };
-
-    const targetAgentOverride = agentSelect.value;
-    if (targetAgentOverride !== 'auto') {
-      payload.agent_id = targetAgentOverride;
-    }
-
-    btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
-
-    try {
-      const res = await fetch('/analyze/async', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      currentJob = data;
-      activeConversationId = data.job_id;
-      showToast(`Analysis job submitted (ID: ${data.job_id.substring(0, 8)}...)`, 'info');
-
-      placeholderState.classList.add('hidden');
-      routeResultCard.classList.add('hidden');
-      filesContainer.classList.add('hidden');
-      reportPreviewCard.classList.add('hidden');
-      jobProgressCard.classList.remove('hidden');
-      switchWorkbenchTab('output');
-
-      jobIdTag.textContent = `Job ID: ${data.job_id}`;
-      jobStatusHeading.textContent = 'Job Submitted — Processing...';
-      updateProgressSteps('pending');
-
-      pollJobStatus(data.job_id);
-      loadConversationsHistory();
-
-    } catch (err) {
-      showToast(`Failed to submit analysis: ${err.message}`, 'error');
-    } finally {
-      btnAnalyze.disabled = false;
-      btnAnalyze.innerHTML = '<i class="fa-solid fa-play"></i> Start Analysis Run';
-    }
+    return analyzeSavedChat();
   }
-
   // 10. Poll Job Status
   function pollJobStatus(jobId) {
-    if (pollInterval) clearInterval(pollInterval);
-
-    pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch(`/jobs/${jobId}`);
-        if (!res.ok) return;
-
-        const job = await res.json();
-        currentJob = job;
-
-        updateProgressSteps(job.status);
-
-        if (job.status === 'completed') {
-          clearInterval(pollInterval);
-          showToast('Analysis completed successfully!', 'success');
-          jobProgressCard.classList.add('hidden');
-          displayJobResults(job);
-          loadConversationsHistory();
-        } else if (job.status === 'failed') {
-          clearInterval(pollInterval);
-          jobStatusHeading.textContent = 'Analysis Run Failed';
-          showToast(`Job failed: ${job.error || 'Unknown error'}`, 'error');
-          loadConversationsHistory();
-        }
-      } catch (err) {
-        console.warn('Poll error:', err);
-      }
-    }, 2500);
+    return pollSavedRun(jobId, activeChat?.id);
   }
 
   function updateProgressSteps(status) {
@@ -2313,26 +1976,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function loadReportText(tabKey, filePath) {
-    if (!filePath) return;
-    const cleanPath = String(filePath).replace(/^\/+/, '');
-    try {
-      const res = await fetch(`/${cleanPath}`);
-      if (res.ok) {
-        const text = await res.text();
-        if (text && text.trim()) {
-          loadedReportTexts[tabKey] = text;
-        }
-      } else {
-        console.warn(`Could not fetch report ${cleanPath}: HTTP ${res.status}`);
-      }
-    } catch (err) {
-      console.warn(`Could not load report file ${cleanPath}:`, err);
-    }
-  }
 
   // 11. Display Job Results & Artifacts
   async function displayJobResults(job) {
+    const version = navigationVersion;
     placeholderState.classList.add('hidden');
     jobProgressCard.classList.add('hidden');
 
@@ -2391,10 +2038,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const summaryPath = activeFiles['summary'] || activeFiles['medication_summary'] || activeFiles['markdown_report'];
     const contextPath = activeFiles['context_report'];
 
-    await loadReportText('patient', patientPath);
-    await loadReportText('practitioner', practitionerPath);
-    await loadReportText('summary', summaryPath);
-    await loadReportText('context', contextPath);
+    await Promise.all([
+      loadReportText('patient', patientPath, version),
+      loadReportText('practitioner', practitionerPath, version),
+      loadReportText('summary', summaryPath, version),
+      loadReportText('context', contextPath, version)
+    ]);
+    if (version !== navigationVersion) return;
 
     // DB JSON inline result fallbacks if static file text missing
     if (job.result && typeof job.result === 'object') {
@@ -2417,12 +2067,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabBtn) tabBtn.click();
   }
 
-  async function loadReportText(tabKey, filePath) {
+  async function loadReportText(tabKey, filePath, version = navigationVersion) {
     if (!filePath) return;
     try {
       const res = await fetch(`/${filePath}`);
       if (res.ok) {
         const text = await res.text();
+        if (version !== navigationVersion) return;
         loadedReportTexts[tabKey] = text;
       }
     } catch (err) {
@@ -2464,6 +2115,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 12. Route Query Only (Synchronous Classification)
   async function routeQueryOnly() {
+    const owner = activeChat?.id;
     let query = queryInput.value.trim();
     if (!query && intakeChatHistory.length > 0) {
       const lastUserMsg = [...intakeChatHistory].reverse().find(m => m.role === 'user');
@@ -2490,6 +2142,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+
+      if (activeChat?.id !== owner) return;
 
       placeholderState.classList.add('hidden');
       jobProgressCard.classList.add('hidden');

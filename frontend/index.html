@@ -109,10 +109,10 @@
         <!-- Workbench Tab Navigation Bar -->
         <div class="workbench-subtabs-bar">
           <button type="button" class="workbench-subtab-btn active" id="btnTabIntake" data-wtab="intake">
-            <i class="fa-solid fa-sparkles"></i> Medical AI Query &amp; Intake
+            <i class="fa-solid fa-comments"></i> Chat
           </button>
           <button type="button" class="workbench-subtab-btn" id="btnTabOutput" data-wtab="output">
-            <i class="fa-solid fa-square-poll-vertical"></i> Clinical Analysis Output
+            <i class="fa-solid fa-square-poll-vertical"></i> Analysis
             <span class="wtab-indicator hidden" id="wtabOutputIndicator"></span>
           </button>
         </div>
@@ -380,6 +380,8 @@
 
         <!-- TAB 2: CLINICAL ANALYSIS OUTPUT -->
         <div class="workbench-tab-content hidden" id="workbenchTabOutput">
+          <label for="chatRunSelect">Analysis run</label><select id="chatRunSelect"></select>
+          <div class="action-bar"><button type="button" class="btn btn-secondary" id="btnRegenerateRun">Regenerate selected run</button><button type="button" class="btn btn-ghost" id="btnDeleteRun">Delete selected run</button></div>
           <section class="panel output-panel full-width-panel">
             <div class="panel-header">
               <h2><i class="fa-solid fa-square-poll-vertical"></i> Clinical Analysis Output</h2>
@@ -477,6 +479,22 @@
           <span class="patient-count-badge" id="patientTotalBadge">Total Patients: 0</span>
         </div>
 
+        <!-- Active Patient Context Banner -->
+        <div class="patient-active-banner hidden" id="patientsActiveBanner">
+          <div class="active-banner-text">
+            <i class="fa-solid fa-user-check"></i>
+            <span>Currently chatting on: <strong id="patientsActiveBannerName">—</strong></span>
+          </div>
+          <div class="active-banner-actions">
+            <button type="button" class="btn btn-xs btn-primary" id="btnActiveBannerGoChat">
+              <i class="fa-solid fa-comments"></i> Open Chat
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" id="btnActiveBannerClear" title="Deselect and switch to General Medical Research">
+              <i class="fa-solid fa-xmark"></i> Deselect (General Research)
+            </button>
+          </div>
+        </div>
+
         <div class="patients-table-card">
           <table class="patients-table">
             <thead>
@@ -487,7 +505,7 @@
                 <th>Contact</th>
                 <th>Custom Metadata</th>
                 <th>Created</th>
-                <th width="120" style="text-align: right;">Actions</th>
+                <th width="200" style="text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="patientsTableBody">

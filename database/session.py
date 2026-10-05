@@ -35,6 +35,14 @@ def init_db(*, seed: bool = True) -> None:
     except Exception:
         pass
 
+    from sqlalchemy import inspect, text
+    if "chat_id" not in {c["name"] for c in inspect(engine).get_columns("conversations")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE conversations ADD COLUMN chat_id VARCHAR(36) REFERENCES saved_chats(id)"))
+    from .chats import migrate_history
+    with session_scope() as session:
+        migrate_history(session)
+
     _initialized = True
     logger.debug("Database schema ensured for %s", engine.url)
 

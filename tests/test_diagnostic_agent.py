@@ -161,6 +161,36 @@ def _fake_llm_router():
                     ],
                 }
             )
+        if step.startswith("diagnostic_perspective_"):
+            perspective = step.removeprefix("diagnostic_perspective_")
+            actions = {
+                "mainstream": "Use graded physical therapy",
+                "biohacker": "Track pain and training load",
+                "natural_medicine": "Use progressive low-impact movement",
+            }
+            return json.dumps(
+                {
+                    "perspective": perspective,
+                    "interpretation": f"{perspective} interpretation grounded in the knee presentation.",
+                    "recommendations": [
+                        {
+                            "action": actions[perspective],
+                            "rationale": "Supports recovery while the cause is evaluated.",
+                            "evidence_quality": "Moderate",
+                            "safety_notes": "Stop and seek care if red flags develop.",
+                        }
+                    ],
+                    "habit_assessment": [],
+                    "missing_habit_information": [
+                        "Usual exercise volume",
+                        "Sleep duration and quality",
+                        "Typical diet pattern",
+                    ],
+                    "references": [
+                        f"Example ({perspective}). Evidence review. https://example.org/{perspective}"
+                    ],
+                }
+            )
         if step == "diagnostic_layering":
             return (
                 "## ✅ Report Summary\nPatellofemoral pain likely.\n\n"
@@ -205,9 +235,23 @@ def test_pipeline_produces_layered_reports_and_probabilities(monkeypatch):
     assert "Supportive Dietary & Daily Care" in patient
     assert "Emergency Warning Signs" in patient
     assert "Important Medication & Safety Warnings" in patient
+    assert "Three Recommendation Perspectives" in patient
+    assert "Mainstream Medicine" in patient
+    assert "Biohacker / Optimization" in patient
+    assert "Natural & Lifestyle Medicine" in patient
+    assert "Evidence: Moderate" in patient
+
+    assert [p["perspective"] for p in result["perspectives"]] == [
+        "mainstream",
+        "biohacker",
+        "natural_medicine",
+    ]
+    assert all(not p["habit_assessment"] for p in result["perspectives"])
+    assert all(p["missing_habit_information"] for p in result["perspectives"])
 
     # References collected.
     assert any("doi.org/10.1/x" in c for c in result["references"])
+    assert any("example.org/biohacker" in c for c in result["references"])
 
     # No dependency on a fixed symptom engine/database.
     assert not hasattr(agent, "engine")
@@ -305,6 +349,9 @@ def test_noninteractive_skips_level3_question(monkeypatch):
     assert "diagnostic_level1_extraction" in steps
     assert "diagnostic_level2_differential" in steps
     assert "diagnostic_level5_report" in steps
+    assert "diagnostic_perspective_mainstream" in steps
+    assert "diagnostic_perspective_biohacker" in steps
+    assert "diagnostic_perspective_natural_medicine" in steps
 
 
 def test_prompt_input_sanitization():
@@ -317,4 +364,3 @@ def test_prompt_input_sanitization():
     assert "<|im_end|>" not in sanitized
     assert "[SYSTEM]" not in sanitized
     assert "Patient has high blood sugar and diabetes" in sanitized
-

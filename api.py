@@ -73,6 +73,24 @@ app = FastAPI(
     version="0.1.0"
 )
 
+from chat_api import router as chat_router
+app.include_router(chat_router)
+
+
+def hydrate_chat_request(req):
+    if not req.chat_id:
+        return
+    from database import chats
+    ensure_initialized()
+    with session_scope() as session:
+        try:
+            chat = chats.get_chat(session, req.chat_id)
+            req.document_context = chats.background(session, chat)
+            req.messages = [IntakeChatMessage(role=m.role, content=m.content)
+                            for m in chats.messages(session, chat.id) if m.status == "complete"]
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
 # Enable CORS for frontend flexibility
 app.add_middleware(
     CORSMiddleware,
@@ -106,6 +124,7 @@ class RouteRequest(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
+    chat_id: Optional[str] = None
     query: str = Field(..., description="The medical query/subject to analyze.")
     model: str = Field(DEFAULT_ROUTING_MODEL, description="LLM model to use for analysis.")
     implementation: str = Field("langchain", description="Agent implementation to use ('original' or 'langchain').")
@@ -128,13 +147,15 @@ class IntakeChatMessage(BaseModel):
 
 
 class IntakeChatRequest(BaseModel):
-    messages: List[IntakeChatMessage] = Field(..., description="Intake conversation history so far.")
+    chat_id: Optional[str] = None
+    messages: List[IntakeChatMessage] = Field(default_factory=list, description="Intake conversation history so far.")
     model: Optional[str] = Field(DEFAULT_ROUTING_MODEL, description="LLM model to use for intake assistant.")
     document_context: Optional[str] = Field(None, description="Optional background document context.")
 
 
 class IntakeSummarizeRequest(BaseModel):
-    messages: List[IntakeChatMessage] = Field(..., description="Full intake conversation history to summarize.")
+    chat_id: Optional[str] = None
+    messages: List[IntakeChatMessage] = Field(default_factory=list, description="Full intake conversation history to summarize.")
     document_context: Optional[str] = Field(None, description="Optional background document context.")
     model: Optional[str] = Field(DEFAULT_ROUTING_MODEL, description="LLM model to use for prompt synthesis.")
 
@@ -774,6 +795,7 @@ def intake_chat_endpoint(req: IntakeChatRequest):
     Interactive intake assistant endpoint. Evaluates query history (+ optional document context)
     and returns concise, focused clinical clarifying questions to enrich the prompt.
     """
+    hydrate_chat_request(req)
     try:
         model_name = req.model or DEFAULT_ROUTING_MODEL
         llm_mgr = create_llm_manager(primary_provider=model_name)
@@ -828,6 +850,7 @@ def intake_summarize_endpoint(req: IntakeSummarizeRequest):
     Synthesizes a multi-turn intake chat transcript (+ optional document context)
     into a unified, rich clinical query prompt ready for agent analysis.
     """
+    hydrate_chat_request(req)
     try:
         model_name = req.model or DEFAULT_ROUTING_MODEL
         llm_mgr = create_llm_manager(primary_provider=model_name)
@@ -875,6 +898,7 @@ def analyze_query_sync_endpoint(req: AnalyzeRequest):
     """
     Synchronously route and analyze a medical query. Blocks until analysis completes.
     """
+    prepare_saved_analysis(req)
     try:
         with _shield_stdio_from_broken_pipe():
             res = execute_analysis_sync(
@@ -886,6 +910,14 @@ def analyze_query_sync_endpoint(req: AnalyzeRequest):
                 agent_id_override=req.agent_id,
                 context_report=req.context_report,
             )
+        if req.chat_id:
+            with session_scope() as session:
+                conversation_id = res.get("report_id") or str(uuid.uuid4())
+                repository.create_conversation(session, conversation_id=conversation_id, query=req.query,
+                    agent_id=res["agent_id"], status="completed", model=req.model,
+                    implementation=req.implementation, patient_id=req.patient_id, chat_id=req.chat_id)
+                repository.update_conversation(session, conversation_id, files=res["files"],
+                    result=res["result"], report_id=res.get("report_id"))
         return {
             "status": "success",
             "query": req.query,
@@ -901,12 +933,47 @@ def analyze_query_sync_endpoint(req: AnalyzeRequest):
         )
 
 
+def prepare_saved_analysis(req):
+    if req.chat_id:
+        from database import chats
+        from database.models import ChatMessage
+        ensure_initialized()
+        with session_scope() as session:
+            try:
+                chat = chats.get_chat(session, req.chat_id)
+                if any(m.status == "pending" for m in chats.messages(session, chat.id)):
+                    raise HTTPException(409, "Wait for the pending intake reply before analyzing")
+                if req.query.strip():
+                    session.add(ChatMessage(chat_id=chat.id, role="user", content=req.query.strip()))
+                    session.flush()
+                context = chats.background(session, chat)
+                history = chats.transcript(session, chat)
+                message_snapshot = [IntakeChatMessage(role=m.role, content=m.content)
+                                    for m in chats.messages(session, chat.id) if m.status == "complete"]
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            req.patient_id = chat.patient_id
+            if not history:
+                raise HTTPException(400, "Enter a medical query first")
+            req.query = "\n\n".join(p for p in (history, context) if p)
+            req.context_report = "# Analysis context\n\n" + req.query
+            chat.draft = ""
+            if chat.title == "New chat":
+                chat.title = history.removeprefix("USER: ")[:80]
+        if len(message_snapshot) > 1:
+            try:
+                synthesis = intake_summarize_endpoint(IntakeSummarizeRequest(
+                    messages=message_snapshot, model=req.model, document_context=context))["summary"]
+                req.query = "--- INTAKE SUMMARY ---\n" + synthesis + "\n\n--- FULL INTAKE CONTEXT ---\n" + req.query
+            except Exception:
+                logger.warning("Intake synthesis unavailable; using saved transcript", exc_info=True)
+        req.context_report = "# Analysis context\n\n" + req.query
+
+
 @app.post("/analyze/async", status_code=status.HTTP_202_ACCEPTED)
 def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: BackgroundTasks):
-    """
-    Asynchronously route and analyze a medical query. Returns a job ID to poll for status.
-    Conversation is persisted immediately so history survives restarts.
-    """
+    """Start an analysis linked to its originating saved chat when supplied."""
+    prepare_saved_analysis(req)
     job_id = str(uuid.uuid4())
     now = datetime.now()
 
@@ -918,6 +985,7 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
         "model": req.model,
         "implementation": req.implementation,
         "patient_id": req.patient_id,
+        "chat_id": req.chat_id,
         "created_at": now,
         "updated_at": now,
         "error": None,
@@ -944,6 +1012,7 @@ def analyze_query_async_endpoint(req: AnalyzeRequest, background_tasks: Backgrou
                 model=req.model,
                 implementation=req.implementation,
                 patient_id=req.patient_id,
+                chat_id=req.chat_id,
             )
     except Exception as e:
         logger.warning(f"Failed to persist conversation {job_id}: {e}")
@@ -982,6 +1051,8 @@ def list_jobs_endpoint():
         ensure_initialized()
         with session_scope() as session:
             repository.backfill_conversations_from_reports(session)
+            from database.chats import migrate_history
+            migrate_history(session)
             for conv in repository.list_conversations(session, limit=300):
                 merged[conv.id] = repository.conversation_to_job_dict(conv)
     except Exception as e:
@@ -990,7 +1061,11 @@ def list_jobs_endpoint():
     # Overlay in-memory jobs (fresher status for running work).
     with jobs_lock:
         for jid, job in jobs.items():
-            merged[jid] = _job_to_public_dict(job)
+            public = _job_to_public_dict(job)
+            if jid in merged:
+                public["chat_id"] = merged[jid].get("chat_id")
+                public["patient_id"] = merged[jid].get("patient_id")
+            merged[jid] = public
 
     job_list = list(merged.values())
 
@@ -1149,6 +1224,11 @@ def regenerate_job_endpoint(job_id: str, req: RegenerateRequest, background_task
             detail=f"Conversation query for job {job_id} not found."
         )
 
+    ensure_initialized()
+    with session_scope() as session:
+        original = repository.get_conversation(session, job_id)
+        source_patient_id = original.patient_id if original else (old_job or {}).get("patient_id")
+        source_chat_id = original.chat_id if original else (old_job or {}).get("chat_id")
     new_job_id = str(uuid.uuid4())
     now = datetime.now()
 
@@ -1166,6 +1246,8 @@ def regenerate_job_endpoint(job_id: str, req: RegenerateRequest, background_task
             "files": None,
             "result": None,
             "parent_job_id": job_id,
+            "patient_id": source_patient_id,
+            "chat_id": source_chat_id,
             "report_id": None,
             "has_docs": False,
         }
@@ -1182,6 +1264,8 @@ def regenerate_job_endpoint(job_id: str, req: RegenerateRequest, background_task
                 model=req.model,
                 implementation=req.implementation,
                 parent_job_id=job_id,
+                patient_id=source_patient_id,
+                chat_id=source_chat_id,
             )
     except Exception as e:
         logger.warning(f"Failed to persist regenerate conversation {new_job_id}: {e}")

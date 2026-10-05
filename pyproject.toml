@@ -16,6 +16,7 @@ packages = [
 
 [tool.hatch.build.targets.wheel.force-include]
 "api.py" = "api.py"
+"chat_api.py" = "chat_api.py"
 "app_config.py" = "app_config.py"
 "check_llms.py" = "check_llms.py"
 "cost_tracker.py" = "cost_tracker.py"

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -157,6 +157,39 @@ class PatientSupportiveCare(BaseModel):
         default_factory=list,
         description="Specific red-flag emergency symptoms requiring immediate emergency department evaluation",
     )
+
+
+class HabitAssessment(BaseModel):
+    """Assessment of one habit explicitly reported by the patient."""
+
+    domain: Literal["diet", "exercise", "sleep", "stress", "substances", "other"]
+    reported_habit: str = Field(description="Habit stated by the patient; never inferred")
+    assessment: str = Field(description="How the habit may affect the presentation or general health")
+    recommended_improvement: str = Field(description="Specific, realistic improvement")
+    evidence_quality: Literal["Strong", "Moderate", "Limited", "Poor"]
+
+
+class PerspectiveRecommendation(BaseModel):
+    """One evidence-labelled recommendation from a diagnostic perspective."""
+
+    action: str
+    rationale: str
+    evidence_quality: Literal["Strong", "Moderate", "Limited", "Poor"]
+    safety_notes: str = Field(
+        default="",
+        description="Contraindications, interactions, or reasons to seek clinician supervision",
+    )
+
+
+class DiagnosticPerspective(BaseModel):
+    """A bounded diagnostic interpretation and its adjunct recommendations."""
+
+    perspective: Literal["mainstream", "biohacker", "natural_medicine"]
+    interpretation: str
+    recommendations: List[PerspectiveRecommendation] = Field(default_factory=list)
+    habit_assessment: List[HabitAssessment] = Field(default_factory=list)
+    missing_habit_information: List[str] = Field(default_factory=list)
+    references: List[str] = Field(default_factory=list)
 
 
 class DiagnosticReport(BaseModel):

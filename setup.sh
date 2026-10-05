@@ -102,6 +102,65 @@ echo "📁 Ensuring output and cache directories exist..."
 mkdir -p outputs cache
 echo "✅ Workspace directories ready"
 
+# --- Agent-ignore pre-commit hook ---
+# Installs .githooks/pre-commit into the active hooks directory. A hook that is
+# already there (for example a beads shim) is kept; the checker runs first.
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  (
+    cd "$ROOT"
+    hooks_dir="$(git rev-parse --git-path hooks)"
+    mkdir -p "$hooks_dir"
+    dest="$hooks_dir/pre-commit"
+    prepend_checker() {
+      tmp="$(mktemp)"
+      cat > "$tmp" << 'EOF'
+#!/bin/sh
+# .agentignore gate. Runs before any hook that was already installed.
+root=$(git rev-parse --show-toplevel)
+checker="$root/scripts/check_agentignore.py"
+if [ -f "$checker" ]; then
+  python3 "$checker" --staged || exit $?
+fi
+
+EOF
+      cat "$dest" >> "$tmp"
+      mv "$tmp" "$dest"
+      chmod 755 "$dest"
+    }
+    if [ -L "$dest" ]; then
+      rm -f "$dest"
+    fi
+    if [ -f "$dest" ]; then
+      if grep -q "check_agentignore.py" "$dest"; then
+        echo "✅ .agentignore pre-commit hook already installed"
+      else
+        prepend_checker
+        echo "✅ Chained .agentignore check in front of the existing pre-commit hook"
+      fi
+    elif command -v bd >/dev/null 2>&1 && printf '%s' "$hooks_dir" | grep -q '\.beads/hooks'; then
+      cat > "$dest" << 'EOF'
+#!/bin/sh
+# .agentignore gate, then the beads pre-commit shim.
+root=$(git rev-parse --show-toplevel)
+checker="$root/scripts/check_agentignore.py"
+if [ -f "$checker" ]; then
+  python3 "$checker" --staged || exit $?
+fi
+if command -v bd >/dev/null 2>&1; then
+  export BD_GIT_HOOK=1
+  bd hooks run pre-commit "$@"
+fi
+EOF
+      chmod 755 "$dest"
+      echo "✅ Installed .agentignore check chained with beads"
+    else
+      ln -sfn "$ROOT/.githooks/pre-commit" "$dest"
+      echo "✅ Installed .agentignore pre-commit hook"
+    fi
+  )
+fi
+
 # --- Optional System Dependencies (WeasyPrint PDF export on macOS) ---
 if [[ "$OSTYPE" == "darwin"* ]]; then
   if ! command -v brew &>/dev/null || ! brew list pango &>/dev/null 2>&1; then

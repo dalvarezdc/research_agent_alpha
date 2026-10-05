@@ -3,10 +3,10 @@ LangChain-based medical diagnostic agent (Diagnostic Specialist).
 
 Router ID: ``diagnostic_agent``.
 
-A 5-level pipeline that uses LLM clinical reasoning (free-form symptom
+A diagnostic pipeline that uses LLM clinical reasoning (free-form symptom
 extraction + common-sense differential diagnosis) rather than a fixed
-symptom/disease database. Not a multi-perspective fact-checker: no
-Mainstream/Naturist/Biohacker assembly.
+symptom/disease database. Its recommendations include evidence-labelled
+mainstream, biohacker, and natural-medicine perspectives.
 
 Shares cost tracking, audit logging, robust JSON parsing, web research, and
 the layered/lossless report helpers used by the other agents.
@@ -23,7 +23,9 @@ from langchain_agents.base import LangChainAgentBase, LangChainAgentConfig
 
 from .dspy_schemas import (
     ConditionCandidate,
+    DiagnosticPerspective,
     DiagnosticReport,
+    DiagnosticTestItem,
     DifferentialAssessment,
     SymptomExtraction,
 )
@@ -164,17 +166,29 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         report = self._level5_generate_report(
             user_query, results, extraction, assessment
         )
+        perspectives = self._generate_recommendation_perspectives(
+            user_query, extraction, assessment, report
+        )
 
         # Layered, lossless report (Conclusions → Reasoning → Statistical Appendix).
         patient_report, practitioner_report = self._build_diagnostic_layered_reports(
-            report, results
+            report, results, perspectives
         )
+
+        references = self._references(report)
+        for perspective in perspectives:
+            references.extend(
+                {"raw_citation": citation.strip()}
+                for citation in perspective.references
+                if citation.strip()
+            )
 
         return {
             "extraction": extraction.model_dump(),
             "probabilities": results,
             "report": report.model_dump(),
-            "references": [r.get("raw_citation", "") for r in self._references(report)],
+            "perspectives": [p.model_dump() for p in perspectives],
+            "references": list(dict.fromkeys(r["raw_citation"] for r in references)),
             "patient_report": patient_report,
             "practitioner_report": practitioner_report,
             "assessment": assessment.model_dump(),
@@ -442,25 +456,19 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         except Exception as e:
             self.logger.error(f"Failed to parse Level 5 report: {e}")
 
-        # Fallback diagnostic tests
+        # Fail closed: do not invent organ-specific tests when structured synthesis fails.
         fallback_tests = [
             DiagnosticTestItem(
-                name="Complete Blood Count (CBC) & Ferritin",
-                tier="Tier 1: Routine Labs",
-                clinical_purpose="Evaluate for occult blood loss, microcytic anemia, or leukocytosis",
-                actionable_trigger="Hb < 10 g/dL triggers expedited endoscopy; elevated WBC indicates acute inflammation",
-            ),
-            DiagnosticTestItem(
-                name="Comprehensive Metabolic Panel & Lipase",
-                tier="Tier 1: Routine Labs",
-                clinical_purpose="Assess electrolyte loss from vomiting, renal function, liver enzymes, and pancreatic inflammation",
-                actionable_trigger="Lipase >= 3x ULN confirms acute pancreatitis; abnormal liver enzymes prompt biliary ultrasound",
-            ),
-            DiagnosticTestItem(
-                name="Esophagogastroduodenoscopy (EGD) with Biopsies",
-                tier="Tier 2: Definitive Procedures/Imaging",
-                clinical_purpose="Direct visualization of gastric/duodenal mucosa to rule out ulcers, obstruction, or malignancy",
-                actionable_trigger="Ulcer identification initiates targeted therapy; suspicious mass triggers multi-quadrant biopsy",
+                name="Focused in-person clinical assessment",
+                tier="Tier 0: Safety & Baseline",
+                clinical_purpose=(
+                    "Confirm the history, examine the affected system, and screen for "
+                    "red flags before selecting tests"
+                ),
+                actionable_trigger=(
+                    "Examination findings determine whether urgent referral, targeted "
+                    "laboratory testing, or imaging is appropriate"
+                ),
             ),
         ]
 
@@ -478,8 +486,74 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             + [f"Consider: {e}" for e in assessment.recommended_exams[:3]],
             diagnostic_tests=fallback_tests,
             suggested_agent="procedure_agent",
-            routing_rationale="Procedures are indicated to definitively evaluate upper GI alarm features.",
+            routing_rationale="A focused examination is needed before selecting further tests or treatment.",
         )
+
+    @track_cost("Level 6: Multi-Perspective Recommendations (Diagnostic)")
+    def _generate_recommendation_perspectives(
+        self,
+        user_query: str,
+        extraction: SymptomExtraction,
+        assessment: DifferentialAssessment,
+        report: DiagnosticReport,
+    ) -> List[DiagnosticPerspective]:
+        """Generate three bounded perspectives without changing the differential."""
+        perspectives: List[DiagnosticPerspective] = []
+        definitions = {
+            "mainstream": (
+                "Current mainstream medicine based on recent guidelines and high-quality "
+                "clinical research. Prioritize standard evaluation and treatment."
+            ),
+            "biohacker": (
+                "An optimization-oriented view. Suggest measurable diet, exercise, sleep, "
+                "or recovery experiments only when reasonably safe and clinically relevant."
+            ),
+            "natural_medicine": (
+                "A food-, exercise-, behavior-, and lifestyle-first view. Do not recommend "
+                "unproven remedies as substitutes for indicated clinical care."
+            ),
+        }
+        for name, definition in definitions.items():
+            system_prompt = (
+                f"{_CLINICAL_COMMON_SENSE}\n"
+                "You are producing one adjunct recommendation perspective after the "
+                "clinical differential has been formed. Never change the ranked differential, "
+                "dismiss red flags, delay indicated care, or present speculation as fact. "
+                "Label every action Strong, Moderate, Limited, or Poor evidence. "
+                "Assess a habit only if the patient explicitly reported it; otherwise list the "
+                "habit information needed. Supplements require interaction and contraindication "
+                "warnings. Return only JSON matching the schema."
+            )
+            user_prompt = (
+                "Perspective: {perspective}\nDefinition: {definition}\n\n"
+                "Patient statement: {query}\nExtracted facts: {extraction}\n"
+                "Differential summary: {assessment}\nClinical report: {report}\n\n"
+                "Give practical recommendations relevant to this presentation. Consider diet, "
+                "exercise, sleep, stress, substance use, and daily habits, but do not invent "
+                "habits. Include 2-5 current supporting citations with DOI, PMID, or URL where "
+                "available. The perspective field must be exactly {perspective}.\nSchema: {schema}"
+            )
+            try:
+                response = self._call_llm(
+                    system_prompt,
+                    user_prompt,
+                    audit_step=f"diagnostic_perspective_{name}",
+                    perspective=name,
+                    definition=definition,
+                    query=user_query,
+                    extraction=json.dumps(extraction.model_dump()),
+                    assessment=json.dumps(assessment.model_dump()),
+                    report=json.dumps(report.model_dump()),
+                    schema=json.dumps(DiagnosticPerspective.model_json_schema()),
+                )
+                parsed = self._parse_json(response)
+                if isinstance(parsed, dict):
+                    item = DiagnosticPerspective.model_validate(parsed)
+                    if item.perspective == name:
+                        perspectives.append(item)
+            except Exception as exc:
+                self.logger.warning("Could not generate %s perspective: %s", name, exc)
+        return perspectives
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     @staticmethod
@@ -519,7 +593,10 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         ]
 
     def _build_diagnostic_layered_reports(
-        self, report: DiagnosticReport, results: List[Dict[str, Any]]
+        self,
+        report: DiagnosticReport,
+        results: List[Dict[str, Any]],
+        perspectives: Optional[List[DiagnosticPerspective]] = None,
     ) -> tuple[str, str]:
         """
         Build distinct patient and practitioner documents:
@@ -530,6 +607,7 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
           supportive dietary/lifestyle care, medication-hold warnings, emergency
           red-flag signs, and questions for their doctor. (No prescriptive drug tables).
         """
+        perspectives = perspectives or []
         # 1. Build Practitioner Report
         practitioner_sections: list[str] = [
             "# 🩺 Clinical Diagnostic & Management Protocol\n",
@@ -592,6 +670,8 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             for trigger in report.escalation_triggers:
                 practitioner_sections.append(f"- {trigger}")
 
+        self._append_perspectives(practitioner_sections, perspectives, practitioner=True)
+
         # Statistical Appendix
         prob_lines = [
             f"{r['name']}: {r['probability']:.1%} (severity {r['severity']}/5)"
@@ -610,14 +690,13 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             "# Medical Assessment & Next Steps Guide\n",
             "## ✅ Summary",
             f"- **Main Focus:** Your reported symptoms most closely match **{report.most_probable}**, while conditions such as **{report.most_serious}** are important possibilities your doctors will want to carefully rule out.",
-            "- **Next Action:** Schedule an in-person medical evaluation within **48–72 hours** (or go to the emergency room immediately if severe red-flag warning signs develop).",
-            "- **Testing Over Guesswork:** Diagnostic tests (such as blood work and visual imaging/endoscopy) are required to identify the root cause before starting any medications.",
-            "- **At-Home Care:** Avoid over-the-counter stomach acid pills or NSAID painkillers (e.g. ibuprofen) without a doctor's guidance, eat small bland meals, and stay hydrated.\n",
+            "- **Next Action:** Follow the urgency and clinical next steps below; seek emergency care if a red-flag warning sign develops.",
+            "- **Evaluation Before Treatment:** The appropriate examination and tests depend on the suspected cause and should be selected by a clinician.\n",
             "## ⏱️ Recommended Action & Urgency",
             "🟡 **Urgent:** Schedule an in-person doctor appointment within **48–72 hours**. "
             "Proceed immediately to an emergency department if any emergency warning signs appear below.\n",
             "## 🧠 Understanding Your Symptoms (The Reasoning)",
-            f"Your symptoms point primarily to upper digestive conditions like **{report.most_probable}**.",
+            f"Among the possibilities considered, your reported symptoms fit **{report.most_probable}** most closely.",
             f"**Clinical Logic:** {report.reasoning_summary}\n",
             "## 🧪 Tests to Expect and Why",
             "Because several different conditions can cause these symptoms, diagnostic tests are needed before starting treatment:",
@@ -630,8 +709,7 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
                 )
         else:
             patient_sections.append(
-                "- **Blood and lab tests**: To check for dehydration, blood counts, and organ health.\n"
-                "- **Upper endoscopy or imaging**: To directly visualize the digestive lining and check for inflammation or sores."
+                "- **Focused clinical examination**: To check the affected system and decide whether targeted labs or imaging are useful."
             )
 
         care = report.patient_supportive_care
@@ -641,9 +719,7 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
                 patient_sections.append(f"- {warn}")
         else:
             patient_sections.append(
-                "- **Do not start over-the-counter stomach acid reducers (Omeprazole, Prilosec, Nexium)** before your doctor evaluation, as they can interfere with accurate *H. pylori* germ testing.\n"
-                "- **Avoid NSAID painkillers (Ibuprofen, Advil, Aleve, Aspirin)** which can irritate the stomach lining.\n"
-                "- **Do not take unprescribed antibiotics or medications** without direct medical guidance."
+                "- Do not start prescription medicines, antibiotics, high-dose supplements, or restrictive diets for an unconfirmed condition without clinical guidance."
             )
 
         patient_sections.append("\n## 🥗 Supportive Dietary & Daily Care (While Awaiting Your Visit)")
@@ -654,8 +730,7 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         else:
             patient_sections.append(
                 "**Dietary Tips:**\n"
-                "- Eat small, frequent, bland meals (e.g. broth, plain rice, bananas, oatmeal, toast).\n"
-                "- Avoid spicy, fatty, highly acidic, or fried foods, as well as caffeine and alcohol."
+                "- Continue a balanced diet that you tolerate; no condition-specific diet can be recommended safely from the available information."
             )
 
         if care and care.hydration_and_lifestyle:
@@ -665,9 +740,10 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
         else:
             patient_sections.append(
                 "\n**Hydration & Daily Care:**\n"
-                "- Sip oral electrolyte solutions or clear liquids slowly throughout the day rather than drinking large quantities at once.\n"
-                "- Remain upright for at least 60–90 minutes after eating to reduce regurgitation and acid irritation."
+                "- Maintain normal hydration and avoid activities that clearly worsen symptoms until you are assessed."
             )
+
+        self._append_perspectives(patient_sections, perspectives, practitioner=False)
 
         patient_sections.append("\n## 🚨 Emergency Warning Signs (Go to the ER Immediately)")
         if care and care.er_warning_signs:
@@ -675,10 +751,9 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
                 patient_sections.append(f"- **{er_sign}**")
         else:
             patient_sections.append(
-                "- **Vomiting blood or dark material resembling coffee grounds**\n"
-                "- **Passing black, sticky, or tarry stools**\n"
-                "- **Sudden, severe stomach pain where your abdomen feels rigid or extremely tender**\n"
-                "- **Inability to keep any liquids down for >24 hours, or severe dizziness and fainting**"
+                "- **Sudden severe or rapidly worsening symptoms**\n"
+                "- **Fainting, severe breathing difficulty, new confusion, or new weakness**\n"
+                "- **Any red flag identified by your clinician for this presentation**"
             )
 
         patient_sections.append("\n## 💬 Questions to Ask Your Doctor at Your Appointment")
@@ -687,9 +762,9 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
                 patient_sections.append(f"1. {q}")
         else:
             patient_sections.append(
-                "1. *Do you recommend an upper endoscopy (camera exam) to evaluate for an ulcer or other causes?*\n"
-                "2. *Should we test for H. pylori infection before starting any stomach acid medications?*\n"
-                "3. *Are there specific blood tests or gallbladder scans needed based on my symptoms?*"
+                "1. *Which diagnoses are most important to rule out first?*\n"
+                "2. *Which examination findings or tests would change the treatment plan?*\n"
+                "3. *Which activities, foods, medicines, or supplements should I avoid while this is evaluated?*"
             )
 
         patient_sections.append(
@@ -704,3 +779,47 @@ class MedicalDiagnosticAgent(LangChainAgentBase):
             audit_step="diagnostic_layering_loss_check",
         )
         return patient_report, practitioner_report
+
+    @staticmethod
+    def _append_perspectives(
+        sections: List[str],
+        perspectives: List[DiagnosticPerspective],
+        *,
+        practitioner: bool,
+    ) -> None:
+        if not perspectives:
+            return
+        labels = {
+            "mainstream": "Mainstream Medicine",
+            "biohacker": "Biohacker / Optimization",
+            "natural_medicine": "Natural & Lifestyle Medicine",
+        }
+        sections.append("\n## 🔭 Three Recommendation Perspectives")
+        sections.append(
+            "> These views are adjuncts to the safety plan above. Limited or Poor evidence "
+            "should be treated as uncertain and must not delay indicated evaluation."
+        )
+        for item in perspectives:
+            sections.append(f"\n### {labels[item.perspective]}")
+            sections.append(item.interpretation)
+            for recommendation in item.recommendations:
+                line = (
+                    f"- **{recommendation.action}** — {recommendation.rationale} "
+                    f"**Evidence: {recommendation.evidence_quality}.**"
+                )
+                if recommendation.safety_notes:
+                    line += f" Safety: {recommendation.safety_notes}"
+                sections.append(line)
+            if item.habit_assessment:
+                sections.append("\n**Reported habits and improvements:**")
+                for habit in item.habit_assessment:
+                    sections.append(
+                        f"- **{habit.domain.title()}:** {habit.reported_habit}. "
+                        f"{habit.assessment} Suggested improvement: "
+                        f"{habit.recommended_improvement} **Evidence: {habit.evidence_quality}.**"
+                    )
+            if practitioner and item.missing_habit_information:
+                sections.append(
+                    "\n**Habit history still needed:** "
+                    + "; ".join(item.missing_habit_information)
+                )
