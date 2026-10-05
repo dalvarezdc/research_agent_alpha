@@ -46,6 +46,9 @@ reference_validation/        # Citation URL correspondence validation
 tests/                       # pytest suite (uv run python -m pytest tests/)
 examples/router_queries.md   # Ready-to-paste example queries per agent
 pending.md                   # Known gaps and planned work
+.agentignore                 # Paths agents must not read, search, or modify
+scripts/check_agentignore.py # Parses .agentignore; pre-commit gate
+.githooks/pre-commit         # Installed into .git/hooks by setup.sh
 ```
 
 ---
@@ -199,6 +202,30 @@ The method in `run_analysis.py` checks for existing disclaimer before appending.
 injects additional instructions when `"grok"` is in the provider name.
 This is automatic for all agents using `_call_llm()`.
 
+### 7. Agent ignore — never read, search, or modify
+`.agentignore` at the repo root is gitignore syntax. Every AI agent and
+agent-orchestration client must leave matching paths unread, unsearched, and
+unmodified:
+
+- Secrets: `.env*`, credential filenames (`*credential*`), `data/app_config.json`
+  (and its `.tmp` sibling)
+- Caches: `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `cache/*.db`
+  (including SQLite sidecars `cache/*.db-*`)
+- Virtualenvs and build artifacts: `.venv/`, `node_modules/`, `dist/`, `build/`,
+  `*.egg-info/`
+- Generated outputs: `outputs/`
+
+Never open, list, grep, or edit a matching path. Never stage or commit one.
+Never edit `.agentignore` or the hook in order to reach a matching path.
+
+`scripts/check_agentignore.py` parses `.agentignore`. `.githooks/pre-commit`
+runs it on every commit and rejects an add, edit, rename, or delete of a
+matching path. `setup.sh` installs that hook into the active git hooks
+directory (`git rev-parse --git-path hooks`). An existing hook is kept, and
+the checker runs first. The hook loads the copy in `HEAD` and the staged copy.
+A path that either copy ignores is blocked, including when both copies are
+part of the same commit. A missing `.agentignore` fails the commit.
+
 ---
 
 ## Adding a new agent — checklist
@@ -243,6 +270,9 @@ uv run python run_analysis.py diagnostic --subject "fatigue, weight gain, cold i
 # Tests
 uv run python -m pytest tests/ -q
 uv run python -m pytest tests/test_langchain_agents.py -v
+
+# Check staged paths against .agentignore (the pre-commit hook runs this)
+python3 scripts/check_agentignore.py --staged
 ```
 
 ---

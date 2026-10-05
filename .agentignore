@@ -1,0 +1,26 @@
+# Paths any AI agent or agent-orchestration client must not read, search, or modify.
+# Gitignore syntax. Enforced by scripts/check_agentignore.py via .githooks/pre-commit.
+# A commit is blocked when either HEAD or the staged copy of this file matches.
+
+# Secrets and credentials (.env*, credential files, UI secret store)
+.env*
+*credential*
+data/app_config.json
+data/app_config.json.tmp
+
+# Caches
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+cache/*.db
+cache/*.db-*
+
+# Virtual environments and build artifacts
+.venv/
+node_modules/
+dist/
+build/
+*.egg-info/
+
+# Generated analysis outputs
+outputs/
